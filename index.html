@@ -168,11 +168,11 @@ warrior.position.y=-.06;
 const pivot=new THREE.Group();scene.add(pivot);pivot.add(warrior);
 // Modelo riggeado externo CC0: reemplaza la armadura geométrica cuando termina de cargar.
 // Si el servidor externo falla, el modelo de respaldo sigue visible.
-let loadedKnight=null,knightMixer=null,knightIdle=null,knightWalk=null,activeKnightAction=null;
+let loadedKnight=null,knightMixer=null,knightIdle=null,knightWalk=null,activeKnightAction=null,knightBaseY=0;
 const knightLoader=new GLTFLoader();
-knightLoader.load('https://pub-63ab27389d044634a73e89c1a0c6d4a6.r2.dev/free-library/3d-models/t1-sentinel/t1-sentinel.glb',gltf=>{
+knightLoader.load('https://pub-2534e921bf9c4314addcd4d8a6e98b7b.r2.dev/avatars/mixamo/glb/vanguard.glb',gltf=>{
  loadedKnight=gltf.scene;
- loadedKnight.name='T1-Sentinel-CC0';
+ loadedKnight.name='Vanguard-armored-warrior';
  loadedKnight.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(o.material){o.material.side=THREE.FrontSide;}}});
  loadedKnight.updateMatrixWorld(true);
  const bounds=new THREE.Box3().setFromObject(loadedKnight);
@@ -181,6 +181,7 @@ knightLoader.load('https://pub-63ab27389d044634a73e89c1a0c6d4a6.r2.dev/free-libr
  const scale=2.22/height;
  loadedKnight.scale.setScalar(scale);
  loadedKnight.position.set(-((bounds.min.x+bounds.max.x)*.5)*scale,-bounds.min.y*scale,-((bounds.min.z+bounds.max.z)*.5)*scale);
+ knightBaseY=loadedKnight.position.y;
  pivot.add(loadedKnight);
  warrior.visible=false;
  knightMixer=new THREE.AnimationMixer(loadedKnight);
@@ -188,7 +189,7 @@ knightLoader.load('https://pub-63ab27389d044634a73e89c1a0c6d4a6.r2.dev/free-libr
  const walkClip=gltf.animations.find(a=>/walk/i.test(a.name));
  if(idleClip){knightIdle=knightMixer.clipAction(idleClip);knightIdle.play();activeKnightAction=knightIdle;}
  if(walkClip){knightWalk=knightMixer.clipAction(walkClip);knightWalk.enabled=true;knightWalk.setEffectiveWeight(0);}
-},undefined,error=>{console.warn('No se pudo cargar el modelo externo; se mantiene el guerrero de respaldo.',error)});
+},undefined,error=>{console.warn('No se pudo cargar el modelo Vanguard; se mantiene el guerrero de respaldo.',error)});
 camera.lookAt(0,1.13,0);
 let dragging=false,lastX=0,lastY=0,rotY=-.22,rotX=0;
 renderer.domElement.addEventListener('pointerdown',e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId)});
@@ -222,6 +223,10 @@ function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDel
  const forward=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0);
  const sideways=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0);
  const moving=forward!==0||sideways!==0;
+ if(loadedKnight&&!knightWalk){
+  loadedKnight.position.y=knightBaseY+(moving?Math.abs(Math.sin(elapsed*10.5))*.035:Math.sin(elapsed*1.4)*.006);
+  loadedKnight.rotation.z=moving?Math.sin(elapsed*10.5)*.012:0;
+ }
  if(knightMixer){
   const desired=(moving&&knightWalk)?knightWalk:knightIdle;
   if(desired&&desired!==activeKnightAction){
