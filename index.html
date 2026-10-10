@@ -41,60 +41,85 @@ addWall(-7,20,13,1,4);addWall(7,20,13,1,4);addWall(-21,20,7,1,4);addWall(21,20,7
 for(const p of [[-25,-25],[-25,25],[25,-25],[25,25],[-10,5],[10,5]])addPillar(p[0],p[1]);for(const p of [[-29,-20],[-29,20],[29,-20],[29,20],[-12,18],[12,18]])addTorch(p[0],p[1]);
 for(let x=-12;x<=12;x+=3)for(let z=-9;z<=9;z+=3){const tile=new THREE.Mesh(new THREE.BoxGeometry(2.85,.035,2.85),floorMat);tile.position.set(x,.025,z);tile.receiveShadow=true;scene.add(tile)}
 scene.background=new THREE.Color(0x242b30);scene.fog=new THREE.Fog(0x242b30,28,85);
-// Original dark-fantasy armored warrior, built from low-poly procedural meshes.
+// Guerrero original de fantasía oscura: silueta completa, armadura por capas y articulaciones visibles.
 const player=new THREE.Group();scene.add(player);
-const armorMat=mat(0x343b40),edgeMat=mat(0x777d7a),darkMat=mat(0x171c20),leatherMat=mat(0x493329),clothMat=mat(0x382522),skinMat=mat(0x8c6852),goldMat=mat(0x9b7945);
-function warriorPart(geo,material,x,y,z,sx=1,sy=1,sz=1,rx=0,ry=0,rz=0){
- const m=new THREE.Mesh(geo,material);m.position.set(x,y,z);m.scale.set(sx,sy,sz);m.rotation.set(rx,ry,rz);m.castShadow=true;m.receiveShadow=true;player.add(m);return m;
+const armorMat=mat(0x343b40),edgeMat=mat(0x858984),darkMat=mat(0x171c20),leatherMat=mat(0x493329),clothMat=mat(0x382522),skinMat=mat(0x8c6852),goldMat=mat(0x9b7945),steelBright=mat(0xaab4b5,.42);
+function part(parent,geo,material,x,y,z,sx=1,sy=1,sz=1,rx=0,ry=0,rz=0){
+ const m=new THREE.Mesh(geo,material);m.position.set(x,y,z);m.scale.set(sx,sy,sz);m.rotation.set(rx,ry,rz);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;
 }
-// Boots and articulated legs remain separate so the existing walking animation works.
+function plate(parent,x,y,z,w,h,d,material=armorMat,rz=0){return part(parent,new THREE.BoxGeometry(w,h,d),material,x,y,z,1,1,1,0,0,rz)}
+// Piernas articuladas con botas, grebas, rodilleras y placas de muslo.
 const legs=[];
-for(const x of [-.18,.18]){
- warriorPart(new THREE.BoxGeometry(.25,.18,.37),darkMat,x,.12,.08,1,1,1,-.05,0,0);
- const leg=warriorPart(new THREE.BoxGeometry(.22,.52,.25),armorMat,x,.39,0);
- legs.push(leg);
- warriorPart(new THREE.BoxGeometry(.25,.12,.28),edgeMat,x,.57,.015);
- warriorPart(new THREE.BoxGeometry(.27,.2,.29),leatherMat,x,.78,0);
-}
-// Torso, overlapping breastplate, segmented armor and belt.
-const body=warriorPart(new THREE.CapsuleGeometry(.34,.56,3,7),darkMat,0,1.05,0,1,1,.78);
-warriorPart(new THREE.BoxGeometry(.58,.58,.35),armorMat,0,1.13,.015);
-warriorPart(new THREE.BoxGeometry(.46,.34,.075),edgeMat,0,1.22,.205);
-warriorPart(new THREE.BoxGeometry(.37,.055,.09),goldMat,0,1.08,.25);
-warriorPart(new THREE.BoxGeometry(.12,.1,.045),goldMat,0,1.08,.303);
-for(const y of [1.0,1.12,1.24,1.36])warriorPart(new THREE.BoxGeometry(.48,.025,.07),edgeMat,0,y,.24);
-warriorPart(new THREE.BoxGeometry(.53,.14,.31),leatherMat,0,.82,0);
-for(const x of [-.18,-.06,.06,.18])warriorPart(new THREE.BoxGeometry(.095,.22,.29),armorMat,x,.67,.015,1,1,1,.08,0,0);
-// Shoulder pauldrons and armored arms.
 for(const side of [-1,1]){
- warriorPart(new THREE.SphereGeometry(.23,7,6),armorMat,side*.43,1.42,0,1.2,.85,1);
- warriorPart(new THREE.BoxGeometry(.3,.07,.27),edgeMat,side*.43,1.48,.015,1,1,1,0,0,side*-.18);
- warriorPart(new THREE.BoxGeometry(.16,.43,.18),darkMat,side*.46,1.16,.015,1,1,1,0,0,side*.12);
- warriorPart(new THREE.BoxGeometry(.19,.19,.21),armorMat,side*.46,1.0,.03);
+ const hip=new THREE.Group();hip.position.set(side*.19,.82,0);player.add(hip);legs.push(hip);
+ part(hip,new THREE.CapsuleGeometry(.135,.28,2,6),darkMat,0,-.13,0,1,1,.9);
+ plate(hip,0,-.12,.015,.28,.29,.29,armorMat,side*-.035);
+ plate(hip,0,-.285,.035,.30,.075,.31,edgeMat);
+ part(hip,new THREE.CylinderGeometry(.105,.12,.10,7),leatherMat,0,-.34,0);
+ part(hip,new THREE.CylinderGeometry(.105,.13,.30,7),armorMat,0,-.51,.005,1,1,.9);
+ plate(hip,0,-.51,.14,.19,.22,.045,edgeMat);
+ plate(hip,0,-.67,.055,.23,.10,.25,leatherMat);
+ part(hip,new THREE.BoxGeometry(.26,.13,.39),darkMat,0,-.73,.11,1,1,1,-.04,0,0);
+ plate(hip,0,-.44,.12,.18,.06,.05,goldMat);
 }
-// Neck, hood/collar and closed iron helmet: no cartoon face or direction arrow.
-warriorPart(new THREE.CylinderGeometry(.12,.14,.17,7),skinMat,0,1.48,0);
-warriorPart(new THREE.ConeGeometry(.31,.22,7),clothMat,0,1.58,-.015,1,1,1,Math.PI,0,0);
-warriorPart(new THREE.SphereGeometry(.245,8,7),armorMat,0,1.73,0,1,1.1,.92);
-warriorPart(new THREE.BoxGeometry(.31,.12,.24),edgeMat,0,1.63,.045);
-warriorPart(new THREE.BoxGeometry(.31,.075,.21),darkMat,0,1.69,.205);
-warriorPart(new THREE.BoxGeometry(.23,.025,.025),mat(0xb64a32),0,1.69,.222);
-warriorPart(new THREE.BoxGeometry(.08,.24,.06),edgeMat,0,1.79,.218);
-warriorPart(new THREE.ConeGeometry(.07,.19,5),goldMat,0,1.96,-.02,1,1,1,.15,0,0);
-// Short ragged cape and back straps.
-warriorPart(new THREE.BoxGeometry(.48,.62,.09),clothMat,0,1.05,-.22,1,1,1,.1,0,0);
-warriorPart(new THREE.BoxGeometry(.12,.52,.06),leatherMat,-.16,1.07,-.275,1,1,1,.1,0,-.12);
-warriorPart(new THREE.BoxGeometry(.12,.52,.06),leatherMat,.16,1.07,-.275,1,1,1,.1,0,.12);
-player.position.set(0,0,0);
-// Simple original sword model used for the prototype's combat animation.
+// Cadera, faldones laminados, torso ancho y coraza reforzada.
+part(player,new THREE.CapsuleGeometry(.34,.54,3,7),darkMat,0,1.12,0,1,1,.82);
+part(player,new THREE.BoxGeometry(.59,.56,.36),armorMat,0,1.19,.015);
+part(player,new THREE.BoxGeometry(.48,.36,.075),edgeMat,0,1.27,.207);
+part(player,new THREE.BoxGeometry(.39,.26,.035),darkMat,0,1.27,.252);
+part(player,new THREE.BoxGeometry(.07,.25,.025),goldMat,0,1.27,.277);
+for(const y of [1.08,1.19,1.30,1.40])plate(player,0,y,.248,.48,.025,.055,edgeMat);
+plate(player,0,.88,0,.56,.15,.34,leatherMat);
+plate(player,0,.88,.185,.42,.065,.035,goldMat);
+plate(player,0,.88,.215,.09,.11,.035,goldMat);
+for(const side of [-1,1]){
+ plate(player,side*.205,.72,.04,.16,.23,.30,armorMat,side*-.09);
+ plate(player,side*.205,.66,.06,.15,.07,.31,edgeMat,side*-.09);
+}
+// Cuello, gola y casco cerrado con visera, carrilleras y cresta.
+part(player,new THREE.CylinderGeometry(.12,.14,.16,7),skinMat,0,1.50,0);
+part(player,new THREE.ConeGeometry(.32,.20,7),clothMat,0,1.58,-.02,1,1,1,Math.PI,0,0);
+part(player,new THREE.SphereGeometry(.245,8,7),armorMat,0,1.74,0,1,1.1,.95);
+part(player,new THREE.BoxGeometry(.34,.11,.25),edgeMat,0,1.64,.035);
+part(player,new THREE.BoxGeometry(.32,.09,.12),darkMat,0,1.70,.20);
+part(player,new THREE.BoxGeometry(.24,.025,.025),mat(0xb64a32),0,1.70,.263);
+plate(player,0,1.77,.22,.07,.20,.055,edgeMat);
+part(player,new THREE.ConeGeometry(.075,.20,5),goldMat,0,1.97,-.02,1,1,1,.12,0,0);
+for(const side of [-1,1]){
+ part(player,new THREE.BoxGeometry(.10,.24,.14),armorMat,side*.20,1.57,.035,1,1,1,0,0,side*-.12);
+ plate(player,side*.17,1.48,.08,.10,.16,.14,edgeMat,side*-.12);
+}
+// Brazos articulados: hombreras, bíceps, codos, antebrazos y guanteletes.
+const arms={};
+for(const side of [-1,1]){
+ const arm=new THREE.Group();arm.position.set(side*.43,1.42,.005);player.add(arm);arms[side]=arm;
+ part(arm,new THREE.SphereGeometry(.22,7,6),armorMat,0,0,0,1.22,.85,1);
+ part(arm,new THREE.SphereGeometry(.225,7,6),edgeMat,0,.035,.025,1.12,.18,1.08);
+ part(arm,new THREE.CapsuleGeometry(.105,.22,2,6),darkMat,side*.015,-.19,.015);
+ part(arm,new THREE.CylinderGeometry(.11,.13,.22,7),armorMat,side*.02,-.36,.025,1,1,.95);
+ part(arm,new THREE.CylinderGeometry(.13,.105,.25,7),edgeMat,side*.02,-.55,.055,1,1,.88);
+ part(arm,new THREE.BoxGeometry(.20,.23,.22),armorMat,side*.02,-.57,.06);
+ part(arm,new THREE.BoxGeometry(.15,.12,.17),leatherMat,side*.02,-.71,.08);
+ part(arm,new THREE.SphereGeometry(.105,7,6),darkMat,side*.02,-.78,.105,1,.8,1.1);
+ for(const k of [-1,1])part(arm,new THREE.SphereGeometry(.035,6,5),goldMat,k*.12,.02,.17);
+}
+// Capa posterior, faldón de tela y correas.
+part(player,new THREE.BoxGeometry(.48,.46,.075),clothMat,0,1.20,-.235,.96,1,1,.08,0,0);
+part(player,new THREE.ConeGeometry(.36,.54,5),clothMat,0,.88,-.25,1,.95,.28,Math.PI,0,0);
+for(const side of [-1,1]){
+ plate(player,side*.15,1.38,-.20,.09,.14,.07,leatherMat,side*-.12);
+ plate(player,side*.15,1.05,-.30,.075,.38,.035,leatherMat,side*-.08);
+}
+// Espada larga de acero con guarda, pomo y empuñadura de cuero.
 const sword=new THREE.Group();
-const swordHandle=new THREE.Mesh(new THREE.CylinderGeometry(.045,.055,.34,6),mat(0x68452d));
-swordHandle.position.y=.08;sword.add(swordHandle);
-const swordGuard=new THREE.Mesh(new THREE.BoxGeometry(.34,.07,.09),mat(0x9b875b));
-swordGuard.position.y=.27;sword.add(swordGuard);
-const swordBlade=new THREE.Mesh(new THREE.BoxGeometry(.105,.78,.045),mat(0xb9c3c5,.35));
-swordBlade.position.y=.68;swordBlade.castShadow=true;sword.add(swordBlade);
-sword.position.set(.43,1.02,.28);sword.rotation.x=-.25;player.add(sword);
+part(sword,new THREE.CylinderGeometry(.045,.052,.30,6),leatherMat,0,.08,0);
+part(sword,new THREE.BoxGeometry(.34,.065,.075),goldMat,0,.25,0);
+part(sword,new THREE.CylinderGeometry(.065,.065,.065,6),goldMat,0,-.09,0);
+part(sword,new THREE.BoxGeometry(.105,.76,.035),steelBright,0,.66,0);
+part(sword,new THREE.BoxGeometry(.035,.68,.012),edgeMat,0,.66,.024);
+part(sword,new THREE.ConeGeometry(.052,.18,4),steelBright,0,1.12,0);
+sword.position.set(.50,.70,.30);sword.rotation.x=-.20;player.add(sword);
+player.position.set(0,0,0);
 const resources=[];const treeMat=mat(0x68452d),leafMats=[mat(0x2e5636),mat(0x3b6840),mat(0x496f43)],rockMat=mat(0x777d7a);
 function addTree(x,z){const group=new THREE.Group();const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.18,.3,2.2,7),treeMat);trunk.position.y=1.1;trunk.castShadow=true;group.add(trunk);for(let j=0;j<3;j++){const crown=new THREE.Mesh(new THREE.ConeGeometry(1.05-j*.13,1.65,7),leafMats[Math.floor(Math.random()*leafMats.length)]);crown.position.y=2.2+j*.63;crown.castShadow=true;group.add(crown)}group.position.set(x,0,z);scene.add(group);resources.push({type:'wood',mesh:group,position:group.position,active:true})}
 function addRock(x,z){const m=new THREE.Mesh(new THREE.DodecahedronGeometry(.55+Math.random()*.5,0),rockMat);m.position.set(x,.35,z);m.scale.y=.7;m.rotation.set(Math.random(),Math.random(),Math.random());m.castShadow=true;m.receiveShadow=true;scene.add(m);resources.push({type:'stone',mesh:m,position:m.position,active:true})}
@@ -173,11 +198,11 @@ const clock=new THREE.Clock();function animate(){requestAnimationFrame(animate);
 let turn=moveX,drive=-moveY;if(keys.w||keys.arrowup)drive=1;if(keys.s||keys.arrowdown)drive=-1;if(keys.a||keys.arrowleft)turn=-1;if(keys.d||keys.arrowright)turn=1;
 // Tank-style controls: horizontal input turns the heading; vertical input drives along that heading.
 // This prevents the direction vector from being recalculated against a heading that changes every frame.
-if(health>0){heading-=turn*dt*2.35;player.rotation.y=heading;if(Math.abs(drive)>.08){const dx=Math.sin(heading)*drive,dz=Math.cos(heading)*drive;const nextX=player.position.x+dx*dt*4.1,nextZ=player.position.z+dz*dt*4.1,radius=.42;const blocked=wallBoxes.some(b=>nextX+radius>b.minX&&nextX-radius<b.maxX&&nextZ+radius>b.minZ&&nextZ-radius<b.maxZ);if(!blocked){player.position.x=nextX;player.position.z=nextZ;walking+=dt*11*Math.abs(drive);legs[0].rotation.x=Math.sin(walking)*.5*drive;legs[1].rotation.x=-Math.sin(walking)*.5*drive}}else{legs.forEach(l=>l.rotation.x*=.8)}}
+if(health>0){heading-=turn*dt*2.35;player.rotation.y=heading;if(Math.abs(drive)>.08){const dx=Math.sin(heading)*drive,dz=Math.cos(heading)*drive;const nextX=player.position.x+dx*dt*4.1,nextZ=player.position.z+dz*dt*4.1,radius=.42;const blocked=wallBoxes.some(b=>nextX+radius>b.minX&&nextX-radius<b.maxX&&nextZ+radius>b.minZ&&nextZ-radius<b.maxZ);if(!blocked){player.position.x=nextX;player.position.z=nextZ;walking+=dt*11*Math.abs(drive);legs[0].rotation.x=Math.sin(walking)*.48*drive;legs[1].rotation.x=-Math.sin(walking)*.48*drive;arms[-1].rotation.x=-Math.sin(walking)*.18*drive;arms[1].rotation.x=Math.sin(walking)*.16*drive}}else{legs.forEach(l=>l.rotation.x*=.8);arms[-1].rotation.x*=.8;arms[1].rotation.x*=.8}}
 // Combat: enemies approach, telegraph attacks, and can be interrupted or parried.
 attackCooldown=Math.max(0,attackCooldown-dt);attackAnim=Math.max(0,attackAnim-dt);
-if(attackAnim>0){sword.rotation.x=-.25-Math.sin((.34-attackAnim)/.34*Math.PI)*1.45}
-else{sword.rotation.x=-.25}
+if(attackAnim>0){const swing=Math.sin((.34-attackAnim)/.34*Math.PI);sword.rotation.x=-.20-swing*1.45;arms[1].rotation.x=-.9-swing*.55;arms[1].rotation.z=-.25-swing*.45}
+else{sword.rotation.x=-.20;arms[1].rotation.x*=.78;arms[1].rotation.z*=.78}
 for(const e of hostiles){
  if(!e.alive)continue;
  const dx=player.position.x-e.mesh.position.x,dz=player.position.z-e.mesh.position.z,dist=Math.hypot(dx,dz);
