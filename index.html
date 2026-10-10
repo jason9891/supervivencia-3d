@@ -14,7 +14,6 @@
 <button id="jump-control" type="button" aria-label="Saltar" style="position:fixed;z-index:99999;right:22px;right:max(22px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 28px);width:88px;height:88px;border:2px solid #f3d7a0;border-radius:50%;background:linear-gradient(145deg,#8d3427,#431714);box-shadow:0 5px 22px #000b,inset 0 1px 0 #ffffff55;color:#fff4df;font:700 15px/1.2 system-ui,sans-serif;letter-spacing:.08em;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;touch-action:none;-webkit-tap-highlight-color:transparent"><span style="font-size:30px;line-height:1">⬆</span><span>SALTAR</span></button>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
-import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x101114);
 const camera=new THREE.PerspectiveCamera(34,innerWidth/innerHeight,.1,100);
@@ -166,37 +165,55 @@ const floorLight=new THREE.HemisphereLight(0xc0cbd2,0x42413d,.55);scene.add(floo
 // Bare studio presentation: no map, ground, HUD, bars, inventory, enemies or resources.
 warrior.position.y=-.06;
 const pivot=new THREE.Group();scene.add(pivot);pivot.add(warrior);
-// Modelo riggeado externo CC0: reemplaza la armadura geométrica cuando termina de cargar.
-// Si el servidor externo falla, el modelo de respaldo sigue visible.
-let loadedKnight=null,knightMixer=null,knightIdle=null,knightWalk=null,activeKnightAction=null,knightBaseY=0;
-const knightLoader=new GLTFLoader();
-knightLoader.load('https://pub-2534e921bf9c4314addcd4d8a6e98b7b.r2.dev/avatars/mixamo/glb/vanguard.glb',gltf=>{
- loadedKnight=gltf.scene;
- loadedKnight.name='Vanguard-armored-warrior';
- loadedKnight.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(o.material){o.material.side=THREE.FrontSide;}}});
- loadedKnight.updateMatrixWorld(true);
- const bounds=new THREE.Box3().setFromObject(loadedKnight);
- const size=bounds.getSize(new THREE.Vector3());
- const height=size.y||2;
- const scale=2.22/height;
- loadedKnight.scale.setScalar(scale);
- loadedKnight.position.set(-((bounds.min.x+bounds.max.x)*.5)*scale,-bounds.min.y*scale,-((bounds.min.z+bounds.max.z)*.5)*scale);
- knightBaseY=loadedKnight.position.y;
- pivot.add(loadedKnight);
- warrior.visible=false;
- knightMixer=new THREE.AnimationMixer(loadedKnight);
- const idleClip=gltf.animations.find(a=>/idle/i.test(a.name));
- const walkClip=gltf.animations.find(a=>/walk/i.test(a.name));
- if(idleClip){knightIdle=knightMixer.clipAction(idleClip);knightIdle.play();activeKnightAction=knightIdle;}
- if(walkClip){knightWalk=knightMixer.clipAction(walkClip);knightWalk.enabled=true;knightWalk.setEffectiveWeight(0);}
-},undefined,error=>{console.warn('No se pudo cargar el modelo Vanguard; se mantiene el guerrero de respaldo.',error)});
-camera.lookAt(0,1.13,0);
-let dragging=false,lastX=0,lastY=0,rotY=-.22,rotX=0;
-renderer.domElement.addEventListener('pointerdown',e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId)});
-renderer.domElement.addEventListener('pointermove',e=>{if(!dragging)return;rotY+=(e.clientX-lastX)*.009;rotX+=(e.clientY-lastY)*.004;rotX=THREE.MathUtils.clamp(rotX,-.25,.35);lastX=e.clientX;lastY=e.clientY});
-renderer.domElement.addEventListener('pointerup',()=>dragging=false);
-renderer.domElement.addEventListener('pointercancel',()=>dragging=false);
-
+// Personaje base SIN ARMADURA: la progresión futura equipará piezas encontradas.
+warrior.visible=false;
+const baseHuman=new THREE.Group();pivot.add(baseHuman);
+const flesh=mat(0x9b6b50,.88,.02),fleshLight=mat(0xb27d5c,.84,.02),hair=mat(0x211b18,.96,0),pants=mat(0x30251f,.96,0),pantsLight=mat(0x49352a,.94,0),wrap=mat(0x806044,.92,0);
+function limb(parent,material,a,b,r1,r2=r1){
+ const start=new THREE.Vector3(...a),end=new THREE.Vector3(...b),delta=end.clone().sub(start);
+ const o=mesh(parent,new THREE.CapsuleGeometry(r1,Math.max(.01,delta.length()-r1*2),4,8),material,[...(start.clone().add(end).multiplyScalar(.5).toArray())]);
+ o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),delta.normalize());return o;
+}
+// Proporciones humanas atléticas, piel visible, pantalón y vendas sencillas.
+mesh(baseHuman,new THREE.CapsuleGeometry(.235,.42,5,10),flesh,[0,1.48,0],[1.12,1.18,.78]);
+mesh(baseHuman,new THREE.SphereGeometry(.205,10,8),fleshLight,[-.105,1.57,.145],[.72,.55,.32]);
+mesh(baseHuman,new THREE.SphereGeometry(.205,10,8),fleshLight,[.105,1.57,.145],[.72,.55,.32]);
+mesh(baseHuman,new THREE.CapsuleGeometry(.105,.16,4,8),flesh,[0,1.77,0],[.85,1,.85]);
+mesh(baseHuman,new THREE.SphereGeometry(.145,12,10),flesh,[0,1.98,.015],[.90,1.13,.92]);
+mesh(baseHuman,new THREE.SphereGeometry(.15,10,7),hair,[0,2.075,-.015],[1.02,.48,1.02]);
+mesh(baseHuman,new THREE.SphereGeometry(.07,8,6),hair,[-.115,1.99,.015],[.45,.75,.75]);
+mesh(baseHuman,new THREE.SphereGeometry(.07,8,6),hair,[.115,1.99,.015],[.45,.75,.75]);
+mesh(baseHuman,new THREE.BoxGeometry(.038,.016,.012),hair,[-.055,2.005,.148]);
+mesh(baseHuman,new THREE.BoxGeometry(.038,.016,.012),hair,[.055,2.005,.148]);
+mesh(baseHuman,new THREE.ConeGeometry(.027,.065,6),flesh,[0,1.97,.16],[1,1,.8]);
+mesh(baseHuman,new THREE.SphereGeometry(.012,6,5),hair,[-.052,2.01,.151]);
+mesh(baseHuman,new THREE.SphereGeometry(.012,6,5),hair,[.052,2.01,.151]);
+// Cintura de tela y pantalón de viaje, sin placas ni metal.
+mesh(baseHuman,new THREE.CapsuleGeometry(.255,.19,4,8),pants,[0,1.16,0],[1.12,.72,.86]);
+mesh(baseHuman,new THREE.BoxGeometry(.42,.17,.30),wrap,[0,1.22,.045],[1,1,1],[0,0,-.08]);
+const baseLegs=[];
+for(const side of [-1,1]){
+ const leg=new THREE.Group();leg.position.set(side*.13,1.08,0);baseHuman.add(leg);baseLegs.push(leg);
+ limb(leg,pants,[0,-.02,0],[0,-.37,.015],.105);
+ mesh(leg,new THREE.SphereGeometry(.09,8,6),flesh,[0,-.39,.025],[1,.85,1]);
+ limb(leg,flesh,[0,-.40,.02],[0,-.70,.02],.067);
+ limb(leg,pantsLight,[0,-.43,.02],[0,-.66,.02],.073);
+ mesh(leg,new THREE.BoxGeometry(.13,.045,.13),wrap,[0,-.47,.035]);
+ mesh(leg,new THREE.BoxGeometry(.14,.11,.23),pants,[0,-.82,.065]);
+ mesh(leg,new THREE.BoxGeometry(.145,.075,.25),hair,[0,-.87,.09]);
+}
+const baseArms={};
+for(const side of [-1,1]){
+ const arm=new THREE.Group();arm.position.set(side*.30,1.65,0);baseHuman.add(arm);baseArms[side]=arm;
+ mesh(arm,new THREE.SphereGeometry(.13,9,7),flesh,[side*.015,-.03,0],[1,.95,.94]);
+ limb(arm,flesh,[side*.015,-.06,0],[side*.035,-.31,.02],.085);
+ mesh(arm,new THREE.SphereGeometry(.085,8,6),fleshLight,[side*.035,-.32,.02]);
+ limb(arm,flesh,[side*.035,-.34,.02],[side*.045,-.59,.065],.063);
+ mesh(arm,new THREE.SphereGeometry(.067,8,6),flesh,[side*.045,-.63,.075],[.95,1.1,.9]);
+ for(let i=0;i<4;i++)mesh(arm,new THREE.CapsuleGeometry(.012,.055,2,5),flesh,[side*.045+(i-1.5)*.026,-.685,.10]);
+ // Simple cloth wraps on wrists: no armor, shield or weapon in the starting state.
+ mesh(arm,new THREE.CylinderGeometry(.067,.066,.085,8),wrap,[side*.045,-.56,.055],[1,1,1],[0,0,0]);
+}
 // Controles temporales de movimiento para probar la animación en un campo vacío.
 const keys={};
 let jumpHeight=0,jumpVelocity=0;
@@ -216,24 +233,14 @@ const hint=document.createElement('div');hint.textContent='MOVER · SALTAR · WA
 
 const clock=new THREE.Clock();let elapsed=0;
 function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;
- if(knightMixer)knightMixer.update(dt);
+ 
  if(jumpHeight>0||jumpVelocity>0){jumpVelocity-=12.5*dt;jumpHeight+=jumpVelocity*dt;if(jumpHeight<=0){jumpHeight=0;jumpVelocity=0}}
  pivot.position.y=jumpHeight;
- if(loadedKnight)loadedKnight.rotation.y=0;
+ 
  const forward=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0);
  const sideways=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0);
  const moving=forward!==0||sideways!==0;
- if(loadedKnight&&!knightWalk){
-  loadedKnight.position.y=knightBaseY+(moving?Math.abs(Math.sin(elapsed*10.5))*.035:Math.sin(elapsed*1.4)*.006);
-  loadedKnight.rotation.z=moving?Math.sin(elapsed*10.5)*.012:0;
- }
- if(knightMixer){
-  const desired=(moving&&knightWalk)?knightWalk:knightIdle;
-  if(desired&&desired!==activeKnightAction){
-   if(activeKnightAction)activeKnightAction.fadeOut(.18);
-   desired.reset().fadeIn(.18).play();activeKnightAction=desired;
-  }
- }
+
  if(moving){
   const direction=Math.atan2(sideways,forward);
   const target=direction;
@@ -242,16 +249,16 @@ function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDel
   pivot.position.x+=Math.sin(pivot.rotation.y)*forward*speed*dt+Math.cos(pivot.rotation.y)*sideways*speed*dt;
   pivot.position.z+=Math.cos(pivot.rotation.y)*forward*speed*dt-Math.sin(pivot.rotation.y)*sideways*speed*dt;
   const gait=elapsed*10.5;
-  legs[0].rotation.x=Math.sin(gait)*.48;legs[1].rotation.x=-Math.sin(gait)*.48;
-  arms[-1].rotation.x=-Math.sin(gait)*.14;arms[1].rotation.x=Math.sin(gait)*.17;
-  warrior.position.y=-.06+(jumpHeight>0.02?Math.sin(gait)*.015:Math.abs(Math.sin(gait))*.035);
-  if(jumpHeight>0.03){legs[0].rotation.x=-.38;legs[1].rotation.x=-.52;arms[-1].rotation.x=-.28;arms[1].rotation.x=-.42;}
+  baseLegs[0].rotation.x=Math.sin(gait)*.48;baseLegs[1].rotation.x=-Math.sin(gait)*.48;
+  baseArms[-1].rotation.x=-Math.sin(gait)*.18;baseArms[1].rotation.x=Math.sin(gait)*.18;
+  baseHuman.position.y=jumpHeight>0.02?0:Math.abs(Math.sin(gait))*.025;
+  if(jumpHeight>0.03){baseLegs[0].rotation.x=-.38;baseLegs[1].rotation.x=-.52;baseArms[-1].rotation.x=-.28;baseArms[1].rotation.x=-.42;}
  }else{
   pivot.rotation.y+=(rotY-pivot.rotation.y)*Math.min(1,dt*3);
-  legs[0].rotation.x*=.82;legs[1].rotation.x*=.82;
-  arms[-1].rotation.x*=.82;arms[1].rotation.x*=.82;
-  warrior.position.y=-.06+(jumpHeight>0.02?0:Math.sin(elapsed*1.4)*.008);
-  if(jumpHeight>0.02){legs[0].rotation.x=-.38;legs[1].rotation.x=-.52;arms[-1].rotation.x=-.28;arms[1].rotation.x=-.42;}
+  baseLegs[0].rotation.x*=.82;baseLegs[1].rotation.x*=.82;
+  baseArms[-1].rotation.x*=.82;baseArms[1].rotation.x*=.82;
+  baseHuman.position.y=jumpHeight>0.02?0:Math.sin(elapsed*1.4)*.006;
+  if(jumpHeight>0.02){baseLegs[0].rotation.x=-.38;baseLegs[1].rotation.x=-.52;baseArms[-1].rotation.x=-.28;baseArms[1].rotation.x=-.42;}
  }
  pivot.rotation.x=rotX;
  camera.position.x+=(pivot.position.x+1.8-camera.position.x)*Math.min(1,dt*2);
