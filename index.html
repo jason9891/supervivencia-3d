@@ -145,6 +145,12 @@ mesh(sword,new THREE.BoxGeometry(.105,.86,.035),steel,[0,.65,0],[1,1,1],[0,0,0])
 box(sword,ironLight,[0,.65,.021],[.022,.75,.012]);
 mesh(sword,new THREE.ConeGeometry(.053,.17,4),steel,[0,1.16,0]);
 sword.position.set(.11,-.81,.12);sword.scale.setScalar(.80);sword.rotation.set(-.18,0,2.40);arms[1].add(sword);
+// Campo de prueba plano y vacío para observar locomoción: sin muros, objetos ni interfaz.
+const groundMat=new THREE.MeshStandardMaterial({color:0x343a38,roughness:.94,metalness:0});
+const ground=mesh(scene,new THREE.PlaneGeometry(200,200),groundMat,[0,-.075,0],[1,1,1],[-Math.PI/2,0,0]);
+const grid=new THREE.GridHelper(80,80,0x646c68,0x454b48);
+grid.position.y=-.062;grid.material.transparent=true;grid.material.opacity=.24;scene.add(grid);
+const floorLight=new THREE.HemisphereLight(0xc0cbd2,0x42413d,.55);scene.add(floorLight);
 // Bare studio presentation: no map, ground, HUD, bars, inventory, enemies or resources.
 warrior.position.y=-.06;
 const pivot=new THREE.Group();scene.add(pivot);pivot.add(warrior);
@@ -154,12 +160,45 @@ renderer.domElement.addEventListener('pointerdown',e=>{dragging=true;lastX=e.cli
 renderer.domElement.addEventListener('pointermove',e=>{if(!dragging)return;rotY+=(e.clientX-lastX)*.009;rotX+=(e.clientY-lastY)*.004;rotX=THREE.MathUtils.clamp(rotX,-.25,.35);lastX=e.clientX;lastY=e.clientY});
 renderer.domElement.addEventListener('pointerup',()=>dragging=false);
 renderer.domElement.addEventListener('pointercancel',()=>dragging=false);
+
+// Controles temporales de movimiento para probar la animación en un campo vacío.
+const keys={};
+addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase()))e.preventDefault()});
+addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+const pad=document.createElement('div');
+pad.style.cssText='position:fixed;left:16px;bottom:22px;display:grid;grid-template-columns:48px 48px 48px;grid-template-rows:48px 48px 48px;gap:5px;z-index:5;touch-action:none;user-select:none';
+const buttonStyle='border:1px solid #aab4b4aa;border-radius:12px;background:#20272bcc;color:#f4f1e9;font:22px system-ui;backdrop-filter:blur(4px);touch-action:none';
+const padKeys=[['','', 'w'],['a','s','d']];
+function addPad(label,key,col,row){const b=document.createElement('button');b.textContent=label;b.style.cssText=buttonStyle;b.style.gridColumn=col;b.style.gridRow=row;b.setAttribute('aria-label',key);b.addEventListener('pointerdown',e=>{e.preventDefault();keys[key]=true;b.setPointerCapture(e.pointerId)});const off=()=>keys[key]=false;b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('lostpointercapture',off);pad.appendChild(b)}
+addPad('▲','w',2,1);addPad('◀','a',1,2);addPad('▼','s',2,2);addPad('▶','d',3,2);
+const hint=document.createElement('div');hint.textContent='MOVER · WASD o flechas';hint.style.cssText='position:fixed;left:16px;bottom:190px;color:#e4e5df;font:12px system-ui;letter-spacing:.08em;text-shadow:0 2px 4px #000;pointer-events:none';document.body.append(pad,hint);
+
 const clock=new THREE.Clock();let elapsed=0;
 function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;
- pivot.rotation.y=rotY+(dragging?0:Math.sin(elapsed*.22)*.035);pivot.rotation.x=rotX;
- warrior.position.y=-.06+Math.sin(elapsed*1.4)*.012;
- arms[-1].rotation.x=Math.sin(elapsed*1.4)*.018;
- if(!dragging){arms[1].rotation.x=Math.sin(elapsed*1.2)*.018}
+ const forward=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0);
+ const sideways=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0);
+ const moving=forward!==0||sideways!==0;
+ if(moving){
+  const direction=Math.atan2(sideways,forward);
+  const target=direction;
+  pivot.rotation.y=rotY+target;
+  const speed=1.65;
+  pivot.position.x+=Math.sin(pivot.rotation.y)*forward*speed*dt+Math.cos(pivot.rotation.y)*sideways*speed*dt;
+  pivot.position.z+=Math.cos(pivot.rotation.y)*forward*speed*dt-Math.sin(pivot.rotation.y)*sideways*speed*dt;
+  const gait=elapsed*10.5;
+  legs[0].rotation.x=Math.sin(gait)*.48;legs[1].rotation.x=-Math.sin(gait)*.48;
+  arms[-1].rotation.x=-Math.sin(gait)*.14;arms[1].rotation.x=Math.sin(gait)*.17;
+  warrior.position.y=-.06+Math.abs(Math.sin(gait))*.035;
+ }else{
+  pivot.rotation.y+=(rotY-pivot.rotation.y)*Math.min(1,dt*3);
+  legs[0].rotation.x*=.82;legs[1].rotation.x*=.82;
+  arms[-1].rotation.x*=.82;arms[1].rotation.x*=.82;
+  warrior.position.y=-.06+Math.sin(elapsed*1.4)*.008;
+ }
+ pivot.rotation.x=rotX;
+ camera.position.x+=(pivot.position.x+1.8-camera.position.x)*Math.min(1,dt*2);
+ camera.position.z+=(pivot.position.z+4.9-camera.position.z)*Math.min(1,dt*2);
+ camera.lookAt(pivot.position.x,1.13,pivot.position.z);
  renderer.render(scene,camera)}
 function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.8));renderer.setSize(innerWidth,innerHeight)}
 addEventListener('resize',resize);animate();
