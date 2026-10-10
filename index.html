@@ -10,6 +10,8 @@
 </style>
 </head>
 <body>
+<!-- Control táctil independiente del render 3D para que siempre sea visible en iPhone. -->
+<button id="jump-control" type="button" aria-label="Saltar" style="position:fixed;z-index:99999;right:22px;right:max(22px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 28px);width:88px;height:88px;border:2px solid #f3d7a0;border-radius:50%;background:linear-gradient(145deg,#8d3427,#431714);box-shadow:0 5px 22px #000b,inset 0 1px 0 #ffffff55;color:#fff4df;font:700 15px/1.2 system-ui,sans-serif;letter-spacing:.08em;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;touch-action:none;-webkit-tap-highlight-color:transparent"><span style="font-size:30px;line-height:1">⬆</span><span>SALTAR</span></button>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 const scene=new THREE.Scene();
@@ -53,6 +55,10 @@ box(warrior,iron,[0,1.48,0],[.61,.48,.37]);
 mesh(warrior,new THREE.SphereGeometry(.33,10,8),iron,[0,1.49,.015],[1,.83,.65]);
 box(warrior,ironLight,[0,1.52,.235],[.49,.35,.075]);
 box(warrior,ironDark,[0,1.52,.278],[.39,.25,.035]);
+// Placas pectorales solapadas y rebordes que marcan una silueta más pesada.
+mesh(warrior,new THREE.SphereGeometry(.22,10,7),ironLight,[-.13,1.53,.275],[.78,.75,.20],[0,0,-.12]);
+mesh(warrior,new THREE.SphereGeometry(.22,10,7),ironLight,[.13,1.53,.275],[.78,.75,.20],[0,0,.12]);
+box(warrior,ironDark,[0,1.69,.235],[.38,.055,.06]);
 box(warrior,brass,[0,1.51,.302],[.055,.27,.018]);
 for(const y of [1.34,1.43,1.62,1.70])box(warrior,ironLight,[0,y,.247],[.48,.022,.035]);
 box(warrior,brass,[0,1.23,.235],[.48,.065,.045]);
@@ -173,8 +179,9 @@ const buttonStyle='border:1px solid #aab4b4aa;border-radius:12px;background:#202
 const padKeys=[['','', 'w'],['a','s','d']];
 function addPad(label,key,col,row){const b=document.createElement('button');b.textContent=label;b.style.cssText=buttonStyle;b.style.gridColumn=col;b.style.gridRow=row;b.setAttribute('aria-label',key);b.addEventListener('pointerdown',e=>{e.preventDefault();keys[key]=true;b.setPointerCapture(e.pointerId)});const off=()=>keys[key]=false;b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('lostpointercapture',off);pad.appendChild(b)}
 addPad('▲','w',2,1);addPad('◀','a',1,2);addPad('▼','s',2,2);addPad('▶','d',3,2);
-const jumpButton=document.createElement('button');jumpButton.textContent='⬆';jumpButton.setAttribute('aria-label','Saltar');jumpButton.style.cssText=buttonStyle+';position:fixed;right:22px;bottom:38px;width:76px;height:76px;border-radius:50%;font-size:30px;font-weight:700';
-jumpButton.addEventListener('pointerdown',e=>{e.preventDefault();jump();jumpButton.setPointerCapture(e.pointerId)});document.body.appendChild(jumpButton);
+const jumpButton=document.getElementById('jump-control');
+jumpButton.addEventListener('pointerdown',e=>{e.preventDefault();jump();});
+jumpButton.addEventListener('click',e=>{e.preventDefault();jump()});
 const hint=document.createElement('div');hint.textContent='MOVER · SALTAR · WASD / FLECHAS / ESPACIO';hint.style.cssText='position:fixed;left:16px;bottom:190px;color:#e4e5df;font:12px system-ui;letter-spacing:.08em;text-shadow:0 2px 4px #000;pointer-events:none';document.body.append(pad,hint);
 
 const clock=new THREE.Clock();let elapsed=0;
