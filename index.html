@@ -163,7 +163,9 @@ renderer.domElement.addEventListener('pointercancel',()=>dragging=false);
 
 // Controles temporales de movimiento para probar la animación en un campo vacío.
 const keys={};
-addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase()))e.preventDefault()});
+let jumpHeight=0,jumpVelocity=0;
+function jump(){if(jumpHeight<=0.001){jumpVelocity=5.2}}
+addEventListener('keydown',e=>{const k=e.key.toLowerCase();keys[k]=true;if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k))e.preventDefault();if(k===' '&&!e.repeat)jump()});
 addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
 const pad=document.createElement('div');
 pad.style.cssText='position:fixed;left:16px;bottom:22px;display:grid;grid-template-columns:48px 48px 48px;grid-template-rows:48px 48px 48px;gap:5px;z-index:5;touch-action:none;user-select:none';
@@ -171,10 +173,14 @@ const buttonStyle='border:1px solid #aab4b4aa;border-radius:12px;background:#202
 const padKeys=[['','', 'w'],['a','s','d']];
 function addPad(label,key,col,row){const b=document.createElement('button');b.textContent=label;b.style.cssText=buttonStyle;b.style.gridColumn=col;b.style.gridRow=row;b.setAttribute('aria-label',key);b.addEventListener('pointerdown',e=>{e.preventDefault();keys[key]=true;b.setPointerCapture(e.pointerId)});const off=()=>keys[key]=false;b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('lostpointercapture',off);pad.appendChild(b)}
 addPad('▲','w',2,1);addPad('◀','a',1,2);addPad('▼','s',2,2);addPad('▶','d',3,2);
-const hint=document.createElement('div');hint.textContent='MOVER · WASD o flechas';hint.style.cssText='position:fixed;left:16px;bottom:190px;color:#e4e5df;font:12px system-ui;letter-spacing:.08em;text-shadow:0 2px 4px #000;pointer-events:none';document.body.append(pad,hint);
+const jumpButton=document.createElement('button');jumpButton.textContent='⬆';jumpButton.setAttribute('aria-label','Saltar');jumpButton.style.cssText=buttonStyle+';position:fixed;right:22px;bottom:38px;width:76px;height:76px;border-radius:50%;font-size:30px;font-weight:700';
+jumpButton.addEventListener('pointerdown',e=>{e.preventDefault();jump();jumpButton.setPointerCapture(e.pointerId)});document.body.appendChild(jumpButton);
+const hint=document.createElement('div');hint.textContent='MOVER · SALTAR · WASD / FLECHAS / ESPACIO';hint.style.cssText='position:fixed;left:16px;bottom:190px;color:#e4e5df;font:12px system-ui;letter-spacing:.08em;text-shadow:0 2px 4px #000;pointer-events:none';document.body.append(pad,hint);
 
 const clock=new THREE.Clock();let elapsed=0;
 function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;
+ if(jumpHeight>0||jumpVelocity>0){jumpVelocity-=12.5*dt;jumpHeight+=jumpVelocity*dt;if(jumpHeight<=0){jumpHeight=0;jumpVelocity=0}}
+ pivot.position.y=jumpHeight;
  const forward=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0);
  const sideways=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0);
  const moving=forward!==0||sideways!==0;
@@ -188,12 +194,14 @@ function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDel
   const gait=elapsed*10.5;
   legs[0].rotation.x=Math.sin(gait)*.48;legs[1].rotation.x=-Math.sin(gait)*.48;
   arms[-1].rotation.x=-Math.sin(gait)*.14;arms[1].rotation.x=Math.sin(gait)*.17;
-  warrior.position.y=-.06+Math.abs(Math.sin(gait))*.035;
+  warrior.position.y=-.06+(jumpHeight>0.02?Math.sin(gait)*.015:Math.abs(Math.sin(gait))*.035);
+  if(jumpHeight>0.03){legs[0].rotation.x=-.38;legs[1].rotation.x=-.52;arms[-1].rotation.x=-.28;arms[1].rotation.x=-.42;}
  }else{
   pivot.rotation.y+=(rotY-pivot.rotation.y)*Math.min(1,dt*3);
   legs[0].rotation.x*=.82;legs[1].rotation.x*=.82;
   arms[-1].rotation.x*=.82;arms[1].rotation.x*=.82;
-  warrior.position.y=-.06+Math.sin(elapsed*1.4)*.008;
+  warrior.position.y=-.06+(jumpHeight>0.02?0:Math.sin(elapsed*1.4)*.008);
+  if(jumpHeight>0.02){legs[0].rotation.x=-.38;legs[1].rotation.x=-.52;arms[-1].rotation.x=-.28;arms[1].rotation.x=-.42;}
  }
  pivot.rotation.x=rotX;
  camera.position.x+=(pivot.position.x+1.8-camera.position.x)*Math.min(1,dt*2);
