@@ -12,6 +12,7 @@
 <body>
 <!-- Control táctil independiente del render 3D para que siempre sea visible en iPhone. -->
 <button id="jump-control" type="button" aria-label="Saltar" style="position:fixed;z-index:99999;right:22px;right:max(22px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 28px);width:88px;height:88px;border:2px solid #f3d7a0;border-radius:50%;background:linear-gradient(145deg,#8d3427,#431714);box-shadow:0 5px 22px #000b,inset 0 1px 0 #ffffff55;color:#fff4df;font:700 15px/1.2 system-ui,sans-serif;letter-spacing:.08em;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;touch-action:none;-webkit-tap-highlight-color:transparent"><span style="font-size:30px;line-height:1">⬆</span><span>SALTAR</span></button>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
