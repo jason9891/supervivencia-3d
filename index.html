@@ -15,9 +15,9 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.m
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x101114);
 const camera=new THREE.PerspectiveCamera(34,innerWidth/innerHeight,.1,100);
-camera.position.set(2.7,2.15,7.6);
+camera.position.set(1.8,1.95,4.9);
 const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(devicePixelRatio,1.8));renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));renderer.setSize(innerWidth,innerHeight);
 renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;document.body.appendChild(renderer.domElement);
 scene.add(new THREE.HemisphereLight(0x9aaec4,0x191518,2.05));
@@ -98,6 +98,21 @@ for(const side of [-1,1]){
  for(const finger of [-1,0,1])mesh(arm,new THREE.CapsuleGeometry(.025,.075,2,5),ironDark,[side*.025+finger*.045,-.88,.13]);
  for(const k of [-1,1])rivet(arm,k*.14,.02,.17,.026);
 }
+// Escudo de acero en el antebrazo izquierdo, con borde metálico y nervio central.
+const shieldShape=new THREE.Shape();
+shieldShape.moveTo(-.23,.20);shieldShape.quadraticCurveTo(-.22,.29,-.12,.29);
+shieldShape.lineTo(.12,.29);shieldShape.quadraticCurveTo(.23,.29,.23,.20);
+shieldShape.lineTo(.19,-.10);shieldShape.quadraticCurveTo(.15,-.29,0,-.43);
+shieldShape.quadraticCurveTo(-.15,-.29,-.19,-.10);shieldShape.closePath();
+const shieldGeo=new THREE.ExtrudeGeometry(shieldShape,{depth:.065,bevelEnabled:true,bevelSegments:2,steps:1,bevelSize:.025,bevelThickness:.025});
+mesh(arms[-1],shieldGeo,ironDark,[0,-.50,.19],[1,1,1]);
+const shieldFace=new THREE.ShapeGeometry(shieldShape);
+mesh(arms[-1],shieldFace,ironLight,[0,-.50,.286]);
+box(arms[-1],brass,[0,-.53,.30],[.035,.54,.025]);
+mesh(arms[-1],new THREE.SphereGeometry(.055,8,6),brass,[0,-.52,.32]);
+for(const side of [-1,1])for(const y of [.15,-.02,-.19])rivet(arms[-1],side*.16,y-.50,.31,.018);
+box(arms[-1],leather,[0,-.42,.13],[.22,.08,.04],[0,0,.08]);
+box(arms[-1],leather,[0,-.65,.13],[.22,.08,.04],[0,0,-.08]);
 // Segunda capa de detalle: placas biseladas, remaches, ribetes y articulaciones.
 for(const side of [-1,1]){
  // Placas exteriores de los pectorales y costuras de la armadura.
@@ -134,7 +149,7 @@ sword.position.set(.11,-.81,.12);sword.scale.setScalar(.80);sword.rotation.set(-
 warrior.position.y=-.06;
 const pivot=new THREE.Group();scene.add(pivot);pivot.add(warrior);
 camera.lookAt(0,1.13,0);
-let dragging=false,lastX=0,lastY=0,rotY=-.12,rotX=0;
+let dragging=false,lastX=0,lastY=0,rotY=-.22,rotX=0;
 renderer.domElement.addEventListener('pointerdown',e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId)});
 renderer.domElement.addEventListener('pointermove',e=>{if(!dragging)return;rotY+=(e.clientX-lastX)*.009;rotX+=(e.clientY-lastY)*.004;rotX=THREE.MathUtils.clamp(rotX,-.25,.35);lastX=e.clientX;lastY=e.clientY});
 renderer.domElement.addEventListener('pointerup',()=>dragging=false);
