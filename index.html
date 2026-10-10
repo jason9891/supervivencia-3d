@@ -4,299 +4,71 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#101114">
-<title>Guerrero — Modelo 3D</title>
+<title>Supervivencia 3D — Guerrero</title>
 <style>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101114;touch-action:none}canvas{display:block;width:100%;height:100%;touch-action:none}
+#jump{position:fixed;z-index:20;right:max(20px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 28px);width:84px;height:84px;border:2px solid #f3d7a0;border-radius:50%;background:#762b23;color:#fff4df;font:bold 15px system-ui;box-shadow:0 5px 22px #000b;touch-action:none}
+#pad{position:fixed;z-index:20;left:16px;bottom:24px;display:grid;grid-template-columns:48px 48px 48px;grid-template-rows:48px 48px;gap:5px}
+#pad button{border:1px solid #aab4b4aa;border-radius:12px;background:#20272be8;color:#fff;font:22px system-ui;touch-action:none}
+#hint{position:fixed;z-index:20;top:env(safe-area-inset-top);left:0;right:0;text-align:center;padding:12px;color:#e8dfce;font:12px system-ui;letter-spacing:.08em;text-shadow:0 2px 4px #000;pointer-events:none}
+#error{position:fixed;z-index:30;top:20%;left:8%;right:8%;padding:14px;background:#401b1b;color:#fff;font:14px system-ui;display:none;white-space:pre-wrap}
 </style>
 </head>
 <body>
-<!-- Control táctil independiente del render 3D para que siempre sea visible en iPhone. -->
-<button id="jump-control" type="button" aria-label="Saltar" style="position:fixed;z-index:99999;right:22px;right:max(22px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 28px);width:88px;height:88px;border:2px solid #f3d7a0;border-radius:50%;background:linear-gradient(145deg,#8d3427,#431714);box-shadow:0 5px 22px #000b,inset 0 1px 0 #ffffff55;color:#fff4df;font:700 15px/1.2 system-ui,sans-serif;letter-spacing:.08em;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;touch-action:none;-webkit-tap-highlight-color:transparent"><span style="font-size:30px;line-height:1">⬆</span><span>SALTAR</span></button>
+<div id="hint">SUPERVIVENCIA 3D · MOVER Y SALTAR</div>
+<div id="pad"><button data-k="w" style="grid-column:2;grid-row:1">▲</button><button data-k="a" style="grid-column:1;grid-row:2">◀</button><button data-k="s" style="grid-column:2;grid-row:2">▼</button><button data-k="d" style="grid-column:3;grid-row:2">▶</button></div>
+<button id="jump">⬆<br>SALTAR</button><div id="error"></div>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
-const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x101114);
-const camera=new THREE.PerspectiveCamera(34,innerWidth/innerHeight,.1,100);
-camera.position.set(1.8,1.95,4.9);
-const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));renderer.setSize(innerWidth,innerHeight);
-renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;
-renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;document.body.appendChild(renderer.domElement);
-scene.add(new THREE.HemisphereLight(0x9aaec4,0x191518,2.05));
-const key=new THREE.DirectionalLight(0xffdfb4,3.4);key.position.set(-3,7,5);key.castShadow=true;key.shadow.mapSize.set(1536,1536);key.shadow.camera.left=-4;key.shadow.camera.right=4;key.shadow.camera.top=5;key.shadow.camera.bottom=-4;scene.add(key);
-const fill=new THREE.DirectionalLight(0x8da9cf,2.1);fill.position.set(4,3,-4);scene.add(fill);
-const rim=new THREE.DirectionalLight(0xff6339,1.7);rim.position.set(-4,2,-3);scene.add(rim);
-const mat=(color,roughness=.72,metalness=.15)=>new THREE.MeshStandardMaterial({color,roughness,metalness});
-const iron=mat(0x30363b,.38,.78),ironLight=mat(0x62696d,.34,.8),ironDark=mat(0x171c20,.5,.62),black=mat(0x090c0f,.65,.2),leather=mat(0x38251d,.86,.05),leatherLight=mat(0x65412c,.78,.08),cloth=mat(0x251719,.95,0),clothRed=mat(0x421e20,.95,0),brass=mat(0x927344,.4,.72),steel=mat(0xb6c0c4,.27,.9),skin=mat(0x73503d,.9,0),glow= new THREE.MeshStandardMaterial({color:0x9e3028,emissive:0x66100b,emissiveIntensity:.65,roughness:.45});
-const warrior=new THREE.Group();scene.add(warrior);
-function mesh(parent,geo,material,pos,scale=[1,1,1],rot=[0,0,0]){const o=new THREE.Mesh(geo,material);o.position.set(...pos);o.scale.set(...scale);o.rotation.set(...rot);o.castShadow=true;o.receiveShadow=true;parent.add(o);return o}
-function box(parent,material,pos,size,rot=[0,0,0]){return mesh(parent,new THREE.BoxGeometry(...size),material,pos,[1,1,1],rot)}
-function rivet(parent,x,y,z,r=.027){mesh(parent,new THREE.SphereGeometry(r,8,6),brass,[x,y,z])}
-// Boots, feet, articulated legs and layered greaves.
-const legs=[];
+const errorBox=document.getElementById('error');
+addEventListener('error',e=>{errorBox.style.display='block';errorBox.textContent='Error del juego: '+(e.message||'desconocido')});
+addEventListener('unhandledrejection',e=>{errorBox.style.display='block';errorBox.textContent='Error de carga: '+(e.reason?.message||e.reason||'desconocido')});
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x101318);scene.fog=new THREE.Fog(0x101318,12,36);
+const camera=new THREE.PerspectiveCamera(48,innerWidth/innerHeight,.1,100);
+const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.25;document.body.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0x9fb4d0,0x241915,2.1));
+const key=new THREE.DirectionalLight(0xffd7ac,3.2);key.position.set(-4,8,5);scene.add(key);
+const rim=new THREE.DirectionalLight(0x9a352b,2.2);rim.position.set(3,3,-4);scene.add(rim);
+const mat=(color,roughness=.8,metalness=0)=>new THREE.MeshStandardMaterial({color,roughness,metalness});
+const skin=mat(0x98694f),skinLight=mat(0xb68160),hair=mat(0x211a17),pants=mat(0x302720),cloth=mat(0x493029),wrap=mat(0x806044),eye=mat(0x171211);
+function addMesh(parent,geo,material,pos,scale=[1,1,1],rot=[0,0,0]){const o=new THREE.Mesh(geo,material);o.position.set(...pos);o.scale.set(...scale);o.rotation.set(...rot);o.castShadow=true;o.receiveShadow=true;parent.add(o);return o}
+function capsule(parent,material,a,b,r){const v1=new THREE.Vector3(...a),v2=new THREE.Vector3(...b),d=v2.clone().sub(v1);const o=addMesh(parent,new THREE.CapsuleGeometry(r,Math.max(.01,d.length()-2*r),4,8),material,v1.clone().add(v2).multiplyScalar(.5).toArray());o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());return o}
+const ground=addMesh(scene,new THREE.PlaneGeometry(200,200),mat(0x303632,.98),[0,-.08,0],[1,1,1],[-Math.PI/2,0,0]);
+const grid=new THREE.GridHelper(80,80,0x59635e,0x424943);grid.position.y=-.06;grid.material.transparent=true;grid.material.opacity=.25;scene.add(grid);
+// Simple, visible, unarmored humanoid; kept independent from the uploaded GLB while import is validated.
+const actor=new THREE.Group();scene.add(actor);
+addMesh(actor,new THREE.CapsuleGeometry(.24,.43,6,12),skin,[0,1.48,0],[1.12,1.15,.8]);
+addMesh(actor,new THREE.SphereGeometry(.23,16,12),skinLight,[0,1.81,0],[.86,1.03,.86]);
+addMesh(actor,new THREE.SphereGeometry(.205,12,10),hair,[0,1.94,-.035],[1,.62,.92]);
+addMesh(actor,new THREE.BoxGeometry(.08,.025,.025),eye,[-.085,1.84,.18]);
+addMesh(actor,new THREE.BoxGeometry(.08,.025,.025),eye,[.085,1.84,.18]);
+addMesh(actor,new THREE.CapsuleGeometry(.25,.2,4,10),pants,[0,1.15,0],[1.08,.8,.9]);
+addMesh(actor,new THREE.BoxGeometry(.43,.12,.31),wrap,[0,1.23,.02]);
+const legs=[],arms=[];
 for(const side of [-1,1]){
- const hip=new THREE.Group();hip.position.set(side*.22,1.02,0);warrior.add(hip);legs.push(hip);
- mesh(hip,new THREE.CapsuleGeometry(.145,.36,4,8),ironDark,[0,-.20,0],[1,1,.92]);
- mesh(hip,new THREE.CapsuleGeometry(.155,.34,3,7),iron,[0,-.23,.025],[1,.96,.94]);
- box(hip,ironLight,[0,-.26,.145],[.20,.28,.055],[.08,0,0]);
- box(hip,ironDark,[0,-.46,.05],[.30,.09,.24]);
- mesh(hip,new THREE.CylinderGeometry(.105,.13,.32,8),iron,[0,-.62,.015],[1,1,.9]);
- box(hip,ironLight,[0,-.62,.125],[.17,.22,.045]);
- box(hip,brass,[0,-.52,.155],[.12,.035,.025]);
- mesh(hip,new THREE.SphereGeometry(.15,8,6),ironLight,[0,-.46,.08],[1,.7,.6]);
- mesh(hip,new THREE.BoxGeometry(.30,.13,.43),ironDark,[0,-.89,.13],[1,1,1],[-.06,0,0]);
- box(hip,leather,[0,-.83,.20],[.24,.05,.22]);
- for(const z of [-.055,.02,.095])box(hip,brass,[0,-.63,z+.14],[.035,.025,.018]);
+ const leg=new THREE.Group();leg.position.set(side*.13,1.08,0);actor.add(leg);legs.push(leg);
+ capsule(leg,pants,[0,-.02,0],[0,-.37,.015],.105);
+ addMesh(leg,new THREE.SphereGeometry(.09,10,8),skin,[0,-.39,.025],[1,.85,1]);
+ capsule(leg,skin,[0,-.40,.02],[0,-.70,.02],.065);
+ addMesh(leg,new THREE.BoxGeometry(.14,.11,.23),pants,[0,-.82,.065]);
+ addMesh(leg,new THREE.BoxGeometry(.145,.07,.25),hair,[0,-.87,.09]);
+ const arm=new THREE.Group();arm.position.set(side*.30,1.65,0);actor.add(arm);arms.push(arm);
+ addMesh(arm,new THREE.SphereGeometry(.105,10,8),skinLight,[side*.02,-.12,.025],[.88,1.2,.92]);
+ capsule(arm,skin,[side*.02,-.13,.02],[side*.035,-.36,.02],.078);
+ addMesh(arm,new THREE.SphereGeometry(.07,10,8),skin,[side*.035,-.37,.02]);
+ capsule(arm,skin,[side*.035,-.39,.02],[side*.045,-.63,.06],.06);
+ addMesh(arm,new THREE.SphereGeometry(.07,10,8),skinLight,[side*.045,-.66,.07],[.95,1.1,.9]);
+ addMesh(arm,new THREE.CylinderGeometry(.066,.066,.075,8),wrap,[side*.04,-.56,.05]);
 }
-// Hips, skirt plates, articulated waist and broad breastplate.
-mesh(warrior,new THREE.CapsuleGeometry(.34,.34,4,9),ironDark,[0,1.22,0],[1,1,.83]);
-box(warrior,leather,[0,1.24,0],[.62,.25,.38]);
-box(warrior,iron,[0,1.48,0],[.61,.48,.37]);
-mesh(warrior,new THREE.SphereGeometry(.33,10,8),iron,[0,1.49,.015],[1,.83,.65]);
-box(warrior,ironLight,[0,1.52,.235],[.49,.35,.075]);
-box(warrior,ironDark,[0,1.52,.278],[.39,.25,.035]);
-// Placas pectorales solapadas y rebordes que marcan una silueta más pesada.
-mesh(warrior,new THREE.SphereGeometry(.22,10,7),ironLight,[-.13,1.53,.275],[.78,.75,.20],[0,0,-.12]);
-mesh(warrior,new THREE.SphereGeometry(.22,10,7),ironLight,[.13,1.53,.275],[.78,.75,.20],[0,0,.12]);
-box(warrior,ironDark,[0,1.69,.235],[.38,.055,.06]);
-box(warrior,brass,[0,1.51,.302],[.055,.27,.018]);
-for(const y of [1.34,1.43,1.62,1.70])box(warrior,ironLight,[0,y,.247],[.48,.022,.035]);
-box(warrior,brass,[0,1.23,.235],[.48,.065,.045]);
-box(warrior,ironDark,[0,1.23,.265],[.16,.10,.035]);
-mesh(warrior,new THREE.CylinderGeometry(.105,.12,.12,8),brass,[0,1.22,.29]);
-for(const side of [-1,1]){
- // Hanging faulds, each with a beveled edge and rivets.
- const fauld=mesh(warrior,new THREE.BoxGeometry(.19,.31,.31),iron,[side*.22,1.02,.055],[1,1,1],[0,0,side*.12]);
- box(warrior,ironLight,[side*.22,1.02,.218],[.15,.25,.025],[0,0,side*.12]);
- rivet(warrior,side*.22,1.12,.24);rivet(warrior,side*.22,.94,.24);
- box(warrior,leather,[side*.32,1.24,-.015],[.055,.34,.34],[0,0,side*-.12]);
-}
-// Neck, gorget, closed helmet, cheek plates and crown ridge.
-mesh(warrior,new THREE.CylinderGeometry(.12,.15,.18,8),skin,[0,1.78,0]);
-mesh(warrior,new THREE.CylinderGeometry(.19,.24,.15,8),ironDark,[0,1.82,0]);
-mesh(warrior,new THREE.SphereGeometry(.245,10,8),iron,[0,1.99,0],[.96,1.12,.95]);
-mesh(warrior,new THREE.SphereGeometry(.22,8,7),ironLight,[0,2.01,.035],[1,.82,.92]);
-box(warrior,ironDark,[0,1.91,.19],[.34,.17,.16]);
-box(warrior,ironLight,[0,1.94,.24],[.34,.045,.055]);
-box(warrior,black,[0,1.985,.253],[.25,.032,.025]);
-box(warrior,glow,[0,1.985,.269],[.16,.012,.012]);
-box(warrior,ironDark,[0,2.06,.20],[.24,.06,.08]);
-mesh(warrior,new THREE.ConeGeometry(.065,.24,5),ironLight,[0,2.23,-.015],[1,1,.8],[.1,0,0]);
-for(const side of [-1,1]){
- mesh(warrior,new THREE.BoxGeometry(.10,.25,.16),iron,[side*.20,1.88,.035],[1,1,1],[0,0,side*-.13]);
- box(warrior,ironLight,[side*.19,1.84,.13],[.08,.16,.055],[0,0,side*-.12]);
- rivet(warrior,side*.20,1.90,.17);
-}
-// Shoulders and separate arm groups for a readable silhouette.
-const arms={};
-for(const side of [-1,1]){
- const arm=new THREE.Group();arm.position.set(side*.43,1.62,.015);warrior.add(arm);arms[side]=arm;
- mesh(arm,new THREE.SphereGeometry(.235,9,7),iron,[0,0,0],[1.25,.85,1.04]);
- mesh(arm,new THREE.SphereGeometry(.24,8,6),ironLight,[0,.055,.035],[1.13,.19,1.06]);
- box(arm,ironDark,[0,-.11,.11],[.32,.13,.25],[0,0,side*-.10]);
- for(let i=0;i<3;i++)box(arm,ironLight,[side*.03,-.20-i*.07,.08],[.27-i*.025,.035,.19]);
- mesh(arm,new THREE.CapsuleGeometry(.105,.22,3,7),ironDark,[side*.025,-.28,.015]);
- mesh(arm,new THREE.CylinderGeometry(.115,.14,.24,8),iron,[side*.025,-.44,.035],[1,1,.92]);
- mesh(arm,new THREE.CylinderGeometry(.145,.11,.29,8),ironLight,[side*.025,-.64,.065],[1,1,.87]);
- box(arm,ironDark,[side*.025,-.65,.14],[.19,.21,.05]);
- for(let i=0;i<3;i++)box(arm,brass,[side*.025,-.55+i*.065,.165],[.12,.018,.012]);
- mesh(arm,new THREE.SphereGeometry(.105,8,6),leather,[side*.025,-.81,.09],[1,.85,1.1]);
- for(const finger of [-1,0,1])mesh(arm,new THREE.CapsuleGeometry(.025,.075,2,5),ironDark,[side*.025+finger*.045,-.88,.13]);
- for(const k of [-1,1])rivet(arm,k*.14,.02,.17,.026);
-}
-// Escudo de acero en el antebrazo izquierdo, con borde metálico y nervio central.
-const shieldShape=new THREE.Shape();
-shieldShape.moveTo(-.23,.20);shieldShape.quadraticCurveTo(-.22,.29,-.12,.29);
-shieldShape.lineTo(.12,.29);shieldShape.quadraticCurveTo(.23,.29,.23,.20);
-shieldShape.lineTo(.19,-.10);shieldShape.quadraticCurveTo(.15,-.29,0,-.43);
-shieldShape.quadraticCurveTo(-.15,-.29,-.19,-.10);shieldShape.closePath();
-const shieldGeo=new THREE.ExtrudeGeometry(shieldShape,{depth:.065,bevelEnabled:true,bevelSegments:2,steps:1,bevelSize:.025,bevelThickness:.025});
-mesh(arms[-1],shieldGeo,ironDark,[0,-.50,.19],[1,1,1]);
-const shieldFace=new THREE.ShapeGeometry(shieldShape);
-mesh(arms[-1],shieldFace,ironLight,[0,-.50,.286]);
-box(arms[-1],brass,[0,-.53,.30],[.035,.54,.025]);
-mesh(arms[-1],new THREE.SphereGeometry(.055,8,6),brass,[0,-.52,.32]);
-for(const side of [-1,1])for(const y of [.15,-.02,-.19])rivet(arms[-1],side*.16,y-.50,.31,.018);
-box(arms[-1],leather,[0,-.42,.13],[.22,.08,.04],[0,0,.08]);
-box(arms[-1],leather,[0,-.65,.13],[.22,.08,.04],[0,0,-.08]);
-// Segunda capa de detalle: placas biseladas, remaches, ribetes y articulaciones.
-for(const side of [-1,1]){
- // Placas exteriores de los pectorales y costuras de la armadura.
- mesh(warrior,new THREE.SphereGeometry(.17,8,6),ironLight,[side*.19,1.57,.255],[.8,1.05,.22],[0,0,side*-.12]);
- for(const y of [1.39,1.47,1.55,1.63])rivet(warrior,side*.22,y,.291,.018);
- // Rodillera exterior y aro de articulación.
- mesh(legs[side===-1?0:1],new THREE.SphereGeometry(.12,8,6),ironLight,[0,-.43,.17],[1,.83,.32]);
- // Medallón pequeño de hombrera.
- mesh(arms[side],new THREE.CylinderGeometry(.065,.065,.025,8),brass,[0,-.015,.225],[1,1,1],[Math.PI/2,0,0]);
-}
-// Placas de garganta y líneas de refuerzo verticales.
-mesh(warrior,new THREE.ConeGeometry(.18,.20,5),ironDark,[0,1.80,.12],[1,1,.5],[Math.PI,0,0]);
-box(warrior,ironLight,[0,1.39,.278],[.035,.19,.018]);
-box(warrior,leatherLight,[-.16,1.20,.24],[.035,.19,.025],[0,0,-.15]);
-box(warrior,leatherLight,[.16,1.20,.24],[.035,.19,.025],[0,0,.15]);
-// Capa original de silueta irregular, con faldones rasgados y pliegues.
-mesh(warrior,new THREE.BoxGeometry(.48,.48,.08),cloth,[0,1.40,-.23],[1,1,1],[.12,0,0]);
-const capeShape=new THREE.Shape();
-capeShape.moveTo(-.27,1.58);capeShape.lineTo(.27,1.58);capeShape.lineTo(.34,1.28);capeShape.lineTo(.30,.98);capeShape.lineTo(.25,.76);capeShape.lineTo(.14,.86);capeShape.lineTo(.04,.67);capeShape.lineTo(-.05,.82);capeShape.lineTo(-.18,.69);capeShape.lineTo(-.23,.93);capeShape.lineTo(-.32,1.20);capeShape.closePath();
-mesh(warrior,new THREE.ExtrudeGeometry(capeShape,{depth:.045,bevelEnabled:true,bevelSegments:2,steps:1,bevelSize:.012,bevelThickness:.012}),clothRed,[0,0,-.30]);
-for(const fold of [{x:-.17,y:1.14,r:-.12,h:.43},{x:-.04,y:1.12,r:.06,h:.50},{x:.12,y:1.13,r:.13,h:.40}]){
- box(warrior,cloth,[fold.x,fold.y,-.245],[.025,fold.h,.018],[0,0,fold.r]);
-}
-box(warrior,leatherLight,[0,1.49,-.265],[.28,.045,.025]);
-for(const side of [-1,1]){
- box(warrior,leather,[side*.15,1.54,-.22],[.09,.15,.06],[0,0,side*-.12]);
- box(warrior,brass,[side*.15,1.55,-.18],[.045,.045,.025]);
-}
-// Two-handed-looking long sword, held beside the body; visible bevel and crossguard.
-const sword=new THREE.Group();
-mesh(sword,new THREE.CylinderGeometry(.045,.052,.28,8),leather,[0,.02,0]);
-mesh(sword,new THREE.CylinderGeometry(.064,.064,.055,8),brass,[0,-.14,0]);
-box(sword,brass,[0,.19,0],[.34,.055,.075]);
-mesh(sword,new THREE.BoxGeometry(.105,.86,.035),steel,[0,.65,0],[1,1,1],[0,0,0]);
-box(sword,ironLight,[0,.65,.021],[.022,.75,.012]);
-mesh(sword,new THREE.ConeGeometry(.053,.17,4),steel,[0,1.16,0]);
-sword.position.set(.11,-.81,.12);sword.scale.setScalar(.80);sword.rotation.set(-.18,0,2.40);arms[1].add(sword);
-// Campo de prueba plano y vacío para observar locomoción: sin muros, objetos ni interfaz.
-const groundMat=new THREE.MeshStandardMaterial({color:0x343a38,roughness:.94,metalness:0});
-const ground=mesh(scene,new THREE.PlaneGeometry(200,200),groundMat,[0,-.075,0],[1,1,1],[-Math.PI/2,0,0]);
-const grid=new THREE.GridHelper(80,80,0x646c68,0x454b48);
-grid.position.y=-.062;grid.material.transparent=true;grid.material.opacity=.24;scene.add(grid);
-const floorLight=new THREE.HemisphereLight(0xc0cbd2,0x42413d,.55);scene.add(floorLight);
-// Bare studio presentation: no map, ground, HUD, bars, inventory, enemies or resources.
-warrior.position.y=-.06;
-const pivot=new THREE.Group();scene.add(pivot);pivot.add(warrior);
-// Personaje base SIN ARMADURA: la progresión futura equipará piezas encontradas.
-warrior.visible=false;
-const baseHuman=new THREE.Group();pivot.add(baseHuman);
-const flesh=mat(0x9b6b50,.88,.02),fleshLight=mat(0xb27d5c,.84,.02),hair=mat(0x211b18,.96,0),eyes=mat(0x241d18,.82,0),pants=mat(0x30251f,.96,0),pantsLight=mat(0x49352a,.94,0),wrap=mat(0x806044,.92,0);
-function limb(parent,material,a,b,r1,r2=r1){
- const start=new THREE.Vector3(...a),end=new THREE.Vector3(...b),delta=end.clone().sub(start);
- const o=mesh(parent,new THREE.CapsuleGeometry(r1,Math.max(.01,delta.length()-r1*2),4,8),material,[...(start.clone().add(end).multiplyScalar(.5).toArray())]);
- o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),delta.normalize());return o;
-}
-// Proporciones humanas atléticas, piel visible, pantalón y vendas sencillas.
-mesh(baseHuman,new THREE.CapsuleGeometry(.235,.42,7,14),flesh,[0,1.48,0],[1.12,1.18,.78]);
-// Anatomía atlética: pectorales, clavículas, oblicuos y segmentos abdominales; sin placas de armadura.
-for(const side of [-1,1]){
- mesh(baseHuman,new THREE.SphereGeometry(.14,12,9),fleshLight,[side*.125,1.56,.155],[.95,.66,.54],[0,0,side*-.10]);
- mesh(baseHuman,new THREE.SphereGeometry(.105,10,8),flesh,[side*.205,1.45,.065],[.72,1.05,.72],[0,0,side*-.23]);
- mesh(baseHuman,new THREE.SphereGeometry(.075,10,8),fleshLight,[side*.095,1.36,.17],[.82,.62,.32]);
- mesh(baseHuman,new THREE.SphereGeometry(.065,10,8),flesh,[side*.09,1.28,.166],[.85,.58,.30]);
- mesh(baseHuman,new THREE.SphereGeometry(.065,10,8),flesh,[side*.085,1.20,.15],[.8,.56,.30]);
- mesh(baseHuman,new THREE.SphereGeometry(.105,10,8),flesh,[side*.225,1.68,.005],[1.15,.95,.95]);
-}
-//
-mesh(baseHuman,new THREE.CapsuleGeometry(.105,.16,4,8),flesh,[0,1.77,0],[.85,1,.85]);
-mesh(baseHuman,new THREE.SphereGeometry(.145,14,12),flesh,[0,1.98,.015],[.90,1.13,.92]);
-// Mandíbula, pómulos, orejas y rasgos faciales sencillos para evitar una cabeza esférica.
-mesh(baseHuman,new THREE.SphereGeometry(.095,10,8),fleshLight,[0,1.925,.085],[.88,.66,.82]);
-for(const side of [-1,1]){
- mesh(baseHuman,new THREE.SphereGeometry(.034,8,7),fleshLight,[side*.143,1.99,.005],[.72,1,.75]);
- mesh(baseHuman,new THREE.SphereGeometry(.026,8,6),flesh,[side*.064,2.005,.132],[1.15,.72,.45]);
- mesh(baseHuman,new THREE.SphereGeometry(.014,8,6),hair,[side*.052,2.01,.158],[1,.7,.4]);
- mesh(baseHuman,new THREE.BoxGeometry(.052,.018,.018),hair,[side*.052,2.035,.145],[1,1,1],[0,0,side*.10]);
-}
-mesh(baseHuman,new THREE.SphereGeometry(.027,8,6),fleshLight,[0,1.977,.158],[.8,.7,.8]);
-mesh(baseHuman,new THREE.BoxGeometry(.052,.012,.012),hair,[0,1.945,.155]);
-mesh(baseHuman,new THREE.SphereGeometry(.15,12,9),hair,[0,2.075,-.015],[1.02,.48,1.02]);
-mesh(baseHuman,new THREE.SphereGeometry(.105,10,8),hair,[0,2.035,-.09],[1.08,.60,.70]);
-for(let i=0;i<5;i++)mesh(baseHuman,new THREE.ConeGeometry(.025,.075,5),hair,[-.10+i*.05,2.095,.07],[1,1,1],[.15,0,(i-2)*.10]);
-mesh(baseHuman,new THREE.SphereGeometry(.07,8,6),hair,[-.115,1.99,.015],[.45,.75,.75]);
-mesh(baseHuman,new THREE.SphereGeometry(.07,8,6),hair,[.115,1.99,.015],[.45,.75,.75]);
-mesh(baseHuman,new THREE.BoxGeometry(.038,.016,.012),hair,[-.055,2.005,.148]);
-mesh(baseHuman,new THREE.BoxGeometry(.038,.016,.012),hair,[.055,2.005,.148]);
-mesh(baseHuman,new THREE.ConeGeometry(.027,.065,6),flesh,[0,1.97,.16],[1,1,.8]);
-mesh(baseHuman,new THREE.SphereGeometry(.012,6,5),hair,[-.052,2.01,.151]);
-mesh(baseHuman,new THREE.SphereGeometry(.012,6,5),hair,[.052,2.01,.151]);
-// Cintura de tela y pantalón de viaje, sin placas ni metal.
-mesh(baseHuman,new THREE.CapsuleGeometry(.255,.19,4,8),pants,[0,1.16,0],[1.12,.72,.86]);
-mesh(baseHuman,new THREE.BoxGeometry(.42,.17,.30),wrap,[0,1.22,.045],[1,1,1],[0,0,-.08]);
-const baseLegs=[];
-for(const side of [-1,1]){
- const leg=new THREE.Group();leg.position.set(side*.13,1.08,0);baseHuman.add(leg);baseLegs.push(leg);
- limb(leg,pants,[0,-.02,0],[0,-.37,.015],.105);
- mesh(leg,new THREE.SphereGeometry(.105,10,8),pantsLight,[0,-.18,.012],[1.08,1.35,.92]);
- mesh(leg,new THREE.SphereGeometry(.09,10,8),flesh,[0,-.39,.025],[1,.85,1]);
- mesh(leg,new THREE.SphereGeometry(.075,10,8),fleshLight,[0,-.39,.075],[.9,.75,.38]);
- limb(leg,flesh,[0,-.40,.02],[0,-.70,.02],.067);
- limb(leg,pantsLight,[0,-.43,.02],[0,-.66,.02],.073);
- mesh(leg,new THREE.BoxGeometry(.13,.045,.13),wrap,[0,-.47,.035]);
- mesh(leg,new THREE.BoxGeometry(.14,.11,.23),pants,[0,-.82,.065]);
- mesh(leg,new THREE.BoxGeometry(.145,.075,.25),hair,[0,-.87,.09]);
-}
-const baseArms={};
-for(const side of [-1,1]){
- const arm=new THREE.Group();arm.position.set(side*.30,1.65,0);baseHuman.add(arm);baseArms[side]=arm;
- mesh(arm,new THREE.SphereGeometry(.13,11,9),flesh,[side*.015,-.03,0],[1,.95,.94]);
-// Deltoide y bíceps visibles; la silueta sigue siendo piel y tela, no armadura.
-mesh(arm,new THREE.SphereGeometry(.105,10,8),fleshLight,[side*.025,-.12,.035],[.88,1.22,.92],[0,0,side*.10]);
-limb(arm,flesh,[side*.015,-.06,0],[side*.035,-.31,.02],.085);
-mesh(arm,new THREE.SphereGeometry(.075,10,8),fleshLight,[side*.035,-.245,.055],[.82,.92,.9]);
- mesh(arm,new THREE.SphereGeometry(.085,8,6),fleshLight,[side*.035,-.32,.02]);
- limb(arm,flesh,[side*.035,-.34,.02],[side*.045,-.59,.065],.063);
- mesh(arm,new THREE.SphereGeometry(.067,8,6),flesh,[side*.045,-.63,.075],[.95,1.1,.9]);
- for(let i=0;i<4;i++)mesh(arm,new THREE.CapsuleGeometry(.012,.055,2,5),flesh,[side*.045+(i-1.5)*.026,-.685,.10]);
- // Simple cloth wraps on wrists: no armor, shield or weapon in the starting state.
- mesh(arm,new THREE.CylinderGeometry(.067,.066,.085,8),wrap,[side*.045,-.56,.055],[1,1,1],[0,0,0]);
-}
-// Se conserva visible el personaje procedural mientras se valida el GLB por separado.
-baseHuman.visible=true;
-
-// Controles temporales de movimiento para probar la animación en un campo vacío.
-const keys={};
-let jumpHeight=0,jumpVelocity=0;
-function jump(){if(jumpHeight<=0.001){jumpVelocity=5.2}}
-addEventListener('keydown',e=>{const k=e.key.toLowerCase();keys[k]=true;if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k))e.preventDefault();if(k===' '&&!e.repeat)jump()});
-addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
-const pad=document.createElement('div');
-pad.style.cssText='position:fixed;left:16px;bottom:22px;display:grid;grid-template-columns:48px 48px 48px;grid-template-rows:48px 48px 48px;gap:5px;z-index:5;touch-action:none;user-select:none';
-const buttonStyle='border:1px solid #aab4b4aa;border-radius:12px;background:#20272bcc;color:#f4f1e9;font:22px system-ui;backdrop-filter:blur(4px);touch-action:none';
-const padKeys=[['','', 'w'],['a','s','d']];
-function addPad(label,key,col,row){const b=document.createElement('button');b.textContent=label;b.style.cssText=buttonStyle;b.style.gridColumn=col;b.style.gridRow=row;b.setAttribute('aria-label',key);b.addEventListener('pointerdown',e=>{e.preventDefault();keys[key]=true;b.setPointerCapture(e.pointerId)});const off=()=>keys[key]=false;b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('lostpointercapture',off);pad.appendChild(b)}
-addPad('▲','w',2,1);addPad('◀','a',1,2);addPad('▼','s',2,2);addPad('▶','d',3,2);
-const jumpButton=document.getElementById('jump-control');
-jumpButton.addEventListener('pointerdown',e=>{e.preventDefault();jump();});
-jumpButton.addEventListener('click',e=>{e.preventDefault();jump()});
-const hint=document.createElement('div');hint.textContent='MOVER · SALTAR · WASD / FLECHAS / ESPACIO';hint.style.cssText='position:fixed;left:16px;bottom:190px;color:#e4e5df;font:12px system-ui;letter-spacing:.08em;text-shadow:0 2px 4px #000;pointer-events:none';document.body.append(pad,hint);
-
-// Orientación inicial de cámara/personaje; evita errores en el primer frame.
-let rotY=0,rotX=0;
-const clock=new THREE.Clock();let elapsed=0;
+const keys={};document.querySelectorAll('[data-k]').forEach(b=>{const k=b.dataset.k;b.addEventListener('pointerdown',e=>{e.preventDefault();keys[k]=true;b.setPointerCapture(e.pointerId)});const off=()=>keys[k]=false;b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('lostpointercapture',off)});
+addEventListener('keydown',e=>{const k=e.key.toLowerCase();keys[k]=true;if(k===' '){e.preventDefault();jump()}});addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+let jumpY=0,jumpV=0;function jump(){if(jumpY<=.001)jumpV=5.1}document.getElementById('jump').addEventListener('pointerdown',e=>{e.preventDefault();jump()});
+let elapsed=0;const clock=new THREE.Clock();const camOffset=new THREE.Vector3(0,3.1,6.2);
 function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;
- 
- if(jumpHeight>0||jumpVelocity>0){jumpVelocity-=12.5*dt;jumpHeight+=jumpVelocity*dt;if(jumpHeight<=0){jumpHeight=0;jumpVelocity=0}}
- pivot.position.y=jumpHeight;
- 
- const forward=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0);
- const sideways=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0);
- const moving=forward!==0||sideways!==0;
-
- if(moving){
-  const direction=Math.atan2(sideways,forward);
-  const target=direction;
-  pivot.rotation.y=rotY+target;
-  const speed=1.65;
-  pivot.position.x+=Math.sin(pivot.rotation.y)*forward*speed*dt+Math.cos(pivot.rotation.y)*sideways*speed*dt;
-  pivot.position.z+=Math.cos(pivot.rotation.y)*forward*speed*dt-Math.sin(pivot.rotation.y)*sideways*speed*dt;
-  const gait=elapsed*10.5;
-  baseLegs[0].rotation.x=Math.sin(gait)*.48;baseLegs[1].rotation.x=-Math.sin(gait)*.48;
-  baseArms[-1].rotation.x=-Math.sin(gait)*.18;baseArms[1].rotation.x=Math.sin(gait)*.18;
-  baseHuman.position.y=jumpHeight>0.02?0:Math.abs(Math.sin(gait))*.025;
-  if(jumpHeight>0.03){baseLegs[0].rotation.x=-.38;baseLegs[1].rotation.x=-.52;baseArms[-1].rotation.x=-.28;baseArms[1].rotation.x=-.42;}
- }else{
-  pivot.rotation.y+=(rotY-pivot.rotation.y)*Math.min(1,dt*3);
-  baseLegs[0].rotation.x*=.82;baseLegs[1].rotation.x*=.82;
-  baseArms[-1].rotation.x*=.82;baseArms[1].rotation.x*=.82;
-  baseHuman.position.y=jumpHeight>0.02?0:Math.sin(elapsed*1.4)*.006;
-  if(jumpHeight>0.02){baseLegs[0].rotation.x=-.38;baseLegs[1].rotation.x=-.52;baseArms[-1].rotation.x=-.28;baseArms[1].rotation.x=-.42;}
- }
- pivot.rotation.x=rotX;
- camera.position.x+=(pivot.position.x+1.8-camera.position.x)*Math.min(1,dt*2);
- camera.position.z+=(pivot.position.z+4.9-camera.position.z)*Math.min(1,dt*2);
- camera.lookAt(pivot.position.x,1.13,pivot.position.z);
- renderer.render(scene,camera)}
-function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.8));renderer.setSize(innerWidth,innerHeight)}
-addEventListener('resize',resize);animate();
-</script>
-</body>
-</html>
+if(jumpY>0||jumpV>0){jumpV-=12*dt;jumpY+=jumpV*dt;if(jumpY<=0){jumpY=0;jumpV=0}}
+const f=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0),side=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),moving=!!(f||side);
+if(moving){const angle=Math.atan2(side,f);actor.rotation.y=angle;actor.position.x+=Math.sin(angle)*1.8*dt;actor.position.z+=Math.cos(angle)*f*1.8*dt+Math.sin(angle)*side*1.8*dt;const gait=elapsed*9;legs[0].rotation.x=Math.sin(gait)*.48;legs[1].rotation.x=-Math.sin(gait)*.48;arms[0].rotation.x=-Math.sin(gait)*.18;arms[1].rotation.x=Math.sin(gait)*.18}else{legs.forEach(l=>l.rotation.x*=.85);arms.forEach(a=>a.rotation.x*=.85)}
+actor.position.y=jumpY;camera.position.lerp(new THREE.Vector3(actor.position.x+camOffset.x,camOffset.y+jumpY,actor.position.z+camOffset.z),Math.min(1,dt*3));camera.lookAt(actor.position.x,1.05+jumpY,actor.position.z);renderer.render(scene,camera)}
+function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight)}addEventListener('resize',resize);animate();
+</script></body></html>
