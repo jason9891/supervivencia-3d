@@ -259,6 +259,8 @@ jumpButton.addEventListener('pointerdown',e=>{e.preventDefault();jump();});
 jumpButton.addEventListener('click',e=>{e.preventDefault();jump()});
 const hint=document.createElement('div');hint.textContent='MOVER · SALTAR · WASD / FLECHAS / ESPACIO';hint.style.cssText='position:fixed;left:16px;bottom:190px;color:#e4e5df;font:12px system-ui;letter-spacing:.08em;text-shadow:0 2px 4px #000;pointer-events:none';document.body.append(pad,hint);
 
+// Orientación inicial de cámara/personaje; evita errores en el primer frame.
+let rotY=0,rotX=0;
 const clock=new THREE.Clock();let elapsed=0;
 function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;
  
