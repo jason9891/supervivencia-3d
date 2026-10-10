@@ -110,9 +110,12 @@ gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-
  locomotionActor.add(model);
  locomotionMixer=new THREE.AnimationMixer(model);
  const clips=gltf.animations||[];
- const idleClip=clips.find(a=>/idle|stand|rest/i.test(a.name));
- const walkClip=clips.find(a=>/walk|walking/i.test(a.name));
- const runClip=clips.find(a=>/run|running|jog/i.test(a.name));
+ // Elegir ciclos por nombre; evitar usar una animación arbitraria como caminata.
+ const clipName=clip=>(clip.name||'').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').replace(/[_-]+/g,' ').trim();
+ const findClip=patterns=>clips.find(clip=>patterns.some(pattern=>pattern.test(clipName(clip))));
+ const idleClip=findClip([/\\bidle\\b/,/standing/,/stand still/,/rest/]);
+ const walkClip=findClip([/brisk walk/,/relaxed walk/,/\\bwalk\\b/,/walking/]);
+ const runClip=findClip([/\\brun\\b/,/running/,/\\bjog\\b/]);
  if(idleClip)idleAction=locomotionMixer.clipAction(idleClip);
  if(walkClip)walkAction=locomotionMixer.clipAction(walkClip);
  if(runClip)runAction=locomotionMixer.clipAction(runClip);
@@ -121,7 +124,7 @@ gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-
  actor.visible=false;
  importedActor.visible=false;
  locomotionActor.visible=true;
- document.getElementById('hint').textContent='PERSONAJE ANIMADO CARGADO · '+(walkClip?'CAMINAR':'MOVIMIENTO')+' · '+(runClip?'CORRER':'');
+ document.getElementById('hint').textContent='CAMINAR: '+(walkClip?.name||'NO ENCONTRADA')+' · CORRER: '+(runClip?.name||'NO ENCONTRADA');
  console.info('Clips disponibles:',clips.map(a=>a.name));
 },undefined,error=>{
  console.warn('No se pudo cargar el GLB de animaciones; se conserva el personaje base.',error);
