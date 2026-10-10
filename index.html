@@ -115,7 +115,7 @@ gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-
  const findClip=patterns=>clips.find(clip=>patterns.some(pattern=>pattern.test(clipName(clip))));
  const idleClip=findClip([/\\bidle\\b/,/standing/,/stand still/,/rest/,/breath/,/ready stance/]);
  // Algunos paquetes nombran los ciclos por dirección o locomoción, no literalmente "walk".
- const walkClip=findClip([/brisk walk/,/relaxed walk/,/\\bwalk\\b/,/walking/,/walk cycle/,/locomotion/,/forward/,/move forward/,/movement/,/jog cycle/]);
+ const walkClip=findClip([/walk brisk/,/walk relaxed/,/brisk walk/,/relaxed walk/,/walk/,/walking/,/walk cycle/,/locomotion/,/forward/,/move forward/,/movement/,/jog cycle/]);
  const runClip=findClip([/\\brun\\b/,/running/,/\\bjog\\b/,/sprint/,/fast move/]);
  if(idleClip)idleAction=locomotionMixer.clipAction(idleClip);
  if(walkClip)walkAction=locomotionMixer.clipAction(walkClip);
