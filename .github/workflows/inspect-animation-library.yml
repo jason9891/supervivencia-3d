@@ -15,8 +15,45 @@ jobs:
           curl -fL --retry 3 'https://raw.githubusercontent.com/jason9891/supervivencia-3d/main/assets/characters/animations/Universal%20Animation%20Library%5BStandard%5D.zip' -o library.zip
           unzip -t library.zip
           unzip -Z1 library.zip | tee manifest.txt
-          echo '=== ANIMATION FILES ==='
-          grep -Ei '\.(glb|gltf|fbx|blend|bvh|json)$' manifest.txt || true
+          mkdir extracted
+          unzip -q library.zip -d extracted
+      - name: Extract animation names from GLB files
+        run: |
+          python3 - <<'PY'
+          import json, struct, pathlib
+          out = pathlib.Path("manifest.txt")
+          lines = ["", "=== GLB ANIMATION DETAILS ==="]
+          for path in pathlib.Path("extracted").rglob("*.glb"):
+              data = path.read_bytes()
+              if data[:4] != b"glTF":
+                  lines.append(f"{path}: INVALID GLB")
+                  continue
+              version, total = struct.unpack_from("<II", data, 4)
+              offset = 12
+              doc = None
+              while offset + 8 <= len(data):
+                  length, kind = struct.unpack_from("<II", data, offset)
+                  offset += 8
+                  chunk = data[offset:offset+length]
+                  offset += length
+                  if kind == 0x4E4F534A:
+                      doc = json.loads(chunk.decode("utf-8").rstrip(" \\x00"))
+                      break
+              lines.append(f"FILE: {path}")
+              if not doc:
+                  lines.append("  Could not read GLB JSON chunk")
+                  continue
+              animations = doc.get("animations", [])
+              lines.append(f"  Animation count: {len(animations)}")
+              for i, anim in enumerate(animations):
+                  lines.append(f"  {i+1}. {anim.get('name') or '(unnamed)'}")
+              skins = doc.get("skins", [])
+              lines.append(f"  Skin count: {len(skins)}")
+              for i, skin in enumerate(skins):
+                  lines.append(f"  Skin {i+1}: {len(skin.get('joints', []))} joints")
+          out.write_text(out.read_text() + "\\n" + "\\n".join(lines) + "\\n")
+          print("\\n".join(lines))
+          PY
       - name: Save manifest
         uses: actions/upload-artifact@v4
         with:
