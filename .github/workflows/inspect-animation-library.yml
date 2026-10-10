@@ -1,0 +1,21 @@
+name: Inspect animation library
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download and list ZIP without changing game files
+        run: |
+          curl -fL --retry 3 'https://raw.githubusercontent.com/jason9891/supervivencia-3d/main/assets/characters/animations/Universal%20Animation%20Library%5BStandard%5D.zip' -o library.zip
+          unzip -t library.zip
+          unzip -Z1 library.zip | tee manifest.txt
+          echo '=== ANIMATION FILES ==='
+          grep -Ei '\.(glb|gltf|fbx|blend|bvh|json)$' manifest.txt || true
+      - name: Save manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: animation-library-manifest
+          path: manifest.txt
