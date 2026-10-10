@@ -98,6 +98,21 @@ for(const side of [-1,1]){
  for(const finger of [-1,0,1])mesh(arm,new THREE.CapsuleGeometry(.025,.075,2,5),ironDark,[side*.025+finger*.045,-.88,.13]);
  for(const k of [-1,1])rivet(arm,k*.14,.02,.17,.026);
 }
+// Segunda capa de detalle: placas biseladas, remaches, ribetes y articulaciones.
+for(const side of [-1,1]){
+ // Placas exteriores de los pectorales y costuras de la armadura.
+ mesh(warrior,new THREE.SphereGeometry(.17,8,6),ironLight,[side*.19,1.57,.255],[.8,1.05,.22],[0,0,side*-.12]);
+ for(const y of [1.39,1.47,1.55,1.63])rivet(warrior,side*.22,y,.291,.018);
+ // Rodillera exterior y aro de articulación.
+ mesh(legs[side===-1?0:1],new THREE.SphereGeometry(.12,8,6),ironLight,[0,-.43,.17],[1,.83,.32]);
+ // Medallón pequeño de hombrera.
+ mesh(arms[side],new THREE.CylinderGeometry(.065,.065,.025,8),brass,[0,-.015,.225],[1,1,1],[Math.PI/2,0,0]);
+}
+// Placas de garganta y líneas de refuerzo verticales.
+mesh(warrior,new THREE.ConeGeometry(.18,.20,5),ironDark,[0,1.80,.12],[1,1,.5],[Math.PI,0,0]);
+box(warrior,ironLight,[0,1.39,.278],[.035,.19,.018]);
+box(warrior,leatherLight,[-.16,1.20,.24],[.035,.19,.025],[0,0,-.15]);
+box(warrior,leatherLight,[.16,1.20,.24],[.035,.19,.025],[0,0,.15]);
 // Heavy split cloak: dark red lining and ragged pointed lower edge.
 mesh(warrior,new THREE.BoxGeometry(.48,.48,.08),cloth,[0,1.40,-.23],[1,1,1],[.12,0,0]);
 mesh(warrior,new THREE.ConeGeometry(.38,.74,6),clothRed,[0,1.02,-.25],[1,.95,.32],[Math.PI,0,0]);
@@ -114,7 +129,7 @@ box(sword,brass,[0,.19,0],[.34,.055,.075]);
 mesh(sword,new THREE.BoxGeometry(.105,.86,.035),steel,[0,.65,0],[1,1,1],[0,0,0]);
 box(sword,ironLight,[0,.65,.021],[.022,.75,.012]);
 mesh(sword,new THREE.ConeGeometry(.053,.17,4),steel,[0,1.16,0]);
-sword.position.set(.11,-.82,.12);sword.rotation.set(-.22,0,-.20);arms[1].add(sword);
+sword.position.set(.11,-.81,.12);sword.scale.setScalar(.80);sword.rotation.set(-.18,0,2.40);arms[1].add(sword);
 // Bare studio presentation: no map, ground, HUD, bars, inventory, enemies or resources.
 warrior.position.y=-.06;
 const pivot=new THREE.Group();scene.add(pivot);pivot.add(warrior);
