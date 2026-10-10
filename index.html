@@ -68,7 +68,7 @@ const importedActor=new THREE.Group();scene.add(importedActor);importedActor.vis
 let importedMixer=null;
 const gltfLoader=new GLTFLoader();
 const locomotionActor=new THREE.Group();scene.add(locomotionActor);locomotionActor.visible=false;
-let locomotionMixer=null,walkAction=null,runAction=null,idleAction=null,activeAction=null;
+let locomotionMixer=null,walkAction=null,runAction=null,idleAction=null,activeAction=null,locomotionModelLoaded=false;
 function selectLocomotion(next){if(!next||next===activeAction)return;if(activeAction)activeAction.fadeOut(.16);next.reset().fadeIn(.16).play();activeAction=next;}
 const runButton=document.getElementById('run');runButton.addEventListener('pointerdown',e=>{e.preventDefault();keys.run=true;runButton.setPointerCapture(e.pointerId)});const stopRun=()=>keys.run=false;runButton.addEventListener('pointerup',stopRun);runButton.addEventListener('pointercancel',stopRun);runButton.addEventListener('lostpointercapture',stopRun);
 gltfLoader.load('./assets/characters/human-base-rigged.glb',gltf=>{
@@ -85,9 +85,8 @@ gltfLoader.load('./assets/characters/human-base-rigged.glb',gltf=>{
  model.traverse(obj=>{if(obj.isMesh){obj.castShadow=true;obj.receiveShadow=true;}});
  importedActor.add(model);
  if(gltf.animations&&gltf.animations.length){importedMixer=new THREE.AnimationMixer(model);importedMixer.clipAction(gltf.animations[0]).play();}
- actor.visible=false;
- importedActor.visible=true;
- document.getElementById('hint').textContent='MODELO HUMANO GLB CARGADO · MOVER Y SALTAR';
+ if(!locomotionModelLoaded){actor.visible=false;importedActor.visible=true;document.getElementById('hint').textContent='MODELO HUMANO GLB CARGADO · MOVER Y SALTAR';}
+ else{actor.visible=false;importedActor.visible=false;}
 },undefined,error=>{
  console.error('No se pudo cargar human-base-rigged.glb',error);
  errorBox.style.display='block';
@@ -108,6 +107,7 @@ gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-
  }
  model.traverse(obj=>{if(obj.isMesh){obj.castShadow=true;obj.receiveShadow=true;}});
  locomotionActor.add(model);
+ locomotionModelLoaded=true;
  locomotionMixer=new THREE.AnimationMixer(model);
  const clips=gltf.animations||[];
  // Elegir ciclos por nombre; evitar usar una animación arbitraria como caminata.
@@ -123,22 +123,15 @@ gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-
  // No reproducir clips desconocidos como si fueran caminata: eso causa la marcha tipo zombi.
  const initial=idleAction||walkAction||runAction||null;
  if(initial){initial.play();activeAction=initial;}
- if(walkAction){
-  actor.visible=false;
-  importedActor.visible=false;
-  locomotionActor.visible=true;
-  document.getElementById('hint').textContent='CAMINAR: '+walkClip.name+' · CORRER: '+(runClip?.name||'CAMINATA RÁPIDA');
- }else{
-  // Sin un ciclo de marcha válido, no mostrar el GLB base que se ve como esqueleto.
-  // Mantener visible el personaje procedural, cuyas extremidades ya se animan con los controles.
-  actor.visible=true;
-  importedActor.visible=false;
-  locomotionActor.visible=false;
-  const names=clips.map(a=>a.name).filter(Boolean);
-  document.getElementById('hint').textContent=names.length
-   ? 'PERSONAJE PROVISIONAL ACTIVO · ANIMACIÓN DISPONIBLE: '+names.slice(0,2).join(' / ')
-   : 'PERSONAJE PROVISIONAL ACTIVO · SIN CICLO DE CAMINATA';
- }
+ // Priorizar el modelo humano animado aunque no se detecte una caminata en este archivo.
+ // Evita que una carga tardía vuelva a mostrar el esqueleto base o el personaje geométrico.
+ actor.visible=false;
+ importedActor.visible=false;
+ locomotionActor.visible=true;
+ const names=clips.map(a=>a.name).filter(Boolean);
+ document.getElementById('hint').textContent=walkAction
+  ? 'CAMINAR: '+walkClip.name+' · CORRER: '+(runClip?.name||'CAMINATA RÁPIDA')
+  : 'MODELO HUMANO ANIMADO · SIN CICLO DE CAMINATA DETECTADO'+(names.length?' · CLIPS: '+names.slice(0,3).join(' / '):'');
  console.info('Clips disponibles:',clips.map(a=>a.name),'selección:',{idle:idleClip?.name,walk:walkClip?.name,run:runClip?.name});
 },undefined,error=>{
  console.warn('No se pudo cargar el GLB de animaciones; se conserva el personaje base.',error);
