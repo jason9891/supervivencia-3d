@@ -134,10 +134,15 @@ mesh(warrior,new THREE.ConeGeometry(.18,.20,5),ironDark,[0,1.80,.12],[1,1,.5],[M
 box(warrior,ironLight,[0,1.39,.278],[.035,.19,.018]);
 box(warrior,leatherLight,[-.16,1.20,.24],[.035,.19,.025],[0,0,-.15]);
 box(warrior,leatherLight,[.16,1.20,.24],[.035,.19,.025],[0,0,.15]);
-// Heavy split cloak: dark red lining and ragged pointed lower edge.
+// Capa original de silueta irregular, con faldones rasgados y pliegues.
 mesh(warrior,new THREE.BoxGeometry(.48,.48,.08),cloth,[0,1.40,-.23],[1,1,1],[.12,0,0]);
-mesh(warrior,new THREE.ConeGeometry(.38,.74,6),clothRed,[0,1.02,-.25],[1,.95,.32],[Math.PI,0,0]);
-mesh(warrior,new THREE.ConeGeometry(.20,.42,5),cloth,[.18,.93,-.26],[1,.9,.28],[Math.PI,0,.1]);
+const capeShape=new THREE.Shape();
+capeShape.moveTo(-.27,1.58);capeShape.lineTo(.27,1.58);capeShape.lineTo(.34,1.28);capeShape.lineTo(.30,.98);capeShape.lineTo(.25,.76);capeShape.lineTo(.14,.86);capeShape.lineTo(.04,.67);capeShape.lineTo(-.05,.82);capeShape.lineTo(-.18,.69);capeShape.lineTo(-.23,.93);capeShape.lineTo(-.32,1.20);capeShape.closePath();
+mesh(warrior,new THREE.ExtrudeGeometry(capeShape,{depth:.045,bevelEnabled:true,bevelSegments:2,steps:1,bevelSize:.012,bevelThickness:.012}),clothRed,[0,0,-.30]);
+for(const fold of [{x:-.17,y:1.14,r:-.12,h:.43},{x:-.04,y:1.12,r:.06,h:.50},{x:.12,y:1.13,r:.13,h:.40}]){
+ box(warrior,cloth,[fold.x,fold.y,-.245],[.025,fold.h,.018],[0,0,fold.r]);
+}
+box(warrior,leatherLight,[0,1.49,-.265],[.28,.045,.025]);
 for(const side of [-1,1]){
  box(warrior,leather,[side*.15,1.54,-.22],[.09,.15,.06],[0,0,side*-.12]);
  box(warrior,brass,[side*.15,1.55,-.18],[.045,.045,.025]);
