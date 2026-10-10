@@ -1,6 +1,9 @@
 name: Inspect animation library
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 permissions:
   contents: read
 jobs:
