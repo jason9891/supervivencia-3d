@@ -7,7 +7,7 @@
 <title>Supervivencia 3D — Guerrero</title>
 <style>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101114;touch-action:none}canvas{display:block;width:100%;height:100%;touch-action:none}
-#jump{position:fixed;z-index:20;right:max(20px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 28px);width:84px;height:84px;border:2px solid #f3d7a0;border-radius:50%;background:#762b23;color:#fff4df;font:bold 15px system-ui;box-shadow:0 5px 22px #000b;touch-action:none}
+#run{position:fixed;z-index:20;right:max(28px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 126px);width:68px;height:54px;border:1px solid #c4c9c0;border-radius:14px;background:#27352fe8;color:#fff;font:bold 13px system-ui;touch-action:none}#jump{position:fixed;z-index:20;right:max(20px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 28px);width:84px;height:84px;border:2px solid #f3d7a0;border-radius:50%;background:#762b23;color:#fff4df;font:bold 15px system-ui;box-shadow:0 5px 22px #000b;touch-action:none}
 #pad{position:fixed;z-index:20;left:16px;bottom:24px;display:grid;grid-template-columns:48px 48px 48px;grid-template-rows:48px 48px;gap:5px}
 #pad button{border:1px solid #aab4b4aa;border-radius:12px;background:#20272be8;color:#fff;font:22px system-ui;touch-action:none}
 #hint{position:fixed;z-index:20;top:env(safe-area-inset-top);left:0;right:0;text-align:center;padding:12px;color:#e8dfce;font:12px system-ui;letter-spacing:.08em;text-shadow:0 2px 4px #000;pointer-events:none}
@@ -17,7 +17,7 @@
 <body>
 <div id="hint">SUPERVIVENCIA 3D · MOVER Y SALTAR</div>
 <div id="pad"><button data-k="w" style="grid-column:2;grid-row:1">▲</button><button data-k="a" style="grid-column:1;grid-row:2">◀</button><button data-k="s" style="grid-column:2;grid-row:2">▼</button><button data-k="d" style="grid-column:3;grid-row:2">▶</button></div>
-<button id="jump">⬆<br>SALTAR</button><div id="error"></div>
+<button id="run">CORRER</button><button id="jump">⬆<br>SALTAR</button><div id="error"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
@@ -66,7 +66,7 @@ for(const side of [-1,1]){
 // Cargar el modelo humano real del repositorio sin ocultar el respaldo hasta que esté listo.
 const importedActor=new THREE.Group();scene.add(importedActor);importedActor.visible=false;
 let importedMixer=null;
-const gltfLoader=new GLTFLoader();
+const gltfLoader=new GLTFLoader();\nconst locomotionActor=new THREE.Group();scene.add(locomotionActor);locomotionActor.visible=false;\nlet locomotionMixer=null,walkAction=null,runAction=null,idleAction=null,activeAction=null;\nfunction selectLocomotion(next){if(!next||next===activeAction)return;if(activeAction)activeAction.fadeOut(.16);next.reset().fadeIn(.16).play();activeAction=next;}\nconst runButton=document.getElementById('run');runButton.addEventListener('pointerdown',e=>{e.preventDefault();keys.run=true;runButton.setPointerCapture(e.pointerId)});const stopRun=()=>keys.run=false;runButton.addEventListener('pointerup',stopRun);runButton.addEventListener('pointercancel',stopRun);runButton.addEventListener('lostpointercapture',stopRun);
 gltfLoader.load('./assets/characters/human-base-rigged.glb',gltf=>{
  const model=gltf.scene;
  model.updateMatrixWorld(true);
@@ -96,8 +96,8 @@ let jumpY=0,jumpV=0;function jump(){if(jumpY<=.001)jumpV=5.1}document.getElement
 let elapsed=0;const clock=new THREE.Clock();const camOffset=new THREE.Vector3(0,3.1,6.2);
 function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;if(importedMixer)importedMixer.update(dt);
 if(jumpY>0||jumpV>0){jumpV-=12*dt;jumpY+=jumpV*dt;if(jumpY<=0){jumpY=0;jumpV=0}}
-const f=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0),side=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),moving=!!(f||side);
-if(moving){const angle=Math.atan2(side,f);actor.rotation.y=angle;actor.position.x+=Math.sin(angle)*1.8*dt;actor.position.z+=Math.cos(angle)*f*1.8*dt+Math.sin(angle)*side*1.8*dt;const gait=elapsed*9;legs[0].rotation.x=Math.sin(gait)*.48;legs[1].rotation.x=-Math.sin(gait)*.48;arms[0].rotation.x=-Math.sin(gait)*.18;arms[1].rotation.x=Math.sin(gait)*.18}else{legs.forEach(l=>l.rotation.x*=.85);arms.forEach(a=>a.rotation.x*=.85)}
-actor.position.y=jumpY;importedActor.position.copy(actor.position);importedActor.rotation.y=actor.rotation.y;camera.position.lerp(new THREE.Vector3(actor.position.x+camOffset.x,camOffset.y+jumpY,actor.position.z+camOffset.z),Math.min(1,dt*3));camera.lookAt(actor.position.x,1.05+jumpY,actor.position.z);renderer.render(scene,camera)}
+const f=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0),side=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),moving=!!(f||side),running=!!(keys.run||keys.shift),speed=running?3.2:1.8;
+if(moving){const angle=Math.atan2(side,f);actor.rotation.y=angle;actor.position.x+=Math.sin(angle)*speed*dt;actor.position.z+=Math.cos(angle)*f*speed*dt+Math.sin(angle)*side*speed*dt;const gait=elapsed*9;legs[0].rotation.x=Math.sin(gait)*.48;legs[1].rotation.x=-Math.sin(gait)*.48;arms[0].rotation.x=-Math.sin(gait)*.18;arms[1].rotation.x=Math.sin(gait)*.18}else{legs.forEach(l=>l.rotation.x*=.85);arms.forEach(a=>a.rotation.x*=.85)}
+if(locomotionMixer){selectLocomotion(moving?(running?(runAction||walkAction||activeAction):(walkAction||activeAction)):(idleAction||activeAction));locomotionMixer.update(dt);}\nactor.position.y=jumpY;importedActor.position.copy(actor.position);importedActor.rotation.y=actor.rotation.y;locomotionActor.position.copy(actor.position);locomotionActor.rotation.y=actor.rotation.y;camera.position.lerp(new THREE.Vector3(actor.position.x+camOffset.x,camOffset.y+jumpY,actor.position.z+camOffset.z),Math.min(1,dt*3));camera.lookAt(actor.position.x,1.05+jumpY,actor.position.z);renderer.render(scene,camera)}
 function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight)}addEventListener('resize',resize);animate();
 </script></body></html>
