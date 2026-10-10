@@ -8,6 +8,7 @@
 <style>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101114;touch-action:none}canvas{display:block;width:100%;height:100%;touch-action:none}
 #run{position:fixed;z-index:20;right:max(28px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 126px);width:68px;height:54px;border:1px solid #c4c9c0;border-radius:14px;background:#27352fe8;color:#fff;font:bold 13px system-ui;touch-action:none}#jump{position:fixed;z-index:20;right:max(20px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 28px);width:84px;height:84px;border:2px solid #f3d7a0;border-radius:50%;background:#762b23;color:#fff4df;font:bold 15px system-ui;box-shadow:0 5px 22px #000b;touch-action:none}
+#atk{position:fixed;z-index:20;right:max(116px,calc(env(safe-area-inset-right) + 104px));bottom:calc(env(safe-area-inset-bottom) + 40px);width:72px;height:72px;border:2px solid #d8a8a0;border-radius:50%;background:#5a1f1a;color:#fff4df;font:bold 13px system-ui;box-shadow:0 5px 18px #000b;touch-action:none}#arm{position:fixed;z-index:20;right:max(116px,calc(env(safe-area-inset-right) + 104px));bottom:calc(env(safe-area-inset-bottom) + 126px);width:68px;height:54px;border:1px solid #c4c9c0;border-radius:14px;background:#27352fe8;color:#fff;font:bold 13px system-ui;touch-action:none}#arm.on{background:#6b5a22;border-color:#f3d7a0}
 #pad{position:fixed;z-index:20;left:16px;bottom:24px;display:grid;grid-template-columns:48px 48px 48px;grid-template-rows:48px 48px;gap:5px}
 #pad button{border:1px solid #aab4b4aa;border-radius:12px;background:#20272be8;color:#fff;font:22px system-ui;touch-action:none}
 #hint{position:fixed;z-index:20;top:env(safe-area-inset-top);left:0;right:0;text-align:center;padding:12px;color:#e8dfce;font:12px system-ui;letter-spacing:.08em;text-shadow:0 2px 4px #000;pointer-events:none}
@@ -17,7 +18,7 @@
 <body>
 <div id="hint">SUPERVIVENCIA 3D · MOVER Y SALTAR</div>
 <div id="pad"><button data-k="w" style="grid-column:2;grid-row:1">▲</button><button data-k="a" style="grid-column:1;grid-row:2">◀</button><button data-k="s" style="grid-column:2;grid-row:2">▼</button><button data-k="d" style="grid-column:3;grid-row:2">▶</button></div>
-<button id="run">CORRER</button><button id="jump">⬆<br>SALTAR</button><div id="error"></div>
+<button id="atk">ATACAR</button><button id="arm">ARMA</button><button id="run">CORRER</button><button id="jump">⬆<br>SALTAR</button><div id="error"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
@@ -93,8 +94,27 @@ gltfLoader.load('./assets/characters/human-base-rigged.glb',gltf=>{
  errorBox.textContent='No se pudo cargar el modelo humano GLB. Se mantiene el personaje provisional. '+(error?.message||'');
 });
  
-// Intentar cargar el personaje CC0 que incluye animaciones. El modelo actual queda como respaldo.
-gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-person-animated.glb',gltf=>{
+// Personaje Quaternius (CC0) con 43 animaciones. Si falla, se usa el hombre de traje como respaldo.
+let attackAction=null,swordIdleAction=null,attacking=false,armed=false;
+const normName=n=>(n||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+// Nombres exactos (ya normalizados) de cada acción, en orden de preferencia.
+const CLIP_NAMES={
+ idle:['idle loop','idle standing','idle'],
+ walk:['walk loop','walk formal loop','walk relaxed','walk brisk'],
+ run:['sprint loop','jog fwd loop','run','jog'],
+ attack:['sword attack'],
+ swordIdle:['sword idle']
+};
+function findClip(clips,names){for(const n of names){const c=clips.find(item=>normName(item.name)===n);if(c)return c;}return undefined;}
+function toggleArm(){armed=!armed;document.getElementById('arm').classList.toggle('on',armed);}
+function attack(){
+ if(!attackAction||attacking)return;
+ attacking=true;
+ if(activeAction)activeAction.fadeOut(.1);
+ attackAction.reset().fadeIn(.1).play();
+ activeAction=attackAction;
+}
+function setupLocomotion(gltf,label){
  const model=gltf.scene;
  model.updateMatrixWorld(true);
  const bounds=new THREE.Box3().setFromObject(model);
@@ -105,48 +125,44 @@ gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-
   model.scale.setScalar(factor);
   model.position.set(-center.x*factor,-bounds.min.y*factor,-center.z*factor);
  }
- model.traverse(obj=>{if(obj.isMesh){obj.castShadow=true;obj.receiveShadow=true;}});
+ model.traverse(obj=>{if(obj.isMesh){obj.castShadow=true;obj.receiveShadow=true;obj.frustumCulled=false;}});
  locomotionActor.add(model);
  locomotionModelLoaded=true;
  locomotionMixer=new THREE.AnimationMixer(model);
  const clips=gltf.animations||[];
- // Elegir ciclos por nombre; evitar usar una animación arbitraria como caminata.
- const clipName=clip=>(clip.name||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[_-]+/g,' ').trim();
- const findClip=patterns=>{for(const pattern of patterns){const clip=clips.find(item=>pattern.test(clipName(item)));if(clip)return clip;}return undefined;};
- const idleClip=findClip([/^idle loop$/, /^idle$/, /idle.*loop/, /standing idle/, /stand still/]);
- // Algunos paquetes nombran los ciclos por dirección o locomoción, no literalmente "walk".
- const walkClip=findClip([/^walk formal loop$/, /^walk loop$/, /walk formal/, /walk.*loop/, /walking cycle/, /^walk$/]);
- const runClip=findClip([/^sprint loop$/, /^jog fwd loop$/, /sprint.*loop/, /running cycle/, /^run$/]);
+ const idleClip=findClip(clips,CLIP_NAMES.idle),walkClip=findClip(clips,CLIP_NAMES.walk),runClip=findClip(clips,CLIP_NAMES.run);
+ const attackClip=findClip(clips,CLIP_NAMES.attack),swordIdleClip=findClip(clips,CLIP_NAMES.swordIdle);
  if(idleClip)idleAction=locomotionMixer.clipAction(idleClip);
  if(walkClip)walkAction=locomotionMixer.clipAction(walkClip);
  if(runClip)runAction=locomotionMixer.clipAction(runClip);
- // No reproducir clips desconocidos como si fueran caminata: eso causa la marcha tipo zombi.
+ if(swordIdleClip)swordIdleAction=locomotionMixer.clipAction(swordIdleClip);
+ if(attackClip){attackAction=locomotionMixer.clipAction(attackClip);attackAction.setLoop(THREE.LoopOnce,1);attackAction.clampWhenFinished=false;}
+ locomotionMixer.addEventListener('finished',e=>{if(e.action===attackAction){attacking=false;attackAction.fadeOut(.15);activeAction=null;}});
  const initial=idleAction||walkAction||null;
  if(initial){initial.play();activeAction=initial;}
- // Priorizar el modelo humano animado aunque no se detecte una caminata en este archivo.
- // Evita que una carga tardía vuelva a mostrar el esqueleto base o el personaje geométrico.
  actor.visible=false;
  importedActor.visible=false;
  locomotionActor.visible=true;
- const names=clips.map(a=>a.name).filter(Boolean);
- document.getElementById('hint').textContent=walkAction
-  ? 'CAMINAR: '+walkClip.name+' · CORRER: '+(runClip?.name||'CAMINATA RÁPIDA')
-  : 'MODELO HUMANO ANIMADO · SIN CICLO DE CAMINATA DETECTADO'+(names.length?' · CLIPS: '+names.slice(0,3).join(' / '):'');
- console.info('Clips disponibles:',clips.map(a=>a.name),'selección:',{idle:idleClip?.name,walk:walkClip?.name,run:runClip?.name});
-},undefined,error=>{
- console.warn('No se pudo cargar el GLB de animaciones; se conserva el personaje base.',error);
+ document.getElementById('hint').textContent=label+' · '+clips.length+' ANIMACIONES · CAMINAR, CORRER, ATACAR';
+ console.info('Clips disponibles:',clips.map(a=>a.name),'selección:',{idle:idleClip?.name,walk:walkClip?.name,run:runClip?.name,attack:attackClip?.name,swordIdle:swordIdleClip?.name});
+}
+gltfLoader.load('./assets/characters/ual/UAL1_Standard.glb',gltf=>setupLocomotion(gltf,'GUERRERO UAL'),undefined,error=>{
+ console.warn('No se pudo cargar UAL1_Standard.glb; se usa el hombre de traje como respaldo.',error);
+ gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-person-animated.glb',gltf=>setupLocomotion(gltf,'MODELO DE RESPALDO'),undefined,err=>console.warn('No se pudo cargar el respaldo; se conserva el personaje base.',err));
 });
 
+document.getElementById('atk').addEventListener('pointerdown',e=>{e.preventDefault();attack()});
+document.getElementById('arm').addEventListener('pointerdown',e=>{e.preventDefault();toggleArm()});
 
 const keys={};document.querySelectorAll('[data-k]').forEach(b=>{const k=b.dataset.k;b.addEventListener('pointerdown',e=>{e.preventDefault();keys[k]=true;b.setPointerCapture(e.pointerId)});const off=()=>keys[k]=false;b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('lostpointercapture',off)});
-addEventListener('keydown',e=>{const k=e.key.toLowerCase();keys[k]=true;if(k===' '){e.preventDefault();jump()}});addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+addEventListener('keydown',e=>{const k=e.key.toLowerCase();keys[k]=true;if(k===' '){e.preventDefault();jump()}if(k==='j')attack();if(k==='e'&&!e.repeat)toggleArm();});addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
 let jumpY=0,jumpV=0;function jump(){if(jumpY<=.001)jumpV=5.1}document.getElementById('jump').addEventListener('pointerdown',e=>{e.preventDefault();jump()});
 let elapsed=0;const clock=new THREE.Clock();const camOffset=new THREE.Vector3(0,3.1,6.2);
 function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;if(importedMixer)importedMixer.update(dt);
 if(jumpY>0||jumpV>0){jumpV-=12*dt;jumpY+=jumpV*dt;if(jumpY<=0){jumpY=0;jumpV=0}}
-const f=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0),side=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),moving=!!(f||side),running=!!(keys.run||keys.shift),speed=running?3.2:1.8;
+const f=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0),side=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),moving=!attacking&&!!(f||side),running=!!(keys.run||keys.shift),speed=running?3.2:1.8;
 if(moving){const angle=Math.atan2(side,f);actor.rotation.y=angle;actor.position.x+=Math.sin(angle)*speed*dt;actor.position.z+=Math.cos(angle)*f*speed*dt+Math.sin(angle)*side*speed*dt;const gait=elapsed*9;legs[0].rotation.x=Math.sin(gait)*.48;legs[1].rotation.x=-Math.sin(gait)*.48;arms[0].rotation.x=-Math.sin(gait)*.18;arms[1].rotation.x=Math.sin(gait)*.18}else{legs.forEach(l=>l.rotation.x*=.85);arms.forEach(a=>a.rotation.x*=.85)}
-if(locomotionMixer){selectLocomotion(moving?(running?(runAction||walkAction):(walkAction||idleAction)):(idleAction||walkAction));locomotionMixer.update(dt);}
+if(locomotionMixer){if(!attacking)selectLocomotion(moving?(running?(runAction||walkAction):(walkAction||idleAction)):(armed&&swordIdleAction?swordIdleAction:(idleAction||walkAction)));locomotionMixer.update(dt);}
 actor.position.y=jumpY;importedActor.position.copy(actor.position);importedActor.rotation.y=actor.rotation.y;locomotionActor.position.copy(actor.position);locomotionActor.rotation.y=actor.rotation.y;camera.position.lerp(new THREE.Vector3(actor.position.x+camOffset.x,camOffset.y+jumpY,actor.position.z+camOffset.z),Math.min(1,dt*3));camera.lookAt(actor.position.x,1.05+jumpY,actor.position.z);renderer.render(scene,camera)}
 function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight)}addEventListener('resize',resize);animate();
 </script></body></html>
