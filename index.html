@@ -119,13 +119,20 @@ gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-
  if(idleClip)idleAction=locomotionMixer.clipAction(idleClip);
  if(walkClip)walkAction=locomotionMixer.clipAction(walkClip);
  if(runClip)runAction=locomotionMixer.clipAction(runClip);
- const initial=idleAction||walkAction||runAction||(clips[0]?locomotionMixer.clipAction(clips[0]):null);
+ // No reproducir clips desconocidos como si fueran caminata: eso causa la marcha tipo zombi.
+ const initial=idleAction||walkAction||runAction||null;
  if(initial){initial.play();activeAction=initial;}
  actor.visible=false;
- importedActor.visible=false;
- locomotionActor.visible=true;
- document.getElementById('hint').textContent='CAMINAR: '+(walkClip?.name||'NO ENCONTRADA')+' · CORRER: '+(runClip?.name||'NO ENCONTRADA');
- console.info('Clips disponibles:',clips.map(a=>a.name));
+ if(walkAction){
+  importedActor.visible=false;
+  locomotionActor.visible=true;
+  document.getElementById('hint').textContent='CAMINAR: '+walkClip.name+' · CORRER: '+(runClip?.name||'CAMINATA RÁPIDA');
+ }else{
+  locomotionActor.visible=false;
+  importedActor.visible=true;
+  document.getElementById('hint').textContent='MODELO HUMANO BASE · SIN CICLO DE CAMINATA VÁLIDO';
+ }
+ console.info('Clips disponibles:',clips.map(a=>a.name),'selección:',{idle:idleClip?.name,walk:walkClip?.name,run:runClip?.name});
 },undefined,error=>{
  console.warn('No se pudo cargar el GLB de animaciones; se conserva el personaje base.',error);
 });
