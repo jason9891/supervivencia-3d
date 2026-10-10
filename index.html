@@ -18,8 +18,10 @@
 <div id="hint">SUPERVIVENCIA 3D · MOVER Y SALTAR</div>
 <div id="pad"><button data-k="w" style="grid-column:2;grid-row:1">▲</button><button data-k="a" style="grid-column:1;grid-row:2">◀</button><button data-k="s" style="grid-column:2;grid-row:2">▼</button><button data-k="d" style="grid-column:3;grid-row:2">▶</button></div>
 <button id="jump">⬆<br>SALTAR</button><div id="error"></div>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
 const errorBox=document.getElementById('error');
 addEventListener('error',e=>{errorBox.style.display='block';errorBox.textContent='Error del juego: '+(e.message||'desconocido')});
 addEventListener('unhandledrejection',e=>{errorBox.style.display='block';errorBox.textContent='Error de carga: '+(e.reason?.message||e.reason||'desconocido')});
@@ -61,14 +63,41 @@ for(const side of [-1,1]){
  addMesh(arm,new THREE.SphereGeometry(.07,10,8),skinLight,[side*.045,-.66,.07],[.95,1.1,.9]);
  addMesh(arm,new THREE.CylinderGeometry(.066,.066,.075,8),wrap,[side*.04,-.56,.05]);
 }
+// Cargar el modelo humano real del repositorio sin ocultar el respaldo hasta que esté listo.
+const importedActor=new THREE.Group();scene.add(importedActor);importedActor.visible=false;
+let importedMixer=null;
+const gltfLoader=new GLTFLoader();
+gltfLoader.load('./assets/characters/human-base-rigged.glb',gltf=>{
+ const model=gltf.scene;
+ model.updateMatrixWorld(true);
+ const bounds=new THREE.Box3().setFromObject(model);
+ const size=bounds.getSize(new THREE.Vector3());
+ const center=bounds.getCenter(new THREE.Vector3());
+ if(size.y>0){
+  const factor=1.82/size.y;
+  model.scale.setScalar(factor);
+  model.position.set(-center.x*factor,-bounds.min.y*factor,-center.z*factor);
+ }
+ model.traverse(obj=>{if(obj.isMesh){obj.castShadow=true;obj.receiveShadow=true;}});
+ importedActor.add(model);
+ if(gltf.animations&&gltf.animations.length){importedMixer=new THREE.AnimationMixer(model);importedMixer.clipAction(gltf.animations[0]).play();}
+ actor.visible=false;
+ importedActor.visible=true;
+ document.getElementById('hint').textContent='MODELO HUMANO GLB CARGADO · MOVER Y SALTAR';
+},undefined,error=>{
+ console.error('No se pudo cargar human-base-rigged.glb',error);
+ errorBox.style.display='block';
+ errorBox.textContent='No se pudo cargar el modelo humano GLB. Se mantiene el personaje provisional. '+(error?.message||'');
+});
+
 const keys={};document.querySelectorAll('[data-k]').forEach(b=>{const k=b.dataset.k;b.addEventListener('pointerdown',e=>{e.preventDefault();keys[k]=true;b.setPointerCapture(e.pointerId)});const off=()=>keys[k]=false;b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('lostpointercapture',off)});
 addEventListener('keydown',e=>{const k=e.key.toLowerCase();keys[k]=true;if(k===' '){e.preventDefault();jump()}});addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
 let jumpY=0,jumpV=0;function jump(){if(jumpY<=.001)jumpV=5.1}document.getElementById('jump').addEventListener('pointerdown',e=>{e.preventDefault();jump()});
 let elapsed=0;const clock=new THREE.Clock();const camOffset=new THREE.Vector3(0,3.1,6.2);
-function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;
+function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;if(importedMixer)importedMixer.update(dt);
 if(jumpY>0||jumpV>0){jumpV-=12*dt;jumpY+=jumpV*dt;if(jumpY<=0){jumpY=0;jumpV=0}}
 const f=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0),side=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),moving=!!(f||side);
 if(moving){const angle=Math.atan2(side,f);actor.rotation.y=angle;actor.position.x+=Math.sin(angle)*1.8*dt;actor.position.z+=Math.cos(angle)*f*1.8*dt+Math.sin(angle)*side*1.8*dt;const gait=elapsed*9;legs[0].rotation.x=Math.sin(gait)*.48;legs[1].rotation.x=-Math.sin(gait)*.48;arms[0].rotation.x=-Math.sin(gait)*.18;arms[1].rotation.x=Math.sin(gait)*.18}else{legs.forEach(l=>l.rotation.x*=.85);arms.forEach(a=>a.rotation.x*=.85)}
-actor.position.y=jumpY;camera.position.lerp(new THREE.Vector3(actor.position.x+camOffset.x,camOffset.y+jumpY,actor.position.z+camOffset.z),Math.min(1,dt*3));camera.lookAt(actor.position.x,1.05+jumpY,actor.position.z);renderer.render(scene,camera)}
+actor.position.y=jumpY;importedActor.position.copy(actor.position);importedActor.rotation.y=actor.rotation.y;camera.position.lerp(new THREE.Vector3(actor.position.x+camOffset.x,camOffset.y+jumpY,actor.position.z+camOffset.z),Math.min(1,dt*3));camera.lookAt(actor.position.x,1.05+jumpY,actor.position.z);renderer.render(scene,camera)}
 function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight)}addEventListener('resize',resize);animate();
 </script></body></html>
