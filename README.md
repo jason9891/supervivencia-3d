@@ -13,7 +13,8 @@ Prototipo de supervivencia 3D para móviles, ejecutable en el navegador y pensad
 
 - Mueve al personaje con el joystick táctil; en ordenador también puedes usar WASD o flechas.
 - **ATACAR** (o tecla J) lanza el ataque de espada; **ARMA** (o tecla E) alterna la postura con espada. **CORRER** (o Shift) hace sprint.
-- **SALTAR** (o barra espaciadora) cruza los barrancos del camino: los primeros se pasan caminando y los últimos requieren correr y saltar. Si caes, reapareces al inicio de la última plataforma. En la parte superior ves el progreso.
+- **Doble toque** en una flecha (o en W) y mantenerla = correr; también sirve el botón **CORRER** o Shift.
+- **SALTAR** (o barra espaciadora) cruza los barrancos: saltando caminando se alcanzan ~1,7 m y **saltando en carrera ~3,5 m**, porque el salto conserva el impulso de la carrera. El primer barranco se cruza caminando; los demás requieren correr. Si caes, reapareces al inicio de la última plataforma. En la parte superior ves el progreso.
 - Los botones de pantalla no seleccionan texto al mantenerlos pulsados.
 - Acércate a un árbol o una piedra y pulsa **RECOGER**.
 - Reúne 3 de madera y 2 piedras para fabricar un hacha.

@@ -166,7 +166,7 @@ function setupLocomotion(gltf,label){
  actor.visible=false;
  importedActor.visible=false;
  locomotionActor.visible=true;
- document.getElementById('hint').textContent=label+' · '+clips.length+' ANIMACIONES · CAMINAR, CORRER, SALTAR, ATACAR';
+ document.getElementById('hint').textContent=label+' · '+clips.length+' ANIMACIONES · DOBLE TOQUE ▲ = CORRER · SALTA CORRIENDO = MÁS ALCANCE';
  console.info('Clips disponibles:',clips.map(a=>a.name),'selección:',{idle:idleClip?.name,walk:walkClip?.name,run:runClip?.name,attack:attackClip?.name,swordIdle:swordIdleClip?.name});
 }
 gltfLoader.load('./assets/characters/ual/UAL1_Standard.glb',gltf=>setupLocomotion(gltf,'GUERRERO UAL'),undefined,error=>{
@@ -177,15 +177,20 @@ gltfLoader.load('./assets/characters/ual/UAL1_Standard.glb',gltf=>setupLocomotio
 document.getElementById('atk').addEventListener('pointerdown',e=>{e.preventDefault();attack()});
 document.getElementById('arm').addEventListener('pointerdown',e=>{e.preventDefault();toggleArm()});
 
-const keys={};document.querySelectorAll('[data-k]').forEach(b=>{const k=b.dataset.k;b.addEventListener('pointerdown',e=>{e.preventDefault();keys[k]=true;b.setPointerCapture(e.pointerId)});const off=()=>keys[k]=false;b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('lostpointercapture',off)});
-addEventListener('keydown',e=>{const k=e.key.toLowerCase();keys[k]=true;if(k===' '){e.preventDefault();jump()}if(k==='j')attack();if(k==='e'&&!e.repeat)toggleArm();});addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+const keys={};
+// Doble toque en una dirección = correr mientras se mantenga pulsada (como en los juegos de acción clásicos).
+const DIRS=['w','a','s','d','arrowup','arrowleft','arrowdown','arrowright'];const tapAt={};let runLatch=false;
+function press(k,repeat){if(DIRS.includes(k)&&!keys[k]&&!repeat){const now=performance.now();if(now-(tapAt[k]??-1e9)<320)runLatch=true;tapAt[k]=now}keys[k]=true}
+function release(k){keys[k]=false;if(!DIRS.some(d=>keys[d]))runLatch=false}
+document.querySelectorAll('[data-k]').forEach(b=>{const k=b.dataset.k;b.addEventListener('pointerdown',e=>{e.preventDefault();press(k,false);b.setPointerCapture(e.pointerId)});const off=()=>release(k);b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('lostpointercapture',off)});
+addEventListener('keydown',e=>{const k=e.key.toLowerCase();press(k,e.repeat);if(k===' '){e.preventDefault();jump()}if(k==='j')attack();if(k==='e'&&!e.repeat)toggleArm();});addEventListener('keyup',e=>release(e.key.toLowerCase()));
 let jumpQueued=false;function jump(){jumpQueued=true}document.getElementById('jump').addEventListener('pointerdown',e=>{e.preventDefault();jump()});
 let elapsed=0;const clock=new THREE.Clock();const camOffset=new THREE.Vector3(0,3.1,6.2);camera.position.set(player.x+camOffset.x,camOffset.y,player.z+camOffset.z);
 document.addEventListener('contextmenu',e=>e.preventDefault());document.addEventListener('selectstart',e=>e.preventDefault());
 function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;if(importedMixer)importedMixer.update(dt);
-const f=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0),side=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),running=!!(keys.run||keys.shift),speed=running?RUN_SPEED:WALK_SPEED;
+const f=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0),side=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),running=!!(keys.run||keys.shift||runLatch),speed=running?RUN_SPEED:WALK_SPEED;
 const moving=!attacking&&!!(f||side);
-stepPlayer(player,course,{f,side,speed,jump:jumpQueued,canMove:!attacking},dt);jumpQueued=false;
+stepPlayer(player,course,{f,side,speed,running,jump:jumpQueued,canMove:!attacking},dt);jumpQueued=false;
 actor.position.set(player.x,player.y,player.z);actor.rotation.y=player.facing;
 if(moving){const gait=elapsed*9;legs[0].rotation.x=Math.sin(gait)*.48;legs[1].rotation.x=-Math.sin(gait)*.48;arms[0].rotation.x=-Math.sin(gait)*.18;arms[1].rotation.x=Math.sin(gait)*.18}else{legs.forEach(l=>l.rotation.x*=.85);arms.forEach(a=>a.rotation.x*=.85)}
 if(locomotionMixer){

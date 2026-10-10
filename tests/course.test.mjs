@@ -15,7 +15,7 @@ function tryCross(i, speed, lead) {
   for (let t = 0; t < 600; t++) {
     const toEdge = p.z - seg.b;
     const jump = !jumped && toEdge <= lead;
-    const ev = stepPlayer(p, course, { f: 1, side: 0, speed, jump }, dt);
+    const ev = stepPlayer(p, course, { f: 1, side: 0, speed, running: speed === RUN_SPEED, jump }, dt);
     if (ev.jumped) jumped = true;
     if (ev.fell) return { ok:false, p };
     if (p.best >= i+1 && p.grounded) return { ok:true, p };
@@ -33,8 +33,31 @@ for (let i = 0; i < GAPS.length; i++) {
 // 2) Caminando solo deben poder los huecos chicos.
 for (let i = 0; i < GAPS.length; i++) {
   const r = tryCross(i, WALK_SPEED, 0.0);
-  const expected = GAPS[i] <= 1.4;
+  const expected = GAPS[i] <= 1.2;
   check(`caminar+saltar hueco ${i+1} (${GAPS[i]} m): ${expected?'debe cruzar':'debe caer'}`, r.ok === expected);
+}
+// 2b) Saltar corriendo llega bastante más lejos que saltar caminando.
+{
+  const reach = (speed) => {
+    const p = createPlayer(course); p.z = 0; let z0 = null, d = 0;
+    for (let t = 0; t < 300; t++) {
+      const ev = stepPlayer(p, course, { f: 1, side: 0, speed, running: speed === RUN_SPEED, jump: t === 0 }, dt);
+      if (ev.jumped) z0 = p.z;
+      if (z0 !== null && ev.landed) { d = z0 - p.z; break; }
+    }
+    return d;
+  };
+  const w = reach(WALK_SPEED), r = reach(RUN_SPEED);
+  check('alcance del salto corriendo > 1.8x el de caminando', r > 1.8 * w, `(caminando ${w.toFixed(2)} m, corriendo ${r.toFixed(2)} m)`);
+}
+// 2c) El impulso se conserva en el aire aunque sueltes la dirección.
+{
+  const p = createPlayer(course); p.z = 0; let z0 = null, zEnd = null;
+  stepPlayer(p, course, { f: 1, side: 0, speed: RUN_SPEED, running: true, jump: true }, dt);
+  z0 = p.z;
+  for (let t = 0; t < 30; t++) stepPlayer(p, course, { f: 0, side: 0 }, dt); // sin tocar nada
+  zEnd = p.z;
+  check('en el aire sin input sigue avanzando por inercia', (z0 - zEnd) > 1.5, `(${(z0 - zEnd).toFixed(2)} m en 0.5 s)`);
 }
 // 3) Caer, reaparecer en el último punto seguro y poder reintentar.
 {
@@ -60,7 +83,7 @@ for (let i = 0; i < GAPS.length; i++) {
   for (let t=0;t<6000 && !goal;t++){
     const seg = course.segments[Math.min(p.best, course.segments.length-1)];
     const nearEdge = p.grounded && (p.z - seg.b) <= 0.1 && p.best < course.segments.length-1;
-    const ev = stepPlayer(p, course, {f:1,side:0,speed:RUN_SPEED,jump:nearEdge}, dt);
+    const ev = stepPlayer(p, course, {f:1,side:0,speed:RUN_SPEED,running:true,jump:nearEdge}, dt);
     if (ev.jumped) jumpedCount++;
     if (ev.reachedGoal && p.best===course.segments.length-1) goal=true;
   }

@@ -10,9 +10,12 @@ export const JUMP_BUFFER = 0.12; // margen para registrar el salto un poco antes
 export const FALL_LIMIT = -8;    // por debajo de esta altura se reaparece
 export const WALK_SPEED = 1.8;
 export const RUN_SPEED = 3.2;
+export const AIR_BOOST_WALK = 1.15; // impulso horizontal extra al saltar caminando
+export const AIR_BOOST_RUN = 1.3;   // impulso horizontal extra al saltar corriendo
+export const MIN_AIR_STEER = 0.9;   // control mínimo en el aire si saltas desde parado
 
-// Huecos crecientes. Con salto en carrera se alcanzan ~2.7 m; caminando ~1.5 m.
-export const GAPS = [1.0, 1.4, 1.8, 2.0, 2.2];
+// Huecos crecientes. Saltando caminando se alcanzan ~1.7 m; saltando en carrera ~3.5 m.
+export const GAPS = [1.2, 2.0, 2.4, 2.8, 3.1];
 
 export function buildCourse(gaps = GAPS) {
   const segments = [{ a: 4, b: -6 }]; // a = borde de entrada (z mayor), b = borde de salida (z menor)
@@ -46,52 +49,33 @@ export function createPlayer(course) {
     facing: Math.PI,          // mirando hacia -Z
     grounded: true, jumping: false,
     coyote: COYOTE, airTime: 0, jumpBuffer: 0,
+    avx: 0, avz: 0,           // velocidad horizontal en el aire (inercia)
     checkpoint: { x: 0, z: spawnZ },
     best: 0, falls: 0,
   };
 }
 
-// input: { f, side, speed, jump, canMove }
+// input: { f, side, speed, running, jump, canMove }
 // devuelve eventos: { jumped, landed, fell, reachedGoal }
 export function stepPlayer(p, course, input, dt) {
   const ev = { jumped: false, landed: false, fell: false, reachedGoal: false };
-  const { f = 0, side = 0, speed = WALK_SPEED, jump = false, canMove = true } = input;
+  const { f = 0, side = 0, speed = WALK_SPEED, running = false, jump = false, canMove = true } = input;
 
-  // Movimiento horizontal (también en el aire).
-  if (canMove && (f || side)) {
-    const len = Math.hypot(side, f);
-    const dx = side / len, dz = -f / len;
-    p.x += dx * speed * dt;
-    p.z += dz * speed * dt;
-    p.facing = Math.atan2(dx, dz);
-  }
+  const len = Math.hypot(side, f);
+  const hasInput = canMove && len > 0;
+  const dx = hasInput ? side / len : 0;
+  const dz = hasInput ? -f / len : 0;
+  const prevGrounded = p.grounded;
 
   if (jump) p.jumpBuffer = JUMP_BUFFER;
   else p.jumpBuffer = Math.max(0, p.jumpBuffer - dt);
 
-  // ¿Hay suelo bajo los pies?
-  const supported = onPlatform(course, p.x, p.z);
-  const wasGrounded = p.grounded;
-  if (supported && p.vy <= 0 && p.y <= 0 && p.y > -0.35) {
-    p.y = 0; p.vy = 0;
-    p.grounded = true;
-    p.coyote = COYOTE;
-    p.airTime = 0;
-    p.jumping = false;
-    if (!wasGrounded) ev.landed = true;
-    const idx = segmentIndex(course, p.x, p.z);
-    if (idx > p.best) p.best = idx;
-    const seg = course.segments[idx];
-    p.checkpoint = { x: 0, z: seg.a - 1.5 };
-    if (idx === course.segments.length - 1) ev.reachedGoal = true;
-  } else {
-    p.grounded = false;
-    p.coyote = Math.max(0, p.coyote - dt);
-    p.airTime += dt;
-  }
-
-  // Salto (con margen antes y después del borde).
+  // 1) Despegue (con margen antes y después del borde). Conserva el impulso de la carrera.
+  let tookOff = false;
   if (p.jumpBuffer > 0 && (p.grounded || (p.coyote > 0 && !p.jumping))) {
+    const boost = running ? AIR_BOOST_RUN : AIR_BOOST_WALK;
+    p.avx = dx * speed * boost;
+    p.avz = dz * speed * boost;
     p.vy = JUMP_V;
     p.y += 0.001;
     p.grounded = false;
@@ -99,19 +83,62 @@ export function stepPlayer(p, course, input, dt) {
     p.coyote = 0;
     p.airTime = 0;
     p.jumpBuffer = 0;
+    tookOff = true;
     ev.jumped = true;
   }
 
-  // Gravedad.
+  // 2) Movimiento horizontal.
+  if (p.grounded) {
+    p.x += dx * speed * dt;
+    p.z += dz * speed * dt;
+  } else {
+    if (hasInput) {
+      // En el aire se puede girar, pero la velocidad se mantiene (no se frena el salto).
+      const air = Math.max(Math.hypot(p.avx, p.avz), MIN_AIR_STEER);
+      p.avx = dx * air;
+      p.avz = dz * air;
+    }
+    p.x += p.avx * dt;
+    p.z += p.avz * dt;
+  }
+  if (hasInput) p.facing = Math.atan2(dx, dz);
+
+  // 3) ¿Hay suelo bajo los pies?
+  const supported = onPlatform(course, p.x, p.z);
+  if (supported && p.vy <= 0 && p.y <= 0 && p.y > -0.35) {
+    p.y = 0; p.vy = 0;
+    p.grounded = true;
+    p.coyote = COYOTE;
+    p.airTime = 0;
+    p.jumping = false;
+    p.avx = 0; p.avz = 0;
+    if (!prevGrounded) ev.landed = true;
+    const idx = segmentIndex(course, p.x, p.z);
+    if (idx > p.best) p.best = idx;
+    const seg = course.segments[idx];
+    p.checkpoint = { x: 0, z: seg.a - 1.5 };
+    if (idx === course.segments.length - 1) ev.reachedGoal = true;
+  } else {
+    if (prevGrounded && !tookOff) {
+      // Salió del borde sin saltar: conserva la velocidad que llevaba.
+      p.avx = dx * speed;
+      p.avz = dz * speed;
+    }
+    p.grounded = false;
+    p.coyote = Math.max(0, p.coyote - dt);
+    p.airTime += dt;
+  }
+
+  // 4) Gravedad.
   if (!p.grounded) {
     p.vy -= GRAVITY * dt;
     p.y += p.vy * dt;
   }
 
-  // Caída al barranco: reaparecer en el último punto seguro.
+  // 5) Caída al barranco: reaparecer en el último punto seguro.
   if (p.y < FALL_LIMIT) {
     p.x = p.checkpoint.x; p.z = p.checkpoint.z;
-    p.y = 0; p.vy = 0;
+    p.y = 0; p.vy = 0; p.avx = 0; p.avz = 0;
     p.grounded = true; p.jumping = false; p.airTime = 0; p.coyote = COYOTE;
     p.facing = Math.PI;
     p.falls++;
