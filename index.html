@@ -14,6 +14,7 @@
 <button id="jump-control" type="button" aria-label="Saltar" style="position:fixed;z-index:99999;right:22px;right:max(22px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 28px);width:88px;height:88px;border:2px solid #f3d7a0;border-radius:50%;background:linear-gradient(145deg,#8d3427,#431714);box-shadow:0 5px 22px #000b,inset 0 1px 0 #ffffff55;color:#fff4df;font:700 15px/1.2 system-ui,sans-serif;letter-spacing:.08em;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;touch-action:none;-webkit-tap-highlight-color:transparent"><span style="font-size:30px;line-height:1">⬆</span><span>SALTAR</span></button>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x101114);
 const camera=new THREE.PerspectiveCamera(34,innerWidth/innerHeight,.1,100);
@@ -165,6 +166,29 @@ const floorLight=new THREE.HemisphereLight(0xc0cbd2,0x42413d,.55);scene.add(floo
 // Bare studio presentation: no map, ground, HUD, bars, inventory, enemies or resources.
 warrior.position.y=-.06;
 const pivot=new THREE.Group();scene.add(pivot);pivot.add(warrior);
+// Modelo riggeado externo CC0: reemplaza la armadura geométrica cuando termina de cargar.
+// Si el servidor externo falla, el modelo de respaldo sigue visible.
+let loadedKnight=null,knightMixer=null,knightIdle=null,knightWalk=null,activeKnightAction=null;
+const knightLoader=new GLTFLoader();
+knightLoader.load('https://pub-63ab27389d044634a73e89c1a0c6d4a6.r2.dev/free-library/3d-models/t1-sentinel/t1-sentinel.glb',gltf=>{
+ loadedKnight=gltf.scene;
+ loadedKnight.name='T1-Sentinel-CC0';
+ loadedKnight.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(o.material){o.material.side=THREE.FrontSide;}}});
+ loadedKnight.updateMatrixWorld(true);
+ const bounds=new THREE.Box3().setFromObject(loadedKnight);
+ const size=bounds.getSize(new THREE.Vector3());
+ const height=size.y||2;
+ const scale=2.22/height;
+ loadedKnight.scale.setScalar(scale);
+ loadedKnight.position.set(-((bounds.min.x+bounds.max.x)*.5)*scale,-bounds.min.y*scale,-((bounds.min.z+bounds.max.z)*.5)*scale);
+ pivot.add(loadedKnight);
+ warrior.visible=false;
+ knightMixer=new THREE.AnimationMixer(loadedKnight);
+ const idleClip=gltf.animations.find(a=>/idle/i.test(a.name));
+ const walkClip=gltf.animations.find(a=>/walk/i.test(a.name));
+ if(idleClip){knightIdle=knightMixer.clipAction(idleClip);knightIdle.play();activeKnightAction=knightIdle;}
+ if(walkClip){knightWalk=knightMixer.clipAction(walkClip);knightWalk.enabled=true;knightWalk.setEffectiveWeight(0);}
+},undefined,error=>{console.warn('No se pudo cargar el modelo externo; se mantiene el guerrero de respaldo.',error)});
 camera.lookAt(0,1.13,0);
 let dragging=false,lastX=0,lastY=0,rotY=-.22,rotX=0;
 renderer.domElement.addEventListener('pointerdown',e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId)});
@@ -191,11 +215,20 @@ const hint=document.createElement('div');hint.textContent='MOVER · SALTAR · WA
 
 const clock=new THREE.Clock();let elapsed=0;
 function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;
+ if(knightMixer)knightMixer.update(dt);
  if(jumpHeight>0||jumpVelocity>0){jumpVelocity-=12.5*dt;jumpHeight+=jumpVelocity*dt;if(jumpHeight<=0){jumpHeight=0;jumpVelocity=0}}
  pivot.position.y=jumpHeight;
+ if(loadedKnight)loadedKnight.rotation.y=0;
  const forward=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0);
  const sideways=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0);
  const moving=forward!==0||sideways!==0;
+ if(knightMixer){
+  const desired=(moving&&knightWalk)?knightWalk:knightIdle;
+  if(desired&&desired!==activeKnightAction){
+   if(activeKnightAction)activeKnightAction.fadeOut(.18);
+   desired.reset().fadeIn(.18).play();activeKnightAction=desired;
+  }
+ }
  if(moving){
   const direction=Math.atan2(sideways,forward);
   const target=direction;
