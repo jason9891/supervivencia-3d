@@ -168,19 +168,39 @@ const pivot=new THREE.Group();scene.add(pivot);pivot.add(warrior);
 // Personaje base SIN ARMADURA: la progresión futura equipará piezas encontradas.
 warrior.visible=false;
 const baseHuman=new THREE.Group();pivot.add(baseHuman);
-const flesh=mat(0x9b6b50,.88,.02),fleshLight=mat(0xb27d5c,.84,.02),hair=mat(0x211b18,.96,0),pants=mat(0x30251f,.96,0),pantsLight=mat(0x49352a,.94,0),wrap=mat(0x806044,.92,0);
+const flesh=mat(0x9b6b50,.88,.02),fleshLight=mat(0xb27d5c,.84,.02),hair=mat(0x211b18,.96,0),eyes=mat(0x241d18,.82,0),pants=mat(0x30251f,.96,0),pantsLight=mat(0x49352a,.94,0),wrap=mat(0x806044,.92,0);
 function limb(parent,material,a,b,r1,r2=r1){
  const start=new THREE.Vector3(...a),end=new THREE.Vector3(...b),delta=end.clone().sub(start);
  const o=mesh(parent,new THREE.CapsuleGeometry(r1,Math.max(.01,delta.length()-r1*2),4,8),material,[...(start.clone().add(end).multiplyScalar(.5).toArray())]);
  o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),delta.normalize());return o;
 }
 // Proporciones humanas atléticas, piel visible, pantalón y vendas sencillas.
-mesh(baseHuman,new THREE.CapsuleGeometry(.235,.42,5,10),flesh,[0,1.48,0],[1.12,1.18,.78]);
-mesh(baseHuman,new THREE.SphereGeometry(.205,10,8),fleshLight,[-.105,1.57,.145],[.72,.55,.32]);
-mesh(baseHuman,new THREE.SphereGeometry(.205,10,8),fleshLight,[.105,1.57,.145],[.72,.55,.32]);
+mesh(baseHuman,new THREE.CapsuleGeometry(.235,.42,7,14),flesh,[0,1.48,0],[1.12,1.18,.78]);
+// Anatomía atlética: pectorales, clavículas, oblicuos y segmentos abdominales; sin placas de armadura.
+for(const side of [-1,1]){
+ mesh(baseHuman,new THREE.SphereGeometry(.14,12,9),fleshLight,[side*.125,1.56,.155],[.95,.66,.54],[0,0,side*-.10]);
+ mesh(baseHuman,new THREE.SphereGeometry(.105,10,8),flesh,[side*.205,1.45,.065],[.72,1.05,.72],[0,0,side*-.23]);
+ mesh(baseHuman,new THREE.SphereGeometry(.075,10,8),fleshLight,[side*.095,1.36,.17],[.82,.62,.32]);
+ mesh(baseHuman,new THREE.SphereGeometry(.065,10,8),flesh,[side*.09,1.28,.166],[.85,.58,.30]);
+ mesh(baseHuman,new THREE.SphereGeometry(.065,10,8),flesh,[side*.085,1.20,.15],[.8,.56,.30]);
+ mesh(baseHuman,new THREE.SphereGeometry(.105,10,8),flesh,[side*.225,1.68,.005],[1.15,.95,.95]);
+}
+//
 mesh(baseHuman,new THREE.CapsuleGeometry(.105,.16,4,8),flesh,[0,1.77,0],[.85,1,.85]);
-mesh(baseHuman,new THREE.SphereGeometry(.145,12,10),flesh,[0,1.98,.015],[.90,1.13,.92]);
-mesh(baseHuman,new THREE.SphereGeometry(.15,10,7),hair,[0,2.075,-.015],[1.02,.48,1.02]);
+mesh(baseHuman,new THREE.SphereGeometry(.145,14,12),flesh,[0,1.98,.015],[.90,1.13,.92]);
+// Mandíbula, pómulos, orejas y rasgos faciales sencillos para evitar una cabeza esférica.
+mesh(baseHuman,new THREE.SphereGeometry(.095,10,8),fleshLight,[0,1.925,.085],[.88,.66,.82]);
+for(const side of [-1,1]){
+ mesh(baseHuman,new THREE.SphereGeometry(.034,8,7),fleshLight,[side*.143,1.99,.005],[.72,1,.75]);
+ mesh(baseHuman,new THREE.SphereGeometry(.026,8,6),flesh,[side*.064,2.005,.132],[1.15,.72,.45]);
+ mesh(baseHuman,new THREE.SphereGeometry(.014,8,6),hair,[side*.052,2.01,.158],[1,.7,.4]);
+ mesh(baseHuman,new THREE.BoxGeometry(.052,.018,.018),hair,[side*.052,2.035,.145],[1,1,1],[0,0,side*.10]);
+}
+mesh(baseHuman,new THREE.SphereGeometry(.027,8,6),fleshLight,[0,1.977,.158],[.8,.7,.8]);
+mesh(baseHuman,new THREE.BoxGeometry(.052,.012,.012),hair,[0,1.945,.155]);
+mesh(baseHuman,new THREE.SphereGeometry(.15,12,9),hair,[0,2.075,-.015],[1.02,.48,1.02]);
+mesh(baseHuman,new THREE.SphereGeometry(.105,10,8),hair,[0,2.035,-.09],[1.08,.60,.70]);
+for(let i=0;i<5;i++)mesh(baseHuman,new THREE.ConeGeometry(.025,.075,5),hair,[-.10+i*.05,2.095,.07],[1,1,1],[.15,0,(i-2)*.10]);
 mesh(baseHuman,new THREE.SphereGeometry(.07,8,6),hair,[-.115,1.99,.015],[.45,.75,.75]);
 mesh(baseHuman,new THREE.SphereGeometry(.07,8,6),hair,[.115,1.99,.015],[.45,.75,.75]);
 mesh(baseHuman,new THREE.BoxGeometry(.038,.016,.012),hair,[-.055,2.005,.148]);
@@ -195,7 +215,9 @@ const baseLegs=[];
 for(const side of [-1,1]){
  const leg=new THREE.Group();leg.position.set(side*.13,1.08,0);baseHuman.add(leg);baseLegs.push(leg);
  limb(leg,pants,[0,-.02,0],[0,-.37,.015],.105);
- mesh(leg,new THREE.SphereGeometry(.09,8,6),flesh,[0,-.39,.025],[1,.85,1]);
+ mesh(leg,new THREE.SphereGeometry(.105,10,8),pantsLight,[0,-.18,.012],[1.08,1.35,.92]);
+ mesh(leg,new THREE.SphereGeometry(.09,10,8),flesh,[0,-.39,.025],[1,.85,1]);
+ mesh(leg,new THREE.SphereGeometry(.075,10,8),fleshLight,[0,-.39,.075],[.9,.75,.38]);
  limb(leg,flesh,[0,-.40,.02],[0,-.70,.02],.067);
  limb(leg,pantsLight,[0,-.43,.02],[0,-.66,.02],.073);
  mesh(leg,new THREE.BoxGeometry(.13,.045,.13),wrap,[0,-.47,.035]);
@@ -205,8 +227,11 @@ for(const side of [-1,1]){
 const baseArms={};
 for(const side of [-1,1]){
  const arm=new THREE.Group();arm.position.set(side*.30,1.65,0);baseHuman.add(arm);baseArms[side]=arm;
- mesh(arm,new THREE.SphereGeometry(.13,9,7),flesh,[side*.015,-.03,0],[1,.95,.94]);
- limb(arm,flesh,[side*.015,-.06,0],[side*.035,-.31,.02],.085);
+ mesh(arm,new THREE.SphereGeometry(.13,11,9),flesh,[side*.015,-.03,0],[1,.95,.94]);
+// Deltoide y bíceps visibles; la silueta sigue siendo piel y tela, no armadura.
+mesh(arm,new THREE.SphereGeometry(.105,10,8),fleshLight,[side*.025,-.12,.035],[.88,1.22,.92],[0,0,side*.10]);
+limb(arm,flesh,[side*.015,-.06,0],[side*.035,-.31,.02],.085);
+mesh(arm,new THREE.SphereGeometry(.075,10,8),fleshLight,[side*.035,-.245,.055],[.82,.92,.9]);
  mesh(arm,new THREE.SphereGeometry(.085,8,6),fleshLight,[side*.035,-.32,.02]);
  limb(arm,flesh,[side*.035,-.34,.02],[side*.045,-.59,.065],.063);
  mesh(arm,new THREE.SphereGeometry(.067,8,6),flesh,[side*.045,-.63,.075],[.95,1.1,.9]);
