@@ -113,10 +113,10 @@ gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-
  // Elegir ciclos por nombre; evitar usar una animación arbitraria como caminata.
  const clipName=clip=>(clip.name||'').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').replace(/[_-]+/g,' ').trim();
  const findClip=patterns=>{for(const pattern of patterns){const clip=clips.find(item=>pattern.test(clipName(item)));if(clip)return clip;}return undefined;};
- const idleClip=findClip([/\\bidle\\b/,/standing/,/stand still/,/rest/,/breath/,/ready stance/]);
+ const idleClip=findClip([/idle loop/,/\bidle\b/,/standing/,/stand still/,/rest/,/breath/,/ready stance/]);
  // Algunos paquetes nombran los ciclos por dirección o locomoción, no literalmente "walk".
  const walkClip=findClip([/walk brisk/,/walk relaxed/,/brisk walk/,/relaxed walk/,/walk/,/walking/,/walk cycle/,/locomotion/,/forward/,/move forward/,/movement/,/jog cycle/]);
- const runClip=findClip([/\\brun\\b/,/running/,/\\bjog\\b/,/sprint/,/fast move/]);
+ const runClip=findClip([/sprint loop/,/running/,/\brun\b/,/\bjog\b/,/sprint/,/fast move/]);
  if(idleClip)idleAction=locomotionMixer.clipAction(idleClip);
  if(walkClip)walkAction=locomotionMixer.clipAction(walkClip);
  if(runClip)runAction=locomotionMixer.clipAction(runClip);
