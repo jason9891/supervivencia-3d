@@ -66,7 +66,11 @@ for(const side of [-1,1]){
 // Cargar el modelo humano real del repositorio sin ocultar el respaldo hasta que esté listo.
 const importedActor=new THREE.Group();scene.add(importedActor);importedActor.visible=false;
 let importedMixer=null;
-const gltfLoader=new GLTFLoader();\nconst locomotionActor=new THREE.Group();scene.add(locomotionActor);locomotionActor.visible=false;\nlet locomotionMixer=null,walkAction=null,runAction=null,idleAction=null,activeAction=null;\nfunction selectLocomotion(next){if(!next||next===activeAction)return;if(activeAction)activeAction.fadeOut(.16);next.reset().fadeIn(.16).play();activeAction=next;}\nconst runButton=document.getElementById('run');runButton.addEventListener('pointerdown',e=>{e.preventDefault();keys.run=true;runButton.setPointerCapture(e.pointerId)});const stopRun=()=>keys.run=false;runButton.addEventListener('pointerup',stopRun);runButton.addEventListener('pointercancel',stopRun);runButton.addEventListener('lostpointercapture',stopRun);
+const gltfLoader=new GLTFLoader();
+const locomotionActor=new THREE.Group();scene.add(locomotionActor);locomotionActor.visible=false;
+let locomotionMixer=null,walkAction=null,runAction=null,idleAction=null,activeAction=null;
+function selectLocomotion(next){if(!next||next===activeAction)return;if(activeAction)activeAction.fadeOut(.16);next.reset().fadeIn(.16).play();activeAction=next;}
+const runButton=document.getElementById('run');runButton.addEventListener('pointerdown',e=>{e.preventDefault();keys.run=true;runButton.setPointerCapture(e.pointerId)});const stopRun=()=>keys.run=false;runButton.addEventListener('pointerup',stopRun);runButton.addEventListener('pointercancel',stopRun);runButton.addEventListener('lostpointercapture',stopRun);
 gltfLoader.load('./assets/characters/human-base-rigged.glb',gltf=>{
  const model=gltf.scene;
  model.updateMatrixWorld(true);
@@ -89,6 +93,40 @@ gltfLoader.load('./assets/characters/human-base-rigged.glb',gltf=>{
  errorBox.style.display='block';
  errorBox.textContent='No se pudo cargar el modelo humano GLB. Se mantiene el personaje provisional. '+(error?.message||'');
 });
+ 
+// Intentar cargar el personaje CC0 que incluye animaciones. El modelo actual queda como respaldo.
+gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-person-animated.glb',gltf=>{
+ const model=gltf.scene;
+ model.updateMatrixWorld(true);
+ const bounds=new THREE.Box3().setFromObject(model);
+ const size=bounds.getSize(new THREE.Vector3());
+ const center=bounds.getCenter(new THREE.Vector3());
+ if(size.y>0){
+  const factor=1.82/size.y;
+  model.scale.setScalar(factor);
+  model.position.set(-center.x*factor,-bounds.min.y*factor,-center.z*factor);
+ }
+ model.traverse(obj=>{if(obj.isMesh){obj.castShadow=true;obj.receiveShadow=true;}});
+ locomotionActor.add(model);
+ locomotionMixer=new THREE.AnimationMixer(model);
+ const clips=gltf.animations||[];
+ const idleClip=clips.find(a=>/idle|stand|rest/i.test(a.name));
+ const walkClip=clips.find(a=>/walk|walking/i.test(a.name));
+ const runClip=clips.find(a=>/run|running|jog/i.test(a.name));
+ if(idleClip)idleAction=locomotionMixer.clipAction(idleClip);
+ if(walkClip)walkAction=locomotionMixer.clipAction(walkClip);
+ if(runClip)runAction=locomotionMixer.clipAction(runClip);
+ const initial=idleAction||walkAction||runAction||(clips[0]?locomotionMixer.clipAction(clips[0]):null);
+ if(initial){initial.play();activeAction=initial;}
+ actor.visible=false;
+ importedActor.visible=false;
+ locomotionActor.visible=true;
+ document.getElementById('hint').textContent='PERSONAJE ANIMADO CARGADO · '+(walkClip?'CAMINAR':'MOVIMIENTO')+' · '+(runClip?'CORRER':'');
+ console.info('Clips disponibles:',clips.map(a=>a.name));
+},undefined,error=>{
+ console.warn('No se pudo cargar el GLB de animaciones; se conserva el personaje base.',error);
+});
+
 
 const keys={};document.querySelectorAll('[data-k]').forEach(b=>{const k=b.dataset.k;b.addEventListener('pointerdown',e=>{e.preventDefault();keys[k]=true;b.setPointerCapture(e.pointerId)});const off=()=>keys[k]=false;b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('lostpointercapture',off)});
 addEventListener('keydown',e=>{const k=e.key.toLowerCase();keys[k]=true;if(k===' '){e.preventDefault();jump()}});addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
@@ -98,6 +136,7 @@ function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDel
 if(jumpY>0||jumpV>0){jumpV-=12*dt;jumpY+=jumpV*dt;if(jumpY<=0){jumpY=0;jumpV=0}}
 const f=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0),side=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),moving=!!(f||side),running=!!(keys.run||keys.shift),speed=running?3.2:1.8;
 if(moving){const angle=Math.atan2(side,f);actor.rotation.y=angle;actor.position.x+=Math.sin(angle)*speed*dt;actor.position.z+=Math.cos(angle)*f*speed*dt+Math.sin(angle)*side*speed*dt;const gait=elapsed*9;legs[0].rotation.x=Math.sin(gait)*.48;legs[1].rotation.x=-Math.sin(gait)*.48;arms[0].rotation.x=-Math.sin(gait)*.18;arms[1].rotation.x=Math.sin(gait)*.18}else{legs.forEach(l=>l.rotation.x*=.85);arms.forEach(a=>a.rotation.x*=.85)}
-if(locomotionMixer){selectLocomotion(moving?(running?(runAction||walkAction||activeAction):(walkAction||activeAction)):(idleAction||activeAction));locomotionMixer.update(dt);}\nactor.position.y=jumpY;importedActor.position.copy(actor.position);importedActor.rotation.y=actor.rotation.y;locomotionActor.position.copy(actor.position);locomotionActor.rotation.y=actor.rotation.y;camera.position.lerp(new THREE.Vector3(actor.position.x+camOffset.x,camOffset.y+jumpY,actor.position.z+camOffset.z),Math.min(1,dt*3));camera.lookAt(actor.position.x,1.05+jumpY,actor.position.z);renderer.render(scene,camera)}
+if(locomotionMixer){selectLocomotion(moving?(running?(runAction||walkAction||activeAction):(walkAction||activeAction)):(idleAction||activeAction));locomotionMixer.update(dt);}
+actor.position.y=jumpY;importedActor.position.copy(actor.position);importedActor.rotation.y=actor.rotation.y;locomotionActor.position.copy(actor.position);locomotionActor.rotation.y=actor.rotation.y;camera.position.lerp(new THREE.Vector3(actor.position.x+camOffset.x,camOffset.y+jumpY,actor.position.z+camOffset.z),Math.min(1,dt*3));camera.lookAt(actor.position.x,1.05+jumpY,actor.position.z);renderer.render(scene,camera)}
 function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight)}addEventListener('resize',resize);animate();
 </script></body></html>
