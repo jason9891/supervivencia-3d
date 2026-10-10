@@ -84,7 +84,7 @@ gltfLoader.load('./assets/characters/human-base-rigged.glb',gltf=>{
  }
  model.traverse(obj=>{if(obj.isMesh){obj.castShadow=true;obj.receiveShadow=true;}});
  importedActor.add(model);
- if(gltf.animations&&gltf.animations.length){importedMixer=new THREE.AnimationMixer(model);importedMixer.clipAction(gltf.animations[0]).play();}
+ // No reproducir automáticamente el primer clip: puede ser T-pose, golpe o una animación no locomotora.\n if(gltf.animations&&gltf.animations.length){importedMixer=new THREE.AnimationMixer(model);}
  if(!locomotionModelLoaded){actor.visible=false;importedActor.visible=true;document.getElementById('hint').textContent='MODELO HUMANO GLB CARGADO · MOVER Y SALTAR';}
  else{actor.visible=false;importedActor.visible=false;}
 },undefined,error=>{
@@ -115,13 +115,13 @@ gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-
  const findClip=patterns=>{for(const pattern of patterns){const clip=clips.find(item=>pattern.test(clipName(item)));if(clip)return clip;}return undefined;};
  const idleClip=findClip([/idle loop/,/\bidle\b/,/standing/,/stand still/,/rest/,/breath/,/ready stance/]);
  // Algunos paquetes nombran los ciclos por dirección o locomoción, no literalmente "walk".
- const walkClip=findClip([/walk loop/,/walk brisk/,/walk relaxed/,/brisk walk/,/relaxed walk/,/walking/,/walk cycle/,/walk/,/locomotion/,/forward/,/move forward/,/movement/,/jog cycle/]);
+ const walkClip=findClip([/^walk formal loop$/, /^walk loop$/, /walk formal/, /walk.*loop/, /walking cycle/, /^walk$/]);
  const runClip=findClip([/sprint loop/,/running/,/\brun\b/,/\bjog\b/,/sprint/,/fast move/]);
  if(idleClip)idleAction=locomotionMixer.clipAction(idleClip);
  if(walkClip)walkAction=locomotionMixer.clipAction(walkClip);
  if(runClip)runAction=locomotionMixer.clipAction(runClip);
  // No reproducir clips desconocidos como si fueran caminata: eso causa la marcha tipo zombi.
- const initial=idleAction||walkAction||runAction||null;
+ const initial=idleAction||walkAction||null;
  if(initial){initial.play();activeAction=initial;}
  // Priorizar el modelo humano animado aunque no se detecte una caminata en este archivo.
  // Evita que una carga tardía vuelva a mostrar el esqueleto base o el personaje geométrico.
@@ -146,7 +146,7 @@ function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDel
 if(jumpY>0||jumpV>0){jumpV-=12*dt;jumpY+=jumpV*dt;if(jumpY<=0){jumpY=0;jumpV=0}}
 const f=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0),side=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),moving=!!(f||side),running=!!(keys.run||keys.shift),speed=running?3.2:1.8;
 if(moving){const angle=Math.atan2(side,f);actor.rotation.y=angle;actor.position.x+=Math.sin(angle)*speed*dt;actor.position.z+=Math.cos(angle)*f*speed*dt+Math.sin(angle)*side*speed*dt;const gait=elapsed*9;legs[0].rotation.x=Math.sin(gait)*.48;legs[1].rotation.x=-Math.sin(gait)*.48;arms[0].rotation.x=-Math.sin(gait)*.18;arms[1].rotation.x=Math.sin(gait)*.18}else{legs.forEach(l=>l.rotation.x*=.85);arms.forEach(a=>a.rotation.x*=.85)}
-if(locomotionMixer){selectLocomotion(moving?(running?(runAction||walkAction||activeAction):(walkAction||activeAction)):(idleAction||activeAction));locomotionMixer.update(dt);}
+if(locomotionMixer){selectLocomotion(moving?(running?(runAction||walkAction):(walkAction||idleAction)):(idleAction||walkAction));locomotionMixer.update(dt);}
 actor.position.y=jumpY;importedActor.position.copy(actor.position);importedActor.rotation.y=actor.rotation.y;locomotionActor.position.copy(actor.position);locomotionActor.rotation.y=actor.rotation.y;camera.position.lerp(new THREE.Vector3(actor.position.x+camOffset.x,camOffset.y+jumpY,actor.position.z+camOffset.z),Math.min(1,dt*3));camera.lookAt(actor.position.x,1.05+jumpY,actor.position.z);renderer.render(scene,camera)}
 function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight)}addEventListener('resize',resize);animate();
 </script></body></html>
