@@ -123,18 +123,21 @@ gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-
  // No reproducir clips desconocidos como si fueran caminata: eso causa la marcha tipo zombi.
  const initial=idleAction||walkAction||runAction||null;
  if(initial){initial.play();activeAction=initial;}
- actor.visible=false;
  if(walkAction){
+  actor.visible=false;
   importedActor.visible=false;
   locomotionActor.visible=true;
   document.getElementById('hint').textContent='CAMINAR: '+walkClip.name+' · CORRER: '+(runClip?.name||'CAMINATA RÁPIDA');
  }else{
+  // Sin un ciclo de marcha válido, no mostrar el GLB base que se ve como esqueleto.
+  // Mantener visible el personaje procedural, cuyas extremidades ya se animan con los controles.
+  actor.visible=true;
+  importedActor.visible=false;
   locomotionActor.visible=false;
-  importedActor.visible=true;
   const names=clips.map(a=>a.name).filter(Boolean);
   document.getElementById('hint').textContent=names.length
-   ? 'SIN CAMINATA DETECTADA · CLIPS: '+names.slice(0,3).join(' / ')
-   : 'MODELO BASE · EL ARCHIVO DE ANIMACIÓN NO CONTIENE CLIPS';
+   ? 'PERSONAJE PROVISIONAL ACTIVO · ANIMACIÓN DISPONIBLE: '+names.slice(0,2).join(' / ')
+   : 'PERSONAJE PROVISIONAL ACTIVO · SIN CICLO DE CAMINATA';
  }
  console.info('Clips disponibles:',clips.map(a=>a.name),'selección:',{idle:idleClip?.name,walk:walkClip?.name,run:runClip?.name});
 },undefined,error=>{
