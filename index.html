@@ -183,7 +183,6 @@ const normName=n=>(n||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f
 const CLIP_NAMES={idle:['idle loop','idle standing','idle'],walk:['walk loop','walk formal loop','walk relaxed','walk brisk'],run:['sprint loop','jog fwd loop','run','jog'],attack:['sword attack'],swordIdle:['sword idle'],jumpStart:['jump start'],jumpLoop:['jump loop']};
 function findClip(clips,names){for(const n of names){const c=clips.find(item=>normName(item.name)===n);if(c)return c;}return undefined;}
 function addHeadFaceTexture(model,factor){
- const head=model.getObjectByProperty('isBone',true) && model.getObjectByProperty('isBone',true);
  let headBone=null;
  model.traverse(obj=>{if(!headBone&&obj.isBone){const n=normName(obj.name);if(n.split(' ').includes('head')&&!n.includes('end'))headBone=obj;}});
  if(!headBone)return false;
