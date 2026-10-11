@@ -1,6 +1,6 @@
 // course.js — camino lineal con barrancos y física de salto.
-// freeMap: true desactiva el límite HALF_WIDTH y el suelo del curso
-// (el mapa usa resolveGround / plataformas propias).
+// freeMap: true (o gaps===0) desactiva HALF_WIDTH y el suelo del curso;
+// el mapa usa resolveGround / plataformas propias.
 
 export const HALF_WIDTH = 2.2;
 export const GRAVITY = 12;
@@ -30,19 +30,24 @@ export function buildCourse(gaps = GAPS) {
   return { segments, gaps: gaps.length, freeMap: false };
 }
 
+function isFreeMap(course) {
+  return !!(course && (course.freeMap || course.gaps === 0));
+}
+
 export function segmentIndex(course, x, z) {
-  if (!course.freeMap && Math.abs(x) > HALF_WIDTH) return -1;
+  if (!isFreeMap(course) && Math.abs(x) > HALF_WIDTH) return -1;
   return course.segments.findIndex(s => z <= s.a && z >= s.b);
 }
 
 export function onPlatform(course, x, z) {
-  if (course.freeMap) return false; // el suelo lo resuelve el mapa
+  if (isFreeMap(course)) return false;
   return segmentIndex(course, x, z) !== -1;
 }
 
 export function createPlayer(course) {
   const s0 = course.segments[0];
-  const spawnZ = course.freeMap ? (s0?.a ?? 0) - 2 : Math.min(0, s0.a - 1);
+  const free = isFreeMap(course);
+  const spawnZ = free ? (s0?.a ?? 0) - 2 : Math.min(0, s0.a - 1);
   return {
     x: 0, y: 0, z: spawnZ, vy: 0,
     facing: Math.PI,
@@ -57,7 +62,7 @@ export function createPlayer(course) {
 export function stepPlayer(p, course, input, dt) {
   const ev = { jumped: false, landed: false, fell: false, reachedGoal: false };
   const { f = 0, side = 0, speed = WALK_SPEED, running = false, jump = false, canMove = true } = input;
-  const freeMap = !!course.freeMap;
+  const freeMap = isFreeMap(course);
 
   const len = Math.hypot(side, f);
   const hasInput = canMove && len > 0;
@@ -98,7 +103,7 @@ export function stepPlayer(p, course, input, dt) {
   }
   if (hasInput) p.facing = Math.atan2(dx, dz);
 
-  // En freeMap el suelo lo pone resolveGround del mapa; no forzar y=0 ni unground.
+  // freeMap: el suelo lo resuelve resolveGround del mapa
   if (freeMap) {
     if (!p.grounded) {
       p.coyote = Math.max(0, p.coyote - dt);
