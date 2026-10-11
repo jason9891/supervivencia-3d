@@ -220,8 +220,22 @@ function addHeadFaceTexture(model,factor){
  const pos=geometry.attributes.position;
  for(let i=0;i<pos.count;i++){const x=pos.getX(i);const u=x/(width*.5);pos.setZ(i,.012/Math.max(factor,.0001)*(1-u*u));}
  geometry.computeVertexNormals();
- const decal=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false,side:THREE.DoubleSide,toneMapped:false}));
- decal.name='HeadFaceTextureTest';decal.position.set(0,.065/Math.max(factor,.0001),.105/Math.max(factor,.0001));decal.renderOrder=5;decal.frustumCulled=false;headBone.add(decal);
+ const material=new THREE.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false,depthTest:true,side:THREE.DoubleSide,toneMapped:false});
+ // El modelo puede mirar hacia cualquiera de los ejes locales; colocar candidatos evita que la cara quede de canto o dentro de la cabeza.
+ const inv=Math.max(factor,.0001), y=.105/inv, offset=.115/inv;
+ const placements=[
+  {p:[0,y,offset],r:0},
+  {p:[0,y,-offset],r:Math.PI},
+  {p:[offset,y,0],r:Math.PI/2},
+  {p:[-offset,y,0],r:-Math.PI/2}
+ ];
+ for(let i=0;i<placements.length;i++){
+  const item=placements[i],decal=new THREE.Mesh(geometry,material);
+  decal.name='HeadFaceTextureTest_'+i;
+  decal.position.set(item.p[0],item.p[1],item.p[2]);
+  decal.rotation.y=item.r;
+  decal.renderOrder=5;decal.frustumCulled=false;headBone.add(decal);
+ }
  return true;
 }
 
