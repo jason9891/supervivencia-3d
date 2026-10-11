@@ -1,46 +1,35 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"><title>PRUEBA 6.4 · Diagnóstico de carga</title>
-<style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#171a20;color:#f1e6d2;font:14px system-ui}canvas{display:block;width:100%;height:100%;touch-action:none}#top{position:fixed;z-index:4;top:env(safe-area-inset-top);left:0;right:0;padding:12px;display:flex;justify-content:space-between;align-items:center;pointer-events:none}#top strong{font-size:11px;text-shadow:0 2px 5px #000}button{pointer-events:auto;border:1px solid #c4a574;border-radius:9px;background:#211d17;color:#f3d7a0;padding:10px;font-weight:700;font-size:11px}#controls{position:fixed;z-index:4;bottom:calc(env(safe-area-inset-bottom) + 12px);left:0;right:0;display:flex;justify-content:center;flex-wrap:wrap;gap:7px;padding:0 8px}#status{position:fixed;z-index:4;top:calc(env(safe-area-inset-top) + 50px);left:12px;right:12px;text-align:center;text-shadow:0 2px 5px #000;font-size:12px;pointer-events:none}#error{display:none;position:fixed;z-index:8;top:25%;left:10px;right:10px;background:#401b1b;padding:12px;white-space:pre-wrap;max-height:45%;overflow:auto}
-</style></head><body>
-<div id="top"><strong>LABORATORIO · PRUEBA 6.4</strong><button id="back">VOLVER</button></div><div id="status">PRUEBA 6.4 · Preparando visor…</div><div id="error"></div>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"><title>PRUEBA 6.5 · Diagnóstico y movilidad</title>
+<style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#171a20;color:#f1e6d2;font:14px system-ui}canvas{display:block;width:100%;height:100%;touch-action:none}#top{position:fixed;z-index:4;top:env(safe-area-inset-top);left:0;right:0;padding:12px;display:flex;justify-content:space-between;align-items:center;pointer-events:none}#top strong{font-size:11px;text-shadow:0 2px 5px #000}button{pointer-events:auto;border:1px solid #c4a574;border-radius:9px;background:#211d17;color:#f3d7a0;padding:10px;font-weight:700;font-size:11px}#controls{position:fixed;z-index:4;bottom:calc(env(safe-area-inset-bottom) + 12px);left:0;right:0;display:flex;justify-content:center;flex-wrap:wrap;gap:7px;padding:0 8px}#status{position:fixed;z-index:4;top:calc(env(safe-area-inset-top) + 50px);left:12px;right:12px;text-align:center;text-shadow:0 2px 5px #000;font-size:12px;pointer-events:none}#error{display:none;position:fixed;z-index:8;top:25%;left:10px;right:10px;background:#401b1b;padding:12px;white-space:pre-wrap;max-height:45%;overflow:auto}</style></head><body>
+<div id="top"><strong>LABORATORIO · PRUEBA 6.5</strong><button id="back">VOLVER</button></div><div id="status">PRUEBA 6.5 · Preparando bibliotecas 3D…</div><div id="error"></div>
 <div id="controls"><button data-a="0">FRENTE</button><button data-a="1.5708">PERFIL D.</button><button data-a="3.14159">NUCA</button><button data-a="-1.5708">PERFIL I.</button><button id="reset">REINICIAR</button><button id="yellow">VER AMARILLO</button><button id="cc0">PROBAR CC0</button><button id="anim" disabled>ANIMACIÓN NO DISP.</button></div>
 <script>
-(function(){
-var status=document.getElementById('status'),err=document.getElementById('error');
-document.getElementById('back').onclick=function(){location.href='./character-lab.html';};
-function showError(m){err.style.display='block';err.textContent=String(m);status.textContent='PRUEBA 6.4 · Error detectado';}
-window.addEventListener('error',function(e){showError(e.message||'Error de JavaScript');});
-window.setTimeout(function(){if(status.textContent==='PRUEBA 6.4 · Preparando visor…')showError('Las bibliotecas 3D no se iniciaron. Comprueba la conexión o el bloqueo del CDN. El botón VOLVER sigue disponible.');},7000);
-})();
+(function(){var s=document.getElementById('status'),e=document.getElementById('error');document.getElementById('back').onclick=function(){location.href='./character-lab.html';};window.addEventListener('error',function(x){e.style.display='block';e.textContent=x.message||'Error JavaScript';s.textContent='PRUEBA 6.5 · Error de inicio';});window.setTimeout(function(){if(s.textContent==='PRUEBA 6.5 · Preparando bibliotecas 3D…'){s.textContent='PRUEBA 6.5 · El módulo no inició';e.style.display='block';e.textContent='El navegador no pudo iniciar el módulo. VOLVER sigue disponible.';}},9000);})();
 </script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js" onerror="document.getElementById('status').textContent='PRUEBA 6.4 · No cargó Three.js desde CDN';document.getElementById('error').style.display='block';document.getElementById('error').textContent='Falló la descarga de three.min.js. El botón VOLVER sigue disponible.'"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/GLTFLoader.js" onerror="document.getElementById('status').textContent='PRUEBA 6.4 · No cargó GLTFLoader';document.getElementById('error').style.display='block';document.getElementById('error').textContent='Falló la descarga de GLTFLoader.js. El botón VOLVER sigue disponible.'"></script>
-<script>
-(function(){
-var status=document.getElementById('status'),err=document.getElementById('error');
-if(!window.THREE||!THREE.GLTFLoader){if(status.textContent.indexOf('PRUEBA 6.4')===0&&status.textContent.indexOf('Error')<0)status.textContent='PRUEBA 6.4 · Bibliotecas 3D no disponibles';return;}
-var scene=new THREE.Scene();scene.background=new THREE.Color(0x171a20);
-scene.add(new THREE.HemisphereLight(0xd4e2ff,0x382a20,2.1));
-var light=new THREE.DirectionalLight(0xffe2bd,3);light.position.set(-4,8,6);scene.add(light);
-var camera=new THREE.PerspectiveCamera(35,innerWidth/innerHeight,.01,1000);camera.position.set(0,1,4.9);
-var renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);document.body.appendChild(renderer.domElement);
-var floor=new THREE.Mesh(new THREE.CircleGeometry(2.3,48),new THREE.MeshStandardMaterial({color:0x292c30,roughness:1}));floor.rotation.x=-Math.PI/2;floor.position.y=-.02;scene.add(floor);
-var loader=new THREE.GLTFLoader(),current=null,mixer=null,actions=[],angle=0,drag=false,lastX=0,lastY=0,serial=0;
-var yellowUrl='./assets/characters/ual/UAL1_Standard.glb';
-var cc0Url='https://raw.githubusercontent.com/Seyamalam/blood-league-kickoff/main/public/assets/vendor/quaternius/night-striker.glb';
-function show(g,label){if(current)scene.remove(current);if(mixer)mixer.stopAllAction();mixer=null;actions=[];var model=g.scene;model.updateMatrixWorld(true);var b=new THREE.Box3().setFromObject(model),s=b.getSize(new THREE.Vector3()),center=b.getCenter(new THREE.Vector3());if(!s.y)throw new Error('El GLB no tiene una malla visible.');var k=1.82/s.y;model.scale.setScalar(k);model.position.set(-center.x*k,-b.min.y*k,-center.z*k);model.traverse(function(o){if(o.isMesh&&o.material)o.material.side=THREE.DoubleSide;});current=new THREE.Group();current.add(model);scene.add(current);current.rotation.y=angle;camera.position.set(0,1,4.9);camera.lookAt(0,.95,0);var clips=g.animations||[];if(clips.length){mixer=new THREE.AnimationMixer(model);actions=clips.map(function(c){return mixer.clipAction(c);});document.getElementById('anim').disabled=false;document.getElementById('anim').textContent='REPRODUCIR '+clips.length+' ANIM.';}else{document.getElementById('anim').disabled=true;document.getElementById('anim').textContent='ANIMACIÓN NO DISP.';}status.textContent='PRUEBA 6.4 · '+label+' · '+clips.length+' animaciones propias';}
-function load(url,label){var id=++serial;status.textContent='PRUEBA 6.4 · Cargando '+label+'…';err.style.display='none';loader.load(url,function(g){if(id!==serial)return;try{show(g,label);}catch(e){showError(e.message);}},undefined,function(e){if(id!==serial)return;showError('No se pudo cargar '+label+'. Comprueba que el archivo exista y sea accesible.');});}
-function showError(m){err.style.display='block';err.textContent=String(m);status.textContent='PRUEBA 6.4 · Error de carga';}
-document.getElementById('yellow').onclick=function(){load(yellowUrl,'PERSONAJE AMARILLO');};document.getElementById('cc0').onclick=function(){load(cc0Url,'HOMBRE CC0');};
-document.getElementById('anim').onclick=function(){if(!actions.length)return;actions.forEach(function(a){a.stop();});actions[0].reset().play();status.textContent='PRUEBA 6.4 · Reproduciendo '+actions[0].getClip().name;};
-document.querySelectorAll('[data-a]').forEach(function(b){b.onclick=function(){angle=Number(b.dataset.a);if(current)current.rotation.y=angle;};});
-document.getElementById('reset').onclick=function(){angle=0;if(current)current.rotation.y=0;camera.position.set(0,1,4.9);camera.lookAt(0,.95,0);};
-renderer.domElement.addEventListener('pointerdown',function(e){drag=true;lastX=e.clientX;lastY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId);});
-renderer.domElement.addEventListener('pointermove',function(e){if(!drag)return;angle+=(e.clientX-lastX)*.012;if(current)current.rotation.y=angle;camera.position.y=Math.max(.45,Math.min(2.5,camera.position.y-(e.clientY-lastY)*.008));camera.lookAt(0,.95,0);lastX=e.clientX;lastY=e.clientY;});
-renderer.domElement.addEventListener('pointerup',function(){drag=false;});renderer.domElement.addEventListener('pointercancel',function(){drag=false;});
-window.addEventListener('resize',function(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
-function frame(){requestAnimationFrame(frame);if(mixer)mixer.update(.016);renderer.render(scene,camera);}frame();
-load(yellowUrl,'PERSONAJE AMARILLO LOCAL');
-})();
+<script type="module">
+const status=document.getElementById('status'),errorBox=document.getElementById('error');
+function fail(message){status.textContent='PRUEBA 6.5 · Error de carga';errorBox.style.display='block';errorBox.textContent=String(message);}
+async function importFirst(urls){let last;for(const url of urls){try{return await import(url);}catch(e){last=e;}}throw new Error('No se pudo descargar una biblioteca desde los CDN probados. '+(last&&last.message||''));}
+try{
+ status.textContent='PRUEBA 6.5 · Cargando motor 3D…';
+ const THREE=await importFirst(['https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js','https://unpkg.com/three@0.170.0/build/three.module.js']);
+ status.textContent='PRUEBA 6.5 · Cargando lector GLB…';
+ const loaderMod=await importFirst(['https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js','https://unpkg.com/three@0.170.0/examples/jsm/loaders/GLTFLoader.js']);
+ const GLTFLoader=loaderMod.GLTFLoader;
+ const scene=new THREE.Scene();scene.background=new THREE.Color(0x171a20);scene.add(new THREE.HemisphereLight(0xd4e2ff,0x382a20,2.1));
+ const light=new THREE.DirectionalLight(0xffe2bd,3);light.position.set(-4,8,6);scene.add(light);
+ const camera=new THREE.PerspectiveCamera(35,innerWidth/innerHeight,.01,1000);camera.position.set(0,1,4.9);
+ const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;document.body.appendChild(renderer.domElement);
+ const floor=new THREE.Mesh(new THREE.CircleGeometry(2.3,48),new THREE.MeshStandardMaterial({color:0x292c30,roughness:1}));floor.rotation.x=-Math.PI/2;floor.position.y=-.02;scene.add(floor);
+ const loader=new GLTFLoader();let current=null,mixer=null,actions=[],angle=0,drag=false,lastX=0,lastY=0,serial=0;
+ const yellowUrl='./assets/characters/ual/UAL1_Standard.glb',cc0Url='https://raw.githubusercontent.com/Seyamalam/blood-league-kickoff/main/public/assets/vendor/quaternius/night-striker.glb';
+ function show(g,label){if(current)scene.remove(current);if(mixer)mixer.stopAllAction();mixer=null;actions=[];const model=g.scene;model.updateMatrixWorld(true);const b=new THREE.Box3().setFromObject(model),s=b.getSize(new THREE.Vector3()),center=b.getCenter(new THREE.Vector3());if(!s.y)throw new Error('El GLB no tiene una malla visible.');const k=1.82/s.y;model.scale.setScalar(k);model.position.set(-center.x*k,-b.min.y*k,-center.z*k);model.traverse(o=>{if(o.isMesh&&o.material)o.material.side=THREE.DoubleSide;});current=new THREE.Group();current.add(model);scene.add(current);current.rotation.y=angle;camera.position.set(0,1,4.9);camera.lookAt(0,.95,0);const clips=g.animations||[];if(clips.length){mixer=new THREE.AnimationMixer(model);actions=clips.map(c=>mixer.clipAction(c));document.getElementById('anim').disabled=false;document.getElementById('anim').textContent='REPRODUCIR '+clips.length+' ANIM.';}else{document.getElementById('anim').disabled=true;document.getElementById('anim').textContent='ANIMACIÓN NO DISP.';}status.textContent='PRUEBA 6.5 · '+label+' · '+clips.length+' animaciones propias';}
+ function load(url,label){const id=++serial;status.textContent='PRUEBA 6.5 · Cargando '+label+'…';errorBox.style.display='none';loader.load(url,g=>{if(id!==serial)return;try{show(g,label);}catch(e){fail(e.message);}},undefined,e=>{if(id!==serial)return;fail('No se pudo cargar '+label+'. Revisa el acceso al archivo GLB.');});}
+ document.getElementById('yellow').onclick=()=>load(yellowUrl,'PERSONAJE AMARILLO');document.getElementById('cc0').onclick=()=>load(cc0Url,'HOMBRE CC0');
+ document.getElementById('anim').onclick=()=>{if(!actions.length)return;actions.forEach(a=>a.stop());actions[0].reset().play();status.textContent='PRUEBA 6.5 · Reproduciendo '+actions[0].getClip().name;};
+ document.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{angle=Number(b.dataset.a);if(current)current.rotation.y=angle;});document.getElementById('reset').onclick=()=>{angle=0;if(current)current.rotation.y=0;camera.position.set(0,1,4.9);camera.lookAt(0,.95,0);};
+ renderer.domElement.addEventListener('pointerdown',e=>{drag=true;lastX=e.clientX;lastY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId);});renderer.domElement.addEventListener('pointermove',e=>{if(!drag)return;angle+=(e.clientX-lastX)*.012;if(current)current.rotation.y=angle;camera.position.y=Math.max(.45,Math.min(2.5,camera.position.y-(e.clientY-lastY)*.008));camera.lookAt(0,.95,0);lastX=e.clientX;lastY=e.clientY;});renderer.domElement.addEventListener('pointerup',()=>drag=false);renderer.domElement.addEventListener('pointercancel',()=>drag=false);
+ addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+ function frame(){requestAnimationFrame(frame);if(mixer)mixer.update(.016);renderer.render(scene,camera);}frame();load(yellowUrl,'PERSONAJE AMARILLO LOCAL');
+}catch(e){fail('Falló la inicialización del visor: '+(e&&e.message||e)+'. Se probaron jsDelivr y unpkg.');}
 </script></body></html>
