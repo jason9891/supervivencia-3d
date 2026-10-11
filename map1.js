@@ -1,4 +1,4 @@
-// map1.js — El Regreso (entrada 2F abierta)
+// map1.js — El Regreso (puerta 2P transitable + suelo por altura)
 import * as THREE from 'three';
 
 export const MAP1_NAME = 'El Regreso';
@@ -38,16 +38,19 @@ export const PLATFORMS = [];
 function addWall(minX, maxX, minZ, maxZ) { WALLS.push({ minX, maxX, minZ, maxZ }); }
 function addPlatform(minX, maxX, minZ, maxZ, y) { PLATFORMS.push({ minX, maxX, minZ, maxZ, y }); }
 
-export function getGroundHeight(x, z) {
+// Solo plataformas a la altura del jugador o por debajo (evita subir al 2º piso al pasar debajo)
+export function getGroundHeight(x, z, fromY = Infinity) {
   let best = -Infinity;
   for (const p of PLATFORMS) {
-    if (x >= p.minX && x <= p.maxX && z >= p.minZ && z <= p.maxZ && p.y > best) best = p.y;
+    if (x >= p.minX && x <= p.maxX && z >= p.minZ && z <= p.maxZ) {
+      if (p.y <= fromY + 0.5 && p.y > best) best = p.y;
+    }
   }
   return best === -Infinity ? 0 : best;
 }
 
 export function resolveGround(player) {
-  const gy = getGroundHeight(player.x, player.z);
+  const gy = getGroundHeight(player.x, player.z, player.y);
   if (player.y <= gy + 0.45) {
     if (player.vy <= 0.65) {
       player.y = gy; player.vy = 0;
@@ -91,7 +94,7 @@ export function buildMap1(scene) {
   const mat = (color, roughness = 0.84, metalness = 0) => new THREE.MeshStandardMaterial({ color, roughness, metalness });
   const stone = mat(0x6a7068, 0.9), dark = mat(0x4a5048, 0.88), dirt = mat(0x5a5348, 0.95);
   const grass = mat(0x3d5c38, 1), wood = mat(0x6b4a32, 0.85), iron = mat(0x3a3a40, 0.4, 0.55);
-  const tile = mat(0x555a52, 0.9), cloth = mat(0x7a4a3a, 0.9), doorM = mat(0x5a3a22, 0.75);
+  const tile = mat(0x555a52, 0.9), doorM = mat(0x5a3a22, 0.75);
 
   function box(w, h, d, material, x, y, z, solid = false) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
@@ -128,7 +131,7 @@ export function buildMap1(scene) {
   cyl(2.6, 2.7, 0.45, stone, 0, PLAZA_Y + 0.12, 14, true);
   cyl(1.7, 1.75, 0.6, dark, 0, PLAZA_Y + 0.5, 14, true);
 
-  // Establo — entrada abierta
+  // Establo
   pad(12, 16, PLAZA_Y, -19, 27, wood);
   box(0.8, 3.4, 16, dark, -24.5, PLAZA_Y + 1.6, 27, true);
   box(0.8, 3.4, 5.5, dark, -13.5, PLAZA_Y + 1.6, 32.5, true);
@@ -145,30 +148,35 @@ export function buildMap1(scene) {
   creature.userData = { type: 'creature', hp: 20, maxHp: 20, weak: true, alive: true };
   scene.add(creature);
 
-  // EDIFICIO 2P — HUECO ANCHO sin colisión (z 15.5..24.5)
+  // === EDIFICIO 2P — puerta ABIERTA (hueco z ~16..24, sin muro sólido ni en P1 ni en P2) ===
   pad(14, 22, PLAZA_Y, 18, 20, tile);
-  pad(4, 10, PLAZA_Y, 12, 20, tile); // umbral
-  box(0.9, 3.2, 5, dark, 11.5, PLAZA_Y + 1.5, 28.5, true); // oeste norte
-  box(0.9, 3.2, 5, dark, 11.5, PLAZA_Y + 1.5, 11.5, true); // oeste sur
-  // marco visual NO solid
-  box(0.3, 2.9, 0.25, doorM, 11.5, PLAZA_Y + 1.35, 24.2);
-  box(0.3, 2.9, 0.25, doorM, 11.5, PLAZA_Y + 1.35, 15.8);
-  box(0.35, 0.3, 8.6, doorM, 11.5, PLAZA_Y + 2.95, 20);
-  const hallDoor = box(0.1, 2.4, 1.5, doorM, 11.7, PLAZA_Y + 1.15, 24.0);
-  hallDoor.rotation.y = -1.0; hallDoor.name = 'hallDoor';
+  pad(5, 10, PLAZA_Y, 12.5, 20, tile);
+  // Planta baja: solo extremos del muro oeste
+  box(0.9, 3.2, 5.5, dark, 11.5, PLAZA_Y + 1.5, 28.75, true);
+  box(0.9, 3.2, 5.5, dark, 11.5, PLAZA_Y + 1.5, 11.25, true);
+  // Marco visual (NO solid)
+  box(0.28, 2.9, 0.22, doorM, 11.45, PLAZA_Y + 1.35, 24.0);
+  box(0.28, 2.9, 0.22, doorM, 11.45, PLAZA_Y + 1.35, 16.0);
+  box(0.3, 0.28, 8.2, doorM, 11.45, PLAZA_Y + 2.95, 20);
+  const hallDoor = box(0.1, 2.3, 1.4, doorM, 11.55, PLAZA_Y + 1.1, 23.6);
+  hallDoor.rotation.y = -1.05; hallDoor.name = 'hallDoor';
+  // Resto muros PB
   box(0.9, 3.2, 22, dark, 24.5, PLAZA_Y + 1.5, 20, true);
   box(14, 3.2, 0.9, dark, 18, PLAZA_Y + 1.5, 30.5, true);
   box(14, 3.2, 0.9, dark, 18, PLAZA_Y + 1.5, 9.5, true);
+  // Losa 2º piso (visual + plataforma; resolveGround usa altura del jugador)
   box(14, 0.35, 22, wood, 18, FLOOR2_Y - 0.15, 20);
   addPlatform(11, 25, 9, 31, FLOOR2_Y);
-  // escaleras al este (no bloquean entrada)
+  // Escaleras este
   for (let i = 0; i < 9; i++) {
     const h = PLAZA_Y + (i + 1) * ((FLOOR2_Y - PLAZA_Y) / 9);
     const z = 12 + i * 0.85;
     box(2.2, 0.38, 0.85, stone, 21.5, h - 0.12, z, true);
     addPlatform(20.4, 22.6, z - 0.42, z + 0.42, h);
   }
-  box(0.9, 3.0, 22, dark, 11.5, FLOOR2_Y + 1.4, 20, true);
+  // Muros 2º piso: OESTE partido igual que PB (no tapa el hueco de la puerta)
+  box(0.9, 3.0, 5.5, dark, 11.5, FLOOR2_Y + 1.4, 28.75, true);
+  box(0.9, 3.0, 5.5, dark, 11.5, FLOOR2_Y + 1.4, 11.25, true);
   box(0.9, 3.0, 22, dark, 24.5, FLOOR2_Y + 1.4, 20, true);
   box(14, 3.0, 0.9, dark, 18, FLOOR2_Y + 1.4, 30.5, true);
   box(14, 3.0, 0.9, dark, 18, FLOOR2_Y + 1.4, 9.5, true);
@@ -180,10 +188,11 @@ export function buildMap1(scene) {
   pageMesh.userData = { type: 'storyPage', read: false };
   const keyMesh = box(0.35, 0.08, 0.12, mat(0xc9a227, 0.4, 0.6), KEY_POS.x, KEY_POS.y, KEY_POS.z);
   keyMesh.userData = { type: 'key', collected: false };
+  // Pasarela a torre (solo plataforma estrecha; no cubre el suelo de la plaza debajo)
   box(3, 0.3, 4, wood, 18, FLOOR2_Y - 0.1, 6);
   addPlatform(16.5, 19.5, 4, 8, FLOOR2_Y);
 
-  // Torres + reja
+  // Torres
   pad(8, 8, PLAZA_Y, -13, -6, stone);
   box(8, 7.5, 0.9, dark, -13, PLAZA_Y + 3.5, -2.5, true);
   box(8, 7.5, 0.9, dark, -13, PLAZA_Y + 3.5, -9.5, true);
@@ -200,6 +209,7 @@ export function buildMap1(scene) {
   addPlatform(9.5, 16.5, -9.5, -2.5, FLOOR2_Y);
   const portcullis = box(12, 5.8, 0.45, iron, 0, PLAZA_Y + 2.9, -2.5, true);
   portcullis.name = 'portcullis';
+  // Puente a torre derecha: plataforma solo en el puente, no sobre el patio
   box(3, 0.3, 3, wood, 13, FLOOR2_Y - 0.1, 1);
   addPlatform(11.5, 14.5, -0.5, 2.5, FLOOR2_Y);
   const towerDoor = box(1.7, 2.5, 0.35, wood, 13, FLOOR2_Y + 1.15, -2.2, true);
