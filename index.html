@@ -22,7 +22,7 @@
 </style>
 </head>
 <body>
-<div id="stat"></div><div id="hint">EL REGRESO · PASILLO DE ENTRADA</div>
+<div id="stat"></div><div id="hint">EL REGRESO · ORILLA DEL RÍO</div>
 <div id="pad"><button data-k="w" style="grid-column:2;grid-row:1">▲</button><button data-k="a" style="grid-column:1;grid-row:2">◀</button><button data-k="s" style="grid-column:2;grid-row:2">▼</button><button data-k="d" style="grid-column:3;grid-row:2">▶</button></div>
 <button id="atk">ATACAR</button><button id="arm">ARMA</button><button id="run">CORRER</button><button id="jump">⬆<br>SALTAR</button><div id="error"></div>
 <div id="story"><div class="box"><h3 id="storyTitle"></h3><p id="storyText"></p><button id="storyClose">Cerrar</button></div></div>
@@ -31,7 +31,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
 import { buildCourse, createPlayer, stepPlayer, HALF_WIDTH, WALK_SPEED, RUN_SPEED } from './course.js';
-import { buildMap1, getCurrentZone, STORY_PAGE, distanceToPage, resolveWallCollisions } from './map1.js';
+import { buildMap1, getCurrentZone, STORY_PAGE, distanceToPage, resolveWallCollisions, resolveGround } from './map1.js';
 
 const errorBox=document.getElementById('error');
 addEventListener('error',e=>{errorBox.style.display='block';errorBox.textContent='Error del juego: '+(e.message||'desconocido')});
@@ -39,8 +39,8 @@ addEventListener('unhandledrejection',e=>{errorBox.style.display='block';errorBo
 
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x12161c);
-scene.fog=new THREE.Fog(0x12161c, 22, 75);
-const camera=new THREE.PerspectiveCamera(48,innerWidth/innerHeight,.1,160);
+scene.fog=new THREE.Fog(0x12161c, 22, 80);
+const camera=new THREE.PerspectiveCamera(48,innerWidth/innerHeight,.1,180);
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
 renderer.setSize(innerWidth,innerHeight);
@@ -53,15 +53,15 @@ document.body.appendChild(renderer.domElement);
 
 scene.add(new THREE.HemisphereLight(0x8aa0b8,0x2a2218,1.0));
 const key=new THREE.DirectionalLight(0xffe8c8,2.0);
-key.position.set(-10,20,8);
+key.position.set(-10,22,10);
 key.castShadow=true;
 key.shadow.mapSize.set(1024,1024);
 key.shadow.camera.near=2;
-key.shadow.camera.far=100;
-key.shadow.camera.left=-45;
-key.shadow.camera.right=45;
-key.shadow.camera.top=45;
-key.shadow.camera.bottom=-45;
+key.shadow.camera.far=120;
+key.shadow.camera.left=-50;
+key.shadow.camera.right=50;
+key.shadow.camera.top=50;
+key.shadow.camera.bottom=-50;
 key.shadow.bias=-0.001;
 scene.add(key);
 const rim=new THREE.DirectionalLight(0x9a4535,1.15);
@@ -74,33 +74,34 @@ function addTorchLight(x,y,z){
   l.castShadow=false;
   scene.add(l);
 }
-// Pasillo largo de aproximación
-addTorchLight(-4.5,3.0,70);
-addTorchLight(4.5,3.0,70);
-addTorchLight(-4.5,3.0,60);
-addTorchLight(4.5,3.0,60);
-addTorchLight(-4.5,3.0,50);
-addTorchLight(4.5,3.0,50);
-addTorchLight(-4.5,3.0,40);
-addTorchLight(4.5,3.0,40);
-addTorchLight(-4.5,3.0,32);
-addTorchLight(4.5,3.0,32);
+// Rio / orilla
+addTorchLight(-5,2.2,108);
+addTorchLight(5,2.2,108);
+// Camino de subida
+addTorchLight(-4,2.5,90);
+addTorchLight(4,2.5,90);
+addTorchLight(-4,3.0,75);
+addTorchLight(4,3.0,75);
+addTorchLight(-4,3.5,62);
+addTorchLight(4,3.5,62);
+// Reja
+addTorchLight(-5,5.0,50);
+addTorchLight(5,5.0,50);
 // Patio
-addTorchLight(-12,2.8,10);
-addTorchLight(12,2.8,10);
-addTorchLight(-12,2.8,-10);
-addTorchLight(12,2.8,-10);
-// Biblioteca (oeste)
-addTorchLight(-28,3.0,6);
-addTorchLight(-28,3.0,-6);
+addTorchLight(-12,5.2,18);
+addTorchLight(12,5.2,18);
+addTorchLight(-12,5.2,2);
+addTorchLight(12,5.2,2);
+// Biblioteca
+addTorchLight(-28,5.5,14);
+addTorchLight(-28,5.5,6);
 // Este
-addTorchLight(26,2.8,4);
-addTorchLight(26,2.8,-4);
+addTorchLight(26,5.2,12);
 // Sur + jefe
-addTorchLight(-5,2.8,-28);
-addTorchLight(5,2.8,-28);
-addTorchLight(-8,3.2,-50);
-addTorchLight(8,3.2,-50);
+addTorchLight(-5,5.2,-18);
+addTorchLight(5,5.2,-18);
+addTorchLight(-8,5.5,-40);
+addTorchLight(8,5.5,-40);
 
 const mat=(color,roughness=.8,metalness=0)=>new THREE.MeshStandardMaterial({color,roughness,metalness});
 const skin=mat(0x98694f),skinLight=mat(0xb68160),hair=mat(0x211a17),pants=mat(0x302720),cloth=mat(0x493029),wrap=mat(0x806044),eye=mat(0x171211);
@@ -111,12 +112,13 @@ const mapData = buildMap1(scene);
 const herbs = mapData.herbs;
 let pageRead = false;
 
-const course = { segments: [{ a: 85, b: -70 }], gaps: 0 };
+const course = { segments: [{ a: 120, b: -70 }], gaps: 0 };
 const player = createPlayer(course);
-// Spawn al inicio del pasillo largo (estilo mapa del enano)
+// Spawn en la orilla del río (punto más bajo)
 player.x = 0;
-player.z = 70;
-player.checkpoint = { x: 0, z: 70 };
+player.z = 108;
+player.y = 0;
+player.checkpoint = { x: 0, z: 108 };
 player.facing = Math.PI;
 
 const statBox=document.getElementById('stat');let lastStat='';
@@ -278,16 +280,8 @@ function animate(){
   stepPlayer(player,course,{f,side,speed,running,jump:jumpQueued,canMove:!attacking},dt);
   jumpQueued=false;
 
-  if (player.y < 0.05) {
-    player.y = 0;
-    player.vy = 0;
-    player.grounded = true;
-    player.jumping = false;
-    player.avx = 0;
-    player.avz = 0;
-  }
-
   resolveWallCollisions(player);
+  resolveGround(player);
 
   if (!pageRead && distanceToPage(player.x, player.y, player.z) < 2.4) {
     showStoryPage();
