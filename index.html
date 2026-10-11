@@ -31,25 +31,50 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
 import { buildCourse, createPlayer, stepPlayer, HALF_WIDTH, WALK_SPEED, RUN_SPEED } from './course.js';
-import { buildMap1, getCurrentZone, STORY_PAGE, distanceToPage } from './map1.js';
+import { buildMap1, getCurrentZone, STORY_PAGE, distanceToPage, resolveWallCollisions } from './map1.js';
 
 const errorBox=document.getElementById('error');
 addEventListener('error',e=>{errorBox.style.display='block';errorBox.textContent='Error del juego: '+(e.message||'desconocido')});
 addEventListener('unhandledrejection',e=>{errorBox.style.display='block';errorBox.textContent='Error de carga: '+(e.reason?.message||e.reason||'desconocido')});
 
 const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x0a0c10);
-scene.fog=new THREE.FogExp2(0x0a0c10, 0.028);
+scene.background=new THREE.Color(0x12161c);
+scene.fog=new THREE.Fog(0x12161c, 18, 55);
 const camera=new THREE.PerspectiveCamera(48,innerWidth/innerHeight,.1,120);
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;document.body.appendChild(renderer.domElement);
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+renderer.setSize(innerWidth,innerHeight);
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.35;
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
 
-// Iluminación más oscura y atmosférica (estilo Blade)
-scene.add(new THREE.HemisphereLight(0x6a7a8a,0x1a120e,0.7));
-const key=new THREE.DirectionalLight(0xc8d4e0,1.4);key.position.set(-6,14,4);scene.add(key);
-const rim=new THREE.DirectionalLight(0x8a3a2a,1.1);rim.position.set(4,3,-5);scene.add(rim);
-// Antorchas (luces puntuales)
-function addTorchLight(x,y,z){const l=new THREE.PointLight(0xffaa55,2.0,11,1.5);l.position.set(x,y,z);scene.add(l);}
+// Iluminación atmosférica + sombras
+scene.add(new THREE.HemisphereLight(0x8aa0b8,0x2a2218,1.0));
+const key=new THREE.DirectionalLight(0xffe8c8,2.0);
+key.position.set(-8,16,6);
+key.castShadow=true;
+key.shadow.mapSize.set(1024,1024);
+key.shadow.camera.near=1;
+key.shadow.camera.far=60;
+key.shadow.camera.left=-30;
+key.shadow.camera.right=30;
+key.shadow.camera.top=30;
+key.shadow.camera.bottom=-30;
+key.shadow.bias=-0.001;
+scene.add(key);
+const rim=new THREE.DirectionalLight(0x9a4535,1.2);
+rim.position.set(5,4,-6);
+scene.add(rim);
+
+function addTorchLight(x,y,z){
+  const l=new THREE.PointLight(0xffb060,2.4,12,1.4);
+  l.position.set(x,y,z);
+  l.castShadow=false; // ahorrar rendimiento en móvil
+  scene.add(l);
+}
 addTorchLight(-8,2.8,14);
 addTorchLight(8,2.8,14);
 addTorchLight(-6,2.6,-6);
@@ -64,23 +89,18 @@ const skin=mat(0x98694f),skinLight=mat(0xb68160),hair=mat(0x211a17),pants=mat(0x
 function addMesh(parent,geo,material,pos,scale=[1,1,1],rot=[0,0,0]){const o=new THREE.Mesh(geo,material);o.position.set(...pos);o.scale.set(...scale);o.rotation.set(...rot);o.castShadow=true;o.receiveShadow=true;parent.add(o);return o}
 function capsule(parent,material,a,b,r){const v1=new THREE.Vector3(...a),v2=new THREE.Vector3(...b),d=v2.clone().sub(v1);const o=addMesh(parent,new THREE.CapsuleGeometry(r,Math.max(.01,d.length()-2*r),4,8),material,v1.clone().add(v2).multiplyScalar(.5).toArray());o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());return o}
 
-// === MAPA 1: El Regreso (solo geometría y props) ===
+// === MAPA 1: El Regreso ===
 const mapData = buildMap1(scene);
 const herbs = mapData.herbs;
 let pageRead = false;
 
-// Mantener course.js para no romper física del personaje.
-// Creamos un segmento muy amplio para que el jugador pueda explorar el mapa libremente.
-const course = {
-  segments: [{ a: 40, b: -60 }],
-  gaps: 0
-};
+// Segmento amplio solo para que course.js no falle; el suelo real es el mapa abierto.
+const course = { segments: [{ a: 50, b: -70 }], gaps: 0 };
 const player = createPlayer(course);
-// Spawn en la entrada del castillo
 player.x = 0;
 player.z = 28;
 player.checkpoint = { x: 0, z: 28 };
-player.facing = Math.PI; // mirando hacia -Z (hacia el interior)
+player.facing = Math.PI;
 
 const statBox=document.getElementById('stat');let lastStat='';
 function updateStat(){
@@ -89,7 +109,6 @@ function updateStat(){
   if(t!==lastStat){statBox.textContent=t;lastStat=t}
 }
 
-// Overlay de la página de historia
 const storyEl = document.getElementById('story');
 document.getElementById('storyClose').addEventListener('pointerdown', () => { storyEl.style.display = 'none'; });
 function showStoryPage() {
@@ -101,7 +120,7 @@ function showStoryPage() {
   if (mapData.pageMesh) mapData.pageMesh.visible = false;
 }
 
-// Simple, visible, unarmored humanoid; kept independent from the uploaded GLB while import is validated.
+// Personaje provisional (no tocar lógica de carga GLB)
 const actor=new THREE.Group();scene.add(actor);
 addMesh(actor,new THREE.CapsuleGeometry(.24,.43,6,12),skin,[0,1.48,0],[1.12,1.15,.8]);
 addMesh(actor,new THREE.SphereGeometry(.23,16,12),skinLight,[0,1.81,0],[.86,1.03,.86]);
@@ -126,7 +145,6 @@ for(const side of [-1,1]){
  addMesh(arm,new THREE.SphereGeometry(.07,10,8),skinLight,[side*.045,-.66,.07],[.95,1.1,.9]);
  addMesh(arm,new THREE.CylinderGeometry(.066,.066,.075,8),wrap,[side*.04,-.56,.05]);
 }
-// Cargar el modelo humano real del repositorio sin ocultar el respaldo hasta que esté listo.
 const importedActor=new THREE.Group();scene.add(importedActor);importedActor.visible=false;
 let importedMixer=null;
 const gltfLoader=new GLTFLoader();
@@ -147,7 +165,7 @@ gltfLoader.load('./assets/characters/human-base-rigged.glb',gltf=>{
  }
  model.traverse(obj=>{if(obj.isMesh){obj.castShadow=true;obj.receiveShadow=true;}});
  importedActor.add(model);
- // No reproducir automáticamente el primer clip: puede ser T-pose, golpe o una animación no locomotora.\n if(gltf.animations&&gltf.animations.length){importedMixer=new THREE.AnimationMixer(model);}
+ if(gltf.animations&&gltf.animations.length){importedMixer=new THREE.AnimationMixer(model);}
  if(!locomotionModelLoaded){actor.visible=false;importedActor.visible=true;document.getElementById('hint').textContent='MODELO HUMANO GLB CARGADO · EXPLORA EL CASTILLO';}
  else{actor.visible=false;importedActor.visible=false;}
 },undefined,error=>{
@@ -155,11 +173,9 @@ gltfLoader.load('./assets/characters/human-base-rigged.glb',gltf=>{
  errorBox.style.display='block';
  errorBox.textContent='No se pudo cargar el modelo humano GLB. Se mantiene el personaje provisional. '+(error?.message||'');
 });
- 
-// Personaje Quaternius (CC0) con 43 animaciones. Si falla, se usa el hombre de traje como respaldo.
+
 let attackAction=null,swordIdleAction=null,jumpStartAction=null,jumpLoopAction=null,attacking=false,armed=false;
 const normName=n=>(n||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
-// Nombres exactos (ya normalizados) de cada acción, en orden de preferencia.
 const CLIP_NAMES={
  idle:['idle loop','idle standing','idle'],
  walk:['walk loop','walk formal loop','walk relaxed','walk brisk'],
@@ -222,7 +238,6 @@ document.getElementById('atk').addEventListener('pointerdown',e=>{e.preventDefau
 document.getElementById('arm').addEventListener('pointerdown',e=>{e.preventDefault();toggleArm()});
 
 const keys={};
-// Doble toque en una dirección = correr mientras se mantenga pulsada (como en los juegos de acción clásicos).
 const DIRS=['w','a','s','d','arrowup','arrowleft','arrowdown','arrowright'];const tapAt={};let runLatch=false;
 function press(k,repeat){if(DIRS.includes(k)&&!keys[k]&&!repeat){const now=performance.now();if(now-(tapAt[k]??-1e9)<320)runLatch=true;tapAt[k]=now}keys[k]=true}
 function release(k){keys[k]=false;if(!DIRS.some(d=>keys[d]))runLatch=false}
@@ -231,29 +246,58 @@ addEventListener('keydown',e=>{const k=e.key.toLowerCase();press(k,e.repeat);if(
 let jumpQueued=false;function jump(){jumpQueued=true}document.getElementById('jump').addEventListener('pointerdown',e=>{e.preventDefault();jump()});
 let elapsed=0;const clock=new THREE.Clock();const camOffset=new THREE.Vector3(0,3.1,6.2);camera.position.set(player.x+camOffset.x,camOffset.y,player.z+camOffset.z);
 document.addEventListener('contextmenu',e=>e.preventDefault());document.addEventListener('selectstart',e=>e.preventDefault());
-function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;if(importedMixer)importedMixer.update(dt);
-const f=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0),side=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),running=!!(keys.run||keys.shift||runLatch),speed=running?RUN_SPEED:WALK_SPEED;
-const moving=!attacking&&!!(f||side);
-stepPlayer(player,course,{f,side,speed,running,jump:jumpQueued,canMove:!attacking},dt);jumpQueued=false;
 
-// Trigger de la página de la biblioteca (opcional)
-if (!pageRead && distanceToPage(player.x, player.y, player.z) < 2.4) {
-  showStoryPage();
-}
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),.04);
+  elapsed+=dt;
+  if(importedMixer)importedMixer.update(dt);
 
-actor.position.set(player.x,player.y,player.z);actor.rotation.y=player.facing;
-if(moving){const gait=elapsed*9;legs[0].rotation.x=Math.sin(gait)*.48;legs[1].rotation.x=-Math.sin(gait)*.48;arms[0].rotation.x=-Math.sin(gait)*.18;arms[1].rotation.x=Math.sin(gait)*.18}else{legs.forEach(l=>l.rotation.x*=.85);arms.forEach(a=>a.rotation.x*=.85)}
-if(locomotionMixer){
- if(!attacking){
-  let next;
-  if(!player.grounded)next=(player.jumping&&player.airTime<.3?(jumpStartAction||jumpLoopAction):(jumpLoopAction||jumpStartAction))||idleAction;
-  else next=moving?(running?(runAction||walkAction):(walkAction||idleAction)):(armed&&swordIdleAction?swordIdleAction:(idleAction||walkAction));
-  selectLocomotion(next);
- }
- locomotionMixer.update(dt);
+  const f=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0);
+  const side=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0);
+  const running=!!(keys.run||keys.shift||runLatch);
+  const speed=running?RUN_SPEED:WALK_SPEED;
+  const moving=!attacking&&!!(f||side);
+
+  stepPlayer(player,course,{f,side,speed,running,jump:jumpQueued,canMove:!attacking},dt);
+  jumpQueued=false;
+
+  // Mapa abierto: el suelo es continuo (evita que HALF_WIDTH de course.js te tire al vacío)
+  if (player.y < 0.05) {
+    player.y = 0;
+    player.vy = 0;
+    player.grounded = true;
+    player.jumping = false;
+    player.avx = 0;
+    player.avz = 0;
+  }
+
+  // Colisiones con paredes del mapa
+  resolveWallCollisions(player);
+
+  // Página de la biblioteca
+  if (!pageRead && distanceToPage(player.x, player.y, player.z) < 2.4) {
+    showStoryPage();
+  }
+
+  actor.position.set(player.x,player.y,player.z);actor.rotation.y=player.facing;
+  if(moving){const gait=elapsed*9;legs[0].rotation.x=Math.sin(gait)*.48;legs[1].rotation.x=-Math.sin(gait)*.48;arms[0].rotation.x=-Math.sin(gait)*.18;arms[1].rotation.x=Math.sin(gait)*.18}else{legs.forEach(l=>l.rotation.x*=.85);arms.forEach(a=>a.rotation.x*=.85)}
+  if(locomotionMixer){
+   if(!attacking){
+    let next;
+    if(!player.grounded)next=(player.jumping&&player.airTime<.3?(jumpStartAction||jumpLoopAction):(jumpLoopAction||jumpStartAction))||idleAction;
+    else next=moving?(running?(runAction||walkAction):(walkAction||idleAction)):(armed&&swordIdleAction?swordIdleAction:(idleAction||walkAction));
+    selectLocomotion(next);
+   }
+   locomotionMixer.update(dt);
+  }
+  importedActor.position.copy(actor.position);importedActor.rotation.y=actor.rotation.y;
+  locomotionActor.position.copy(actor.position);locomotionActor.rotation.y=actor.rotation.y;
+  const camY=Math.max(player.y,-.6);
+  camera.position.lerp(new THREE.Vector3(actor.position.x+camOffset.x,camOffset.y+camY,actor.position.z+camOffset.z),Math.min(1,dt*3));
+  camera.lookAt(actor.position.x,1.05+camY,actor.position.z);
+  updateStat();
+  renderer.render(scene,camera);
 }
-importedActor.position.copy(actor.position);importedActor.rotation.y=actor.rotation.y;locomotionActor.position.copy(actor.position);locomotionActor.rotation.y=actor.rotation.y;
-const camY=Math.max(player.y,-.6);
-camera.position.lerp(new THREE.Vector3(actor.position.x+camOffset.x,camOffset.y+camY,actor.position.z+camOffset.z),Math.min(1,dt*3));camera.lookAt(actor.position.x,1.05+camY,actor.position.z);updateStat();renderer.render(scene,camera)}
 function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight)}addEventListener('resize',resize);animate();
 </script></body></html>
