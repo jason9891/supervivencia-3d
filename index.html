@@ -154,7 +154,24 @@ function setupLocomotion(gltf, label) {
     model.scale.setScalar(f);
     model.position.set(-center.x * f, -bounds.min.y * f, -center.z * f);
   }
-  model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  // PRUEBA VISUAL TEMPORAL — solo materiales del personaje.
+  // Partes articuladas: azul intenso. Partes fijas: rojo.
+  model.traverse(o => {
+    if (!o.isMesh) return;
+    o.castShadow = true;
+    o.receiveShadow = true;
+    const articulated = o.isSkinnedMesh ||
+      (o.geometry && o.geometry.attributes &&
+       o.geometry.attributes.skinIndex && o.geometry.attributes.skinWeight);
+    const tint = articulated ? 0x075bff : 0xff2929;
+    const recolor = m => {
+      const copy = m.clone();
+      if (copy.color) copy.color.setHex(tint);
+      copy.needsUpdate = true;
+      return copy;
+    };
+    o.material = Array.isArray(o.material) ? o.material.map(recolor) : recolor(o.material);
+  });
   locomotionActor.add(model);
   locomotionMixer = new THREE.AnimationMixer(model);
   const clips = gltf.animations || [];
