@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101114">
+<title>Laboratorio visual · Personaje</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101114;color:#f1e6d2;font-family:system-ui,sans-serif}canvas{display:block;width:100%;height:100%;touch-action:none}
+#top{position:fixed;z-index:5;top:env(safe-area-inset-top);left:0;right:0;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;pointer-events:none}
+#top strong{font-size:12px;letter-spacing:.09em;text-shadow:0 2px 5px #000}
+button{pointer-events:auto;border:1px solid #c4a574;border-radius:9px;background:#211d17ed;color:#f3d7a0;padding:10px 12px;font-weight:700;font-size:12px}
+#controls{position:fixed;z-index:5;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 16px);display:flex;justify-content:center;flex-wrap:wrap;gap:7px;padding:0 10px}
+#status{position:fixed;z-index:4;left:12px;right:12px;top:calc(env(safe-area-inset-top) + 54px);text-align:center;font-size:12px;color:#e8dfce;text-shadow:0 2px 5px #000;pointer-events:none}
+#err{position:fixed;z-index:10;left:10px;right:10px;top:35%;padding:12px;background:#401b1b;color:#fff;white-space:pre-wrap;display:none}
+</style>
+</head>
+<body>
+<div id="top"><strong>LABORATORIO VISUAL · PERSONAJE</strong><button id="back">VOLVER AL JUEGO</button></div>
+<div id="status">Arrastra para girar · usa los botones para revisar frente, nuca y perfiles</div>
+<div id="controls">
+<button data-angle="0">FRENTE</button><button data-angle="1.57079632679">PERFIL D.</button><button data-angle="3.14159265359">NUCA</button><button data-angle="-1.57079632679">PERFIL I.</button><button id="reset">REINICIAR</button>
+</div>
+<div id="err"></div>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
+import { addHeadFaceTexture } from './character-details.js';
+const err=document.getElementById('err');
+addEventListener('error',e=>{err.style.display='block';err.textContent='Error: '+(e.message||'');});
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x171a20);
+scene.add(new THREE.HemisphereLight(0xc3d6ee,0x34251d,2.0));
+const key=new THREE.DirectionalLight(0xffe2bd,3.0);key.position.set(-4,8,6);scene.add(key);
+const fill=new THREE.DirectionalLight(0x8da9d2,1.5);fill.position.set(5,4,-5);scene.add(fill);
+const camera=new THREE.PerspectiveCamera(35,innerWidth/innerHeight,.1,100);camera.position.set(0,1.6,5.8);
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.25;document.body.appendChild(renderer.domElement);
+const floor=new THREE.Mesh(new THREE.CircleGeometry(2.3,64),new THREE.MeshStandardMaterial({color:0x292c30,roughness:.95}));floor.rotation.x=-Math.PI/2;floor.position.y=-.02;scene.add(floor);
+let modelRoot=null, targetY=0, dragging=false,lastX=0,lastY=0;
+const loader=new GLTFLoader();
+loader.load('./assets/characters/ual/UAL1_Standard.glb',g=>{
+ const model=g.scene;model.updateMatrixWorld(true);
+ const bounds=new THREE.Box3().setFromObject(model),size=bounds.getSize(new THREE.Vector3()),center=bounds.getCenter(new THREE.Vector3());
+ const scale=size.y>0?1.82/size.y:1;model.scale.setScalar(scale);model.position.set(-center.x*scale,-bounds.min.y*scale,-center.z*scale);
+ model.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
+ const attached=addHeadFaceTexture(model,scale);
+ modelRoot=new THREE.Group();modelRoot.add(model);scene.add(modelRoot);
+ document.getElementById('status').textContent=attached?'Detalle facial cargado · gira el modelo para comprobar orientación y encaje':'No se encontró el hueso Head; se muestra el modelo original';
+},undefined,e=>{err.style.display='block';err.textContent='No se pudo cargar el modelo 3D. Comprueba la conexión y vuelve a abrir esta vista.\n'+(e?.message||'');});
+function setAngle(a){targetY=a;if(modelRoot)modelRoot.rotation.y=a;}
+document.querySelectorAll('[data-angle]').forEach(b=>b.addEventListener('click',()=>setAngle(Number(b.dataset.angle))));
+document.getElementById('reset').addEventListener('click',()=>{setAngle(0);camera.position.set(0,1.6,5.8);});
+document.getElementById('back').addEventListener('click',()=>location.href='./index.html');
+renderer.domElement.addEventListener('pointerdown',e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId);});
+renderer.domElement.addEventListener('pointermove',e=>{if(!dragging)return;targetY+=(e.clientX-lastX)*.012;camera.position.y=Math.max(.6,Math.min(2.8,camera.position.y-(e.clientY-lastY)*.008));lastX=e.clientX;lastY=e.clientY;if(modelRoot)modelRoot.rotation.y=targetY;});
+const stop=()=>dragging=false;renderer.domElement.addEventListener('pointerup',stop);renderer.domElement.addEventListener('pointercancel',stop);
+renderer.domElement.addEventListener('wheel',e=>{camera.position.z=Math.max(3,Math.min(9,camera.position.z+e.deltaY*.006));});
+function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);}
+addEventListener('resize',resize);
+function animate(){requestAnimationFrame(animate);renderer.render(scene,camera);}animate();
+</script>
+</body>
+</html>
