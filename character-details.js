@@ -1,4 +1,4 @@
-export const CHARACTER_DETAILS_VERSION = '1.1-front-axis';
+export const CHARACTER_DETAILS_VERSION = '1.2-face-fit';
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 
@@ -74,12 +74,12 @@ export function addHeadFaceTexture(model, modelScale = 1) {
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.needsUpdate = true;
   const inv = 1 / Math.max(modelScale, 0.0001);
-  const width = 0.19 * inv, height = 0.22 * inv;
+  const width = 0.15 * inv, height = 0.18 * inv;
   const geometry = new THREE.PlaneGeometry(width, height, 8, 8);
   const pos = geometry.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const u = pos.getX(i) / (width * 0.5);
-    pos.setZ(i, 0.008 * inv * (1 - u * u));
+    pos.setZ(i, 0.018 * inv * (1 - u * u));
   }
   geometry.computeVertexNormals();
 
@@ -89,7 +89,7 @@ export function addHeadFaceTexture(model, modelScale = 1) {
   });
   const face = new THREE.Mesh(geometry, material);
   face.name = 'CharacterFaceDetails';
-  face.position.set(0, 0.105 * inv, 0.115 * inv);
+  face.position.set(0, 0.02 * inv, 0.04 * inv);
   face.rotation.y = 0;
   face.renderOrder = 5;
   face.frustumCulled = false;
