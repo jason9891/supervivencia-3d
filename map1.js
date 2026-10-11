@@ -1,20 +1,29 @@
 // map1.js — El Regreso
-// Rio bajo -> camino de piedras -> reja -> patio elevado (alturas reales).
+// Estructura narrativa:
+// 1) Sendero del veterano (paisaje, entrada que solo él conoce)
+// 2) Plaza del pueblo — feria interrumpida (sin heridos)
+// 3) Puesto del sabio (página de historia)
+// 4) Puente hacia el ala noble
+// 5) Ala de la nobleza — confrontación con el villano
 
 import * as THREE from 'three';
 
 export const MAP1_NAME = 'El Regreso';
 export const CASTLE_Y = 2.6;
 
+/**
+ * Ambientes asociados a la historia.
+ * Usa getCurrentZone() para triggers, música, diálogos, etc.
+ */
 export const ZONES = {
-  river:     { minX: -14, maxX: 14, minZ: 88,  maxZ: 115 },
-  approach:  { minX: -10, maxX: 10, minZ: 55,  maxZ: 90 },
-  gate:      { minX: -9,  maxX: 9,  minZ: 42,  maxZ: 58 },
-  courtyard: { minX: -18, maxX: 18, minZ: -16, maxZ: 42 },
-  easthall:  { minX: 16,  maxX: 34, minZ: -12, maxZ: 12 },
-  library:   { minX: -38, maxX: -16, minZ: -16, maxZ: 16 },
-  southhall: { minX: -12, maxX: 12, minZ: -40, maxZ: -16 },
-  boss:      { minX: -16, maxX: 16, minZ: -64, maxZ: -38 },
+  river:        { minX: -14, maxX: 14, minZ: 95,  maxZ: 118 },
+  veteran_path: { minX: -12, maxX: 12, minZ: 58,  maxZ: 96 },
+  side_gate:    { minX: -10, maxX: 10, minZ: 46,  maxZ: 60 },
+  plaza:        { minX: -20, maxX: 20, minZ: -8,  maxZ: 48 },
+  sage:         { minX: -22, maxX: -8, minZ: 8,   maxZ: 28 },
+  market:       { minX: 8,   maxX: 28, minZ: 4,   maxZ: 32 },
+  bridge:       { minX: -6,  maxX: 6,  minZ: -28, maxZ: -6 },
+  nobility:     { minX: -18, maxX: 18, minZ: -58, maxZ: -26 },
 };
 
 export function getCurrentZone(x, z) {
@@ -25,11 +34,13 @@ export function getCurrentZone(x, z) {
 }
 
 export const STORY_PAGE = {
-  title: 'Página encontrada',
+  title: 'Notas del sabio',
   text: `...los sellos se debilitan.\nLo que creíamos leyenda ha vuelto a caminar.\nSi lees esto, ya es demasiado tarde para huir.\nBusca las seis runas. Solo ellas pueden volver a dormir al que no debe despertar.`,
 };
 
-const PAGE_POS = new THREE.Vector3(-28, CASTLE_Y + 0.95, -4);
+// Página en el puesto del sabio (borde oeste de la plaza)
+const PAGE_POS = new THREE.Vector3(-14.5, CASTLE_Y + 1.05, 18);
+
 const PLAYER_R = 0.4;
 export const WALLS = [];
 export const PLATFORMS = [];
@@ -107,10 +118,11 @@ export function buildMap1(scene) {
   const floor = mat(0x5c625a, 0.94);
   const dirt  = mat(0x5a5348, 0.95);
   const wood  = mat(0x6b4a32, 0.85);
+  const cloth = mat(0x7a4a3a, 0.9);
+  const cloth2 = mat(0x4a5a6a, 0.9);
   const iron  = mat(0x3a3a40, 0.4, 0.55);
   const moss  = mat(0x4a6b42, 0.92);
   const tile  = mat(0x555a52, 0.9);
-  const stepMat = mat(0x5a6058, 0.88);
   const rockMat = mat(0x5a5850, 0.95);
   const waterMat = new THREE.MeshStandardMaterial({
     color: 0x2a4a5a, roughness: 0.25, metalness: 0.2, transparent: true, opacity: 0.72,
@@ -145,96 +157,118 @@ export function buildMap1(scene) {
     cyl(0.5 * s, 0.6 * s, 0.9 * s, moss, x - 0.4 * s, y + 0.45 * s, z + 0.3 * s, true);
   }
 
-  function stepPad(w, d, surfaceY, x, z, th = 0.45) {
-    box(w, th, d, stepMat, x, surfaceY - th / 2, z, false);
-    addPlatform(x - w / 2, x + w / 2, z - d / 2, z + d / 2, surfaceY);
-  }
-
-  function floorPad(w, d, surfaceY, x, z, material = floor) {
-    const th = 0.4;
+  /** Plataforma de terreno natural (no grada formal) */
+  function groundPad(w, d, surfaceY, x, z, material = dirt) {
+    const th = Math.max(0.35, surfaceY * 0.35 + 0.3);
     box(w, th, d, material, x, surfaceY - th / 2, z, false);
     addPlatform(x - w / 2, x + w / 2, z - d / 2, z + d / 2, surfaceY);
   }
 
-  // ---- RIO / ORILLA BAJA ----
-  const river = new THREE.Mesh(new THREE.PlaneGeometry(42, 30), waterMat);
+  // =====================================================================
+  // 1. RÍO — llegada del veterano
+  // =====================================================================
+  const river = new THREE.Mesh(new THREE.PlaneGeometry(44, 28), waterMat);
   river.rotation.x = -Math.PI / 2;
-  river.position.set(2, -0.12, 103);
+  river.position.set(1, -0.12, 106);
   scene.add(river);
-  // brazo de rio al costado del camino
-  const stream = new THREE.Mesh(new THREE.PlaneGeometry(6, 36), waterMat);
+  const stream = new THREE.Mesh(new THREE.PlaneGeometry(5.5, 40), waterMat);
   stream.rotation.x = -Math.PI / 2;
-  stream.position.set(9, -0.08, 80);
+  stream.position.set(10, -0.08, 82);
   scene.add(stream);
 
-  floorPad(16, 12, 0.0, 0, 108, dirt);
-  floorPad(14, 8, 0.0, 0, 98, dirt);
-  bigRock(-7, 0, 106, 1.4);
-  bigRock(7.5, 0, 104, 1.3);
-  bigRock(-8, 0, 96, 1.1);
-  bigRock(8, 0, 97, 1.2);
-  bigRock(-6, 0, 112, 1.0);
-  bigRock(6.5, 0, 110, 0.95);
-  cyl(0.2, 0.25, 0.8, moss, -3, 0.3, 105);
-  cyl(0.18, 0.22, 0.7, moss, 4, 0.25, 100);
+  groundPad(16, 12, 0.0, 0, 110, dirt);
+  groundPad(14, 8, 0.0, 0, 100, dirt);
+  bigRock(-7, 0, 108, 1.4);
+  bigRock(7.5, 0, 105, 1.3);
+  bigRock(-8, 0, 98, 1.1);
+  bigRock(8, 0, 99, 1.2);
+  cyl(0.2, 0.25, 0.8, moss, -3, 0.3, 107);
+  cyl(0.18, 0.22, 0.7, moss, 4, 0.25, 102);
 
-  // ---- CAMINO QUE SUBE ----
-  const climb = [
-    [92, 0.35, 10], [88, 0.7, 9.5], [84, 1.05, 9], [80, 1.4, 9],
-    [76, 1.75, 8.5], [72, 2.1, 8.5], [68, 2.35, 9], [64, 2.5, 10],
-    [60, CASTLE_Y, 11], [55, CASTLE_Y, 12],
+  // =====================================================================
+  // 2. SENDERO DEL VETERANO — paisaje, no gradas de castillo
+  //    Ledge naturales de roca y tierra que suben hacia el pueblo
+  // =====================================================================
+  const path = [
+    // z, y, w  — tramos irregulares, un poco desplazados
+    [94, 0.25, 11, -0.4],
+    [90, 0.55, 10, 0.3],
+    [86, 0.9, 10, -0.2],
+    [82, 1.25, 9.5, 0.5],
+    [78, 1.55, 9, -0.3],
+    [74, 1.85, 9, 0.2],
+    [70, 2.15, 9.5, -0.15],
+    [66, 2.4, 10, 0.25],
+    [62, CASTLE_Y, 11, 0],
+    [57, CASTLE_Y, 12, 0],
   ];
-  for (const [z, y, w] of climb) stepPad(w, 4.3, y, 0, z, 0.5);
-
-  bigRock(-6.5, 0.3, 90, 1.3);
-  bigRock(6.8, 0.2, 86, 1.4);
-  bigRock(-7, 0.5, 78, 1.5);
-  bigRock(7.2, 0.6, 74, 1.35);
-  bigRock(-6.8, 0.8, 68, 1.4);
-  bigRock(7, 1.0, 65, 1.3);
-  bigRock(-7.5, 1.2, 58, 1.2);
-  bigRock(7.5, 1.3, 56, 1.25);
-
-  // ---- REJA (abierta al centro; se puede pasar) ----
-  floorPad(14, 10, CASTLE_Y, 0, 48, floor);
-  box(1.5, 5.5, 10, dark, -6.5, CASTLE_Y + 2.5, 48, true);
-  box(1.5, 5.5, 10, dark,  6.5, CASTLE_Y + 2.5, 48, true);
-  box(14, 1.2, 1.4, dark, 0, CASTLE_Y + 5.2, 52);
-  // Hojas laterales (centro libre ~6m)
-  const gate = box(3.2, 5.0, 0.4, iron, -4.6, CASTLE_Y + 2.3, 52.2, true);
-  gate.name = 'mainGate';
-  box(3.2, 5.0, 0.4, iron, 4.6, CASTLE_Y + 2.3, 52.2, true);
-  for (let i = 0; i < 4; i++) {
-    box(0.1, 4.6, 0.1, iron, -5.5 + i * 0.7, CASTLE_Y + 2.2, 52.15);
-    box(0.1, 4.6, 0.1, iron, 3.5 + i * 0.7, CASTLE_Y + 2.2, 52.15);
+  for (const [z, y, w, ox] of path) {
+    groundPad(w, 4.5, y, ox, z, y < 1.5 ? dirt : stone);
   }
+  // Rocas enormes flanqueando (entrada secreta / conocida)
+  bigRock(-6.8, 0.2, 92, 1.35);
+  bigRock(7.0, 0.15, 88, 1.4);
+  bigRock(-7.2, 0.4, 80, 1.5);
+  bigRock(7.4, 0.55, 76, 1.3);
+  bigRock(-7.0, 0.85, 70, 1.4);
+  bigRock(7.2, 1.0, 66, 1.25);
+  bigRock(-7.5, 1.2, 60, 1.2);
+  bigRock(7.6, 1.3, 58, 1.15);
 
-  // ---- PATIO ELEVADO ----
-  floorPad(34, 34, CASTLE_Y, 0, 10, dirt);
-  // Fuente
-  cyl(2.3, 2.4, 0.45, stone, 0, CASTLE_Y + 0.12, 10, true);
-  cyl(1.5, 1.6, 0.65, dark, 0, CASTLE_Y + 0.5, 10, true);
-  cyl(0.32, 0.38, 1.1, stone, 0, CASTLE_Y + 1.15, 10, true);
+  // =====================================================================
+  // 3. ENTRADA LATERAL (reja discreta del veterano)
+  // =====================================================================
+  groundPad(12, 8, CASTLE_Y, 0, 50, stone);
+  box(1.2, 4.5, 7, dark, -5.5, CASTLE_Y + 2.1, 50, true);
+  box(1.2, 4.5, 7, dark,  5.5, CASTLE_Y + 2.1, 50, true);
+  box(12, 1.0, 1.2, dark, 0, CASTLE_Y + 4.6, 53);
+  // Reja semiabierta (paso central libre)
+  const gate = box(2.8, 4.2, 0.35, iron, -3.8, CASTLE_Y + 2.0, 53.2, true);
+  gate.name = 'mainGate';
+  box(2.8, 4.2, 0.35, iron, 3.8, CASTLE_Y + 2.0, 53.2, true);
 
-  // Muros patio con huecos
-  box(9, 2.0, 0.85, stone, -11, CASTLE_Y + 0.9, 26.5, true);
-  box(9, 2.0, 0.85, stone,  11, CASTLE_Y + 0.9, 26.5, true);
-  box(9, 2.0, 0.85, stone, -11, CASTLE_Y + 0.9, -6.5, true);
-  box(9, 2.0, 0.85, stone,  11, CASTLE_Y + 0.9, -6.5, true);
-  box(0.85, 2.0, 9, stone, -16.5, CASTLE_Y + 0.9, 1, true);
-  box(0.85, 2.0, 9, stone, -16.5, CASTLE_Y + 0.9, 19, true);
-  box(0.85, 2.0, 9, stone,  16.5, CASTLE_Y + 0.9, 1, true);
-  box(0.85, 2.0, 9, stone,  16.5, CASTLE_Y + 0.9, 19, true);
+  // =====================================================================
+  // 4. PLAZA — feria del día interrumpida (sin heridos)
+  // =====================================================================
+  groundPad(38, 50, CASTLE_Y, 0, 18, dirt);
 
-  cyl(2.0, 2.2, 4.2, stone, -15, CASTLE_Y + 1.9, 24, true);
-  cyl(2.0, 2.2, 4.2, stone,  15, CASTLE_Y + 1.9, 24, true);
-  cyl(2.0, 2.2, 4.2, stone, -15, CASTLE_Y + 1.9, -4, true);
-  cyl(2.0, 2.2, 4.2, stone,  15, CASTLE_Y + 1.9, -4, true);
+  // Fuente / pozo central
+  cyl(2.2, 2.3, 0.4, stone, 0, CASTLE_Y + 0.1, 18, true);
+  cyl(1.4, 1.5, 0.6, dark, 0, CASTLE_Y + 0.45, 18, true);
+  cyl(0.28, 0.32, 1.0, stone, 0, CASTLE_Y + 1.05, 18, true);
 
-  box(1.5, 0.45, 1.0, dark, -7, CASTLE_Y + 0.18, 15);
-  box(1.2, 0.35, 0.9, stone, 6, CASTLE_Y + 0.12, 6);
-  cyl(0.25, 0.3, 1.2, moss, 4, CASTLE_Y + 0.5, 17, true);
+  // --- Puestos de feria (abandonados, objetos caídos, sin cuerpos) ---
+  function stall(x, z, w, d, clothMat) {
+    // mostrador
+    box(w, 0.9, d, wood, x, CASTLE_Y + 0.45, z, true);
+    // postes
+    box(0.12, 2.2, 0.12, wood, x - w / 2 + 0.15, CASTLE_Y + 1.5, z - d / 2 + 0.15);
+    box(0.12, 2.2, 0.12, wood, x + w / 2 - 0.15, CASTLE_Y + 1.5, z - d / 2 + 0.15);
+    box(0.12, 2.2, 0.12, wood, x - w / 2 + 0.15, CASTLE_Y + 1.5, z + d / 2 - 0.15);
+    box(0.12, 2.2, 0.12, wood, x + w / 2 - 0.15, CASTLE_Y + 1.5, z + d / 2 - 0.15);
+    // toldo
+    box(w + 0.3, 0.08, d + 0.3, clothMat, x, CASTLE_Y + 2.35, z);
+  }
+  stall(-8, 30, 3.2, 2.0, cloth);
+  stall(9, 28, 3.0, 2.2, cloth2);
+  stall(-10, 8, 2.8, 1.8, cloth2);
+  stall(10, 10, 3.4, 2.0, cloth);
+  stall(0, 34, 3.5, 2.0, cloth);
 
+  // Cajas, cestas volcadas, mercancía abandonada
+  box(0.7, 0.55, 0.7, wood, -6, CASTLE_Y + 0.28, 28);
+  box(0.6, 0.45, 0.6, wood, -5.2, CASTLE_Y + 0.22, 27.5);
+  box(1.1, 0.25, 0.5, cloth, 7.5, CASTLE_Y + 0.12, 26);
+  box(0.5, 0.4, 0.5, wood, 8.2, CASTLE_Y + 0.2, 9);
+  box(0.8, 0.2, 0.6, cloth2, -9, CASTLE_Y + 0.1, 7);
+  box(0.9, 0.35, 0.5, wood, 1, CASTLE_Y + 0.18, 32);
+  // Banderines caídos (listones)
+  box(0.08, 1.8, 0.08, wood, -4, CASTLE_Y + 0.9, 22);
+  box(0.9, 0.06, 0.35, cloth, -4, CASTLE_Y + 1.7, 22);
+  box(0.08, 1.5, 0.08, wood, 5, CASTLE_Y + 0.75, 20);
+  box(0.7, 0.06, 0.3, cloth2, 5, CASTLE_Y + 1.4, 20);
+
+  // Hierbas / detalles
   const herbs = [];
   function createHerb(x, z) {
     const group = new THREE.Group();
@@ -254,66 +288,89 @@ export function buildMap1(scene) {
     scene.add(group);
     herbs.push(group);
   }
-  [[-9, 16], [8, 14], [-4, 1], [5, 3], [-11, 8], [10, 19], [-2, 20], [3, -1]].forEach(([x, z]) => createHerb(x, z));
+  [[-12, 22], [12, 24], [-3, 12], [4, 6], [-14, 14], [14, 16], [2, 40], [-6, 4]].forEach(([x, z]) => createHerb(x, z));
 
-  // ---- ALA ESTE ----
-  floorPad(14, 22, CASTLE_Y, 24, 10, floor);
-  box(1.1, 4.6, 22, dark, 30.5, CASTLE_Y + 2.1, 10, true);
-  box(14, 4.6, 1.1, dark, 24, CASTLE_Y + 2.1, 20.5, true);
-  box(14, 4.6, 1.1, dark, 24, CASTLE_Y + 2.1, -0.5, true);
-  box(14, 0.35, 22, dark, 24, CASTLE_Y + 4.5, 10);
-  cyl(0.32, 0.36, 3.8, stone, 20, CASTLE_Y + 1.8, 14, true);
-  cyl(0.32, 0.36, 3.8, stone, 20, CASTLE_Y + 1.8, 6, true);
+  // =====================================================================
+  // 5. PUESTO / CASA DEL SABIO (oeste de la plaza) — página de historia
+  // =====================================================================
+  groundPad(12, 16, CASTLE_Y, -15, 18, wood);
+  // Estructura sencilla abierta a la plaza
+  box(0.9, 3.8, 14, dark, -20.5, CASTLE_Y + 1.8, 18, true); // fondo
+  box(10, 3.8, 0.9, dark, -15, CASTLE_Y + 1.8, 25.5, true);
+  box(10, 3.8, 0.9, dark, -15, CASTLE_Y + 1.8, 10.5, true);
+  box(12, 0.3, 16, dark, -15, CASTLE_Y + 3.9, 18); // techo
+  // Mesa del sabio + libros / rollo
+  box(2.8, 0.7, 1.2, wood, -14, CASTLE_Y + 0.35, 18, true);
+  box(0.35, 0.15, 0.28, mat(0x6a4030), -13.5, CASTLE_Y + 0.8, 17.6);
+  box(0.3, 0.12, 0.25, mat(0x3a4a5a), -14.3, CASTLE_Y + 0.78, 18.3);
+  // Estante
+  box(0.4, 2.2, 3.5, wood, -19.5, CASTLE_Y + 1.2, 20);
 
-  // ---- BIBLIOTECA OESTE ----
-  floorPad(18, 28, CASTLE_Y, -26, 10, tile);
-  box(1.2, 6.5, 28, dark, -34.5, CASTLE_Y + 3.0, 10, true);
-  box(18, 6.5, 1.2, dark, -26, CASTLE_Y + 3.0, 23.5, true);
-  box(18, 6.5, 1.2, dark, -26, CASTLE_Y + 3.0, -3.5, true);
-  box(18, 0.35, 28, dark, -26, CASTLE_Y + 6.5, 10);
-  // Mezzanine
-  box(5.5, 0.32, 18, wood, -30.5, CASTLE_Y + 3.4, 10);
-  box(0.12, 0.9, 18, iron, -27.7, CASTLE_Y + 3.95, 10);
-  // Gradas solidas (bloquean; altura de mezzanine visual)
-  for (let i = 0; i < 8; i++) {
-    const h = 0.38 * (i + 1);
-    const z = 18.5 - i * 0.85;
-    box(2.4, h, 0.85, stepMat, -30.5, CASTLE_Y + h / 2, z, true);
-  }
-  box(0.55, 3.0, 10, wood, -33.5, CASTLE_Y + 1.4, 14);
-  box(0.55, 3.0, 8, wood, -33.5, CASTLE_Y + 1.4, 4);
-  const s1 = box(4.5, 0.3, 1.0, wood, -22, CASTLE_Y + 0.35, 13);
-  s1.rotation.z = 0.4;
   const pageMesh = box(0.4, 0.03, 0.5, mat(0xf0e6d0, 0.6), PAGE_POS.x, PAGE_POS.y, PAGE_POS.z);
-  pageMesh.rotation.x = -Math.PI / 2 + 0.12;
+  pageMesh.rotation.x = -Math.PI / 2 + 0.1;
   pageMesh.userData = { type: 'storyPage', read: false };
 
-  // ---- SUR -> JEFE ----
-  floorPad(20, 22, CASTLE_Y, 0, -18, floor);
-  box(1.2, 4.8, 22, dark, -10, CASTLE_Y + 2.2, -18, true);
-  box(1.2, 4.8, 22, dark,  10, CASTLE_Y + 2.2, -18, true);
-  box(20, 0.3, 8, dark, 0, CASTLE_Y + 4.6, -14);
-  box(20, 0.3, 6, dark, 0, CASTLE_Y + 4.6, -22);
+  // =====================================================================
+  // 6. MERCADO ESTE (puestos / casas del pueblo)
+  // =====================================================================
+  groundPad(14, 22, CASTLE_Y, 18, 18, floor);
+  box(1.0, 3.5, 18, dark, 24.5, CASTLE_Y + 1.6, 18, true);
+  box(12, 3.5, 1.0, dark, 18, CASTLE_Y + 1.6, 28, true);
+  box(12, 3.5, 1.0, dark, 18, CASTLE_Y + 1.6, 8, true);
+  box(14, 0.3, 22, dark, 18, CASTLE_Y + 3.6, 18);
+  stall(16, 20, 2.6, 1.6, cloth);
+  box(1.2, 0.5, 0.8, wood, 20, CASTLE_Y + 0.25, 14);
 
-  floorPad(28, 22, CASTLE_Y, 0, -40, tile);
-  box(1.3, 6.5, 22, dark, -14, CASTLE_Y + 3.0, -40, true);
-  box(1.3, 6.5, 22, dark,  14, CASTLE_Y + 3.0, -40, true);
-  box(5, 6.5, 1.2, dark, -9, CASTLE_Y + 3.0, -29.5, true);
-  box(5, 6.5, 1.2, dark,  9, CASTLE_Y + 3.0, -29.5, true);
-  box(28, 6.5, 1.3, dark, 0, CASTLE_Y + 3.0, -50.5, true);
-  box(3.5, 1.3, 1.0, iron, 0, CASTLE_Y + 5.8, -50.2);
-  box(28, 0.35, 22, dark, 0, CASTLE_Y + 6.5, -40);
-  cyl(0.45, 0.5, 6.0, stone, -7, CASTLE_Y + 2.8, -38, true);
-  cyl(0.45, 0.5, 6.0, stone,  7, CASTLE_Y + 2.8, -38, true);
-  cyl(0.4, 0.45, 5.5, stone, -7, CASTLE_Y + 2.5, -45, true);
-  cyl(0.4, 0.45, 5.5, stone,  7, CASTLE_Y + 2.5, -45, true);
+  // =====================================================================
+  // 7. PUENTE hacia el ala noble (cierre narrativo / cinemática)
+  // =====================================================================
+  // Foso visual (agua baja)
+  const moat = new THREE.Mesh(new THREE.PlaneGeometry(28, 14), waterMat);
+  moat.rotation.x = -Math.PI / 2;
+  moat.position.set(0, CASTLE_Y - 1.8, -16);
+  scene.add(moat);
 
+  // Tablero del puente
+  groundPad(5.5, 18, CASTLE_Y, 0, -16, wood);
+  // Barandillas
+  box(0.2, 1.1, 18, iron, -2.9, CASTLE_Y + 0.55, -16);
+  box(0.2, 1.1, 18, iron,  2.9, CASTLE_Y + 0.55, -16);
+  // Pilares del puente
+  cyl(0.35, 0.4, 2.2, stone, -2.2, CASTLE_Y - 0.9, -10, true);
+  cyl(0.35, 0.4, 2.2, stone,  2.2, CASTLE_Y - 0.9, -10, true);
+  cyl(0.35, 0.4, 2.2, stone, -2.2, CASTLE_Y - 0.9, -22, true);
+  cyl(0.35, 0.4, 2.2, stone,  2.2, CASTLE_Y - 0.9, -22, true);
+
+  // =====================================================================
+  // 8. ALA DE LA NOBLEZA — confrontación con el villano
+  // =====================================================================
+  groundPad(30, 26, CASTLE_Y, 0, -40, tile);
+  box(1.3, 6.5, 26, dark, -14.5, CASTLE_Y + 3.0, -40, true);
+  box(1.3, 6.5, 26, dark,  14.5, CASTLE_Y + 3.0, -40, true);
+  // Entrada desde el puente (hueco norte)
+  box(5, 6.5, 1.2, dark, -9, CASTLE_Y + 3.0, -27.5, true);
+  box(5, 6.5, 1.2, dark,  9, CASTLE_Y + 3.0, -27.5, true);
+  // Fondo sur sellado / trono saqueado
+  box(30, 6.5, 1.3, dark, 0, CASTLE_Y + 3.0, -52.5, true);
+  box(4, 1.4, 1.0, iron, 0, CASTLE_Y + 5.8, -52.2);
+  box(30, 0.35, 26, dark, 0, CASTLE_Y + 6.5, -40); // techo
+  // Columnas nobles
+  cyl(0.48, 0.52, 6.0, stone, -7, CASTLE_Y + 2.8, -36, true);
+  cyl(0.48, 0.52, 6.0, stone,  7, CASTLE_Y + 2.8, -36, true);
+  cyl(0.42, 0.48, 5.5, stone, -7, CASTLE_Y + 2.5, -46, true);
+  cyl(0.42, 0.48, 5.5, stone,  7, CASTLE_Y + 2.5, -46, true);
+  // Restos de mobiliario noble volcado (saqueo)
+  box(2.5, 0.8, 1.2, wood, -3, CASTLE_Y + 0.4, -42);
+  box(1.8, 0.5, 0.9, wood, 4, CASTLE_Y + 0.25, -38);
+  box(1.2, 0.35, 0.7, iron, 0, CASTLE_Y + 0.18, -48);
+
+  // Suelo lejano
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(180, 220),
+    new THREE.PlaneGeometry(180, 240),
     mat(0x141814, 1)
   );
   ground.rotation.x = -Math.PI / 2;
-  ground.position.set(0, -0.6, 20);
+  ground.position.set(0, -0.6, 25);
   ground.receiveShadow = true;
   scene.add(ground);
 
