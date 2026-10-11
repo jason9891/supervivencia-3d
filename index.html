@@ -22,7 +22,7 @@
 </style>
 </head>
 <body>
-<div id="stat"></div><div id="hint">EL REGRESO · EXPLORA EL CASTILLO</div>
+<div id="stat"></div><div id="hint">EL REGRESO · PASILLO DE ENTRADA</div>
 <div id="pad"><button data-k="w" style="grid-column:2;grid-row:1">▲</button><button data-k="a" style="grid-column:1;grid-row:2">◀</button><button data-k="s" style="grid-column:2;grid-row:2">▼</button><button data-k="d" style="grid-column:3;grid-row:2">▶</button></div>
 <button id="atk">ATACAR</button><button id="arm">ARMA</button><button id="run">CORRER</button><button id="jump">⬆<br>SALTAR</button><div id="error"></div>
 <div id="story"><div class="box"><h3 id="storyTitle"></h3><p id="storyText"></p><button id="storyClose">Cerrar</button></div></div>
@@ -39,8 +39,8 @@ addEventListener('unhandledrejection',e=>{errorBox.style.display='block';errorBo
 
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x12161c);
-scene.fog=new THREE.Fog(0x12161c, 18, 55);
-const camera=new THREE.PerspectiveCamera(48,innerWidth/innerHeight,.1,120);
+scene.fog=new THREE.Fog(0x12161c, 22, 70);
+const camera=new THREE.PerspectiveCamera(48,innerWidth/innerHeight,.1,160);
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
 renderer.setSize(innerWidth,innerHeight);
@@ -51,55 +51,70 @@ renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-// Iluminación atmosférica + sombras
 scene.add(new THREE.HemisphereLight(0x8aa0b8,0x2a2218,1.0));
 const key=new THREE.DirectionalLight(0xffe8c8,2.0);
-key.position.set(-8,16,6);
+key.position.set(-10,20,8);
 key.castShadow=true;
 key.shadow.mapSize.set(1024,1024);
-key.shadow.camera.near=1;
-key.shadow.camera.far=60;
-key.shadow.camera.left=-30;
-key.shadow.camera.right=30;
-key.shadow.camera.top=30;
-key.shadow.camera.bottom=-30;
+key.shadow.camera.near=2;
+key.shadow.camera.far=90;
+key.shadow.camera.left=-40;
+key.shadow.camera.right=40;
+key.shadow.camera.top=40;
+key.shadow.camera.bottom=-40;
 key.shadow.bias=-0.001;
 scene.add(key);
-const rim=new THREE.DirectionalLight(0x9a4535,1.2);
-rim.position.set(5,4,-6);
+const rim=new THREE.DirectionalLight(0x9a4535,1.15);
+rim.position.set(6,5,-8);
 scene.add(rim);
 
 function addTorchLight(x,y,z){
-  const l=new THREE.PointLight(0xffb060,2.4,12,1.4);
+  const l=new THREE.PointLight(0xffb060,2.2,13,1.4);
   l.position.set(x,y,z);
-  l.castShadow=false; // ahorrar rendimiento en móvil
+  l.castShadow=false;
   scene.add(l);
 }
-addTorchLight(-8,2.8,14);
-addTorchLight(8,2.8,14);
-addTorchLight(-6,2.6,-6);
-addTorchLight(6,2.6,-6);
-addTorchLight(-5,2.8,-26);
-addTorchLight(5,2.8,-26);
-addTorchLight(-7,3.2,-40);
-addTorchLight(7,3.2,-40);
+// Pasillo de aproximación
+addTorchLight(-5.5,3.2,51);
+addTorchLight(5.5,3.2,51);
+addTorchLight(-5.5,3.2,42);
+addTorchLight(5.5,3.2,42);
+addTorchLight(-5.5,3.2,33);
+addTorchLight(5.5,3.2,33);
+// Patio y gran salón
+addTorchLight(-10,2.8,12);
+addTorchLight(10,2.8,12);
+addTorchLight(-6,3.0,-4);
+addTorchLight(6,3.0,-4);
+addTorchLight(-6,3.0,-18);
+addTorchLight(6,3.0,-18);
+// Biblioteca
+addTorchLight(-8,3.2,-36);
+addTorchLight(8,3.2,-36);
+addTorchLight(-8,3.2,-50);
+addTorchLight(8,3.2,-50);
+// Deadhall + jefe
+addTorchLight(-5,2.8,-66);
+addTorchLight(5,2.8,-66);
+addTorchLight(-10,3.5,-88);
+addTorchLight(10,3.5,-88);
 
 const mat=(color,roughness=.8,metalness=0)=>new THREE.MeshStandardMaterial({color,roughness,metalness});
 const skin=mat(0x98694f),skinLight=mat(0xb68160),hair=mat(0x211a17),pants=mat(0x302720),cloth=mat(0x493029),wrap=mat(0x806044),eye=mat(0x171211);
 function addMesh(parent,geo,material,pos,scale=[1,1,1],rot=[0,0,0]){const o=new THREE.Mesh(geo,material);o.position.set(...pos);o.scale.set(...scale);o.rotation.set(...rot);o.castShadow=true;o.receiveShadow=true;parent.add(o);return o}
 function capsule(parent,material,a,b,r){const v1=new THREE.Vector3(...a),v2=new THREE.Vector3(...b),d=v2.clone().sub(v1);const o=addMesh(parent,new THREE.CapsuleGeometry(r,Math.max(.01,d.length()-2*r),4,8),material,v1.clone().add(v2).multiplyScalar(.5).toArray());o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());return o}
 
-// === MAPA 1: El Regreso ===
 const mapData = buildMap1(scene);
 const herbs = mapData.herbs;
 let pageRead = false;
 
-// Segmento amplio solo para que course.js no falle; el suelo real es el mapa abierto.
-const course = { segments: [{ a: 50, b: -70 }], gaps: 0 };
+// Segmento muy amplio para el mapa expandido
+const course = { segments: [{ a: 65, b: -110 }], gaps: 0 };
 const player = createPlayer(course);
+// Spawn al inicio del pasillo largo (sin techo)
 player.x = 0;
-player.z = 28;
-player.checkpoint = { x: 0, z: 28 };
+player.z = 52;
+player.checkpoint = { x: 0, z: 52 };
 player.facing = Math.PI;
 
 const statBox=document.getElementById('stat');let lastStat='';
@@ -120,7 +135,6 @@ function showStoryPage() {
   if (mapData.pageMesh) mapData.pageMesh.visible = false;
 }
 
-// Personaje provisional (no tocar lógica de carga GLB)
 const actor=new THREE.Group();scene.add(actor);
 addMesh(actor,new THREE.CapsuleGeometry(.24,.43,6,12),skin,[0,1.48,0],[1.12,1.15,.8]);
 addMesh(actor,new THREE.SphereGeometry(.23,16,12),skinLight,[0,1.81,0],[.86,1.03,.86]);
@@ -226,7 +240,7 @@ function setupLocomotion(gltf,label){
  actor.visible=false;
  importedActor.visible=false;
  locomotionActor.visible=true;
- document.getElementById('hint').textContent=label+' · MAPA: EL REGRESO · EXPLORA';
+ document.getElementById('hint').textContent=label+' · CASTILLO · EXPLORA';
  console.info('Clips disponibles:',clips.map(a=>a.name),'selección:',{idle:idleClip?.name,walk:walkClip?.name,run:runClip?.name,attack:attackClip?.name,swordIdle:swordIdleClip?.name});
 }
 gltfLoader.load('./assets/characters/ual/UAL1_Standard.glb',gltf=>setupLocomotion(gltf,'GUERRERO UAL'),undefined,error=>{
@@ -262,7 +276,6 @@ function animate(){
   stepPlayer(player,course,{f,side,speed,running,jump:jumpQueued,canMove:!attacking},dt);
   jumpQueued=false;
 
-  // Mapa abierto: el suelo es continuo (evita que HALF_WIDTH de course.js te tire al vacío)
   if (player.y < 0.05) {
     player.y = 0;
     player.vy = 0;
@@ -272,10 +285,8 @@ function animate(){
     player.avz = 0;
   }
 
-  // Colisiones con paredes del mapa
   resolveWallCollisions(player);
 
-  // Página de la biblioteca
   if (!pageRead && distanceToPage(player.x, player.y, player.z) < 2.4) {
     showStoryPage();
   }
