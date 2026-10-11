@@ -163,7 +163,7 @@ function setupLocomotion(gltf, label) {
   const idleC = findClip(clips, ['idle loop', 'idle standing', 'idle']);
   const walkC = findClip(clips, ['walk loop', 'walk formal loop', 'walk']);
   const runC = findClip(clips, ['sprint loop', 'jog fwd loop', 'run']);
-  const atkC = findClip(clips, ['sword attack']);
+  const atkC = findClip(clips, ['sword attack', 'attack']);
   if (idleC) idleAction = locomotionMixer.clipAction(idleC);
   if (walkC) walkAction = locomotionMixer.clipAction(walkC);
   if (runC) runAction = locomotionMixer.clipAction(runC);
@@ -177,7 +177,143 @@ function setupLocomotion(gltf, label) {
   locomotionActor.visible = true;
   document.getElementById('hint').textContent = label + ' · EL REGRESO';
 }
-gltfLoader.load('./assets/characters/ual/UAL1_Standard.glb', g => setupLocomotion(g, 'GUERRERO UAL'), undefined, () => {
+function setupCC0Locomotion(targetGltf, sourceClips) {
+  const targetRoot = targetGltf.scene;
+  let targetSkin = null;
+  targetRoot.traverse(o => {
+    if (o.isSkinnedMesh && o.skeleton &&
+        (!targetSkin || (o.geometry?.attributes?.position?.count || 0) > (targetSkin.geometry?.attributes?.position?.count || 0))) targetSkin = o;
+  });
+  if (!targetSkin) throw new Error('El modelo CC0 no contiene esqueleto compatible; se usará el personaje de respaldo.');
+  targetRoot.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(targetRoot);
+  const size = box.getSize(new THREE.Vector3());
+  const rawMax = Math.max(size.x, size.y, size.z);
+  if (!rawMax) throw new Error('El modelo CC0 no tiene dimensiones visibles.');
+  const sideways = size.y < Math.max(size.x, size.z) * 0.82;
+  targetRoot.scale.setScalar(1.82 / (sideways ? rawMax : size.y));
+  targetRoot.traverse(o => {
+    if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.material.side = THREE.DoubleSide; }
+  });
+  const oriented = new THREE.Group();
+  oriented.name = 'CC0_UprightCorrection';
+  oriented.add(targetRoot);
+  if (sideways) {
+    if (size.x >= size.z) oriented.rotation.z = Math.PI / 2;
+    else oriented.rotation.x = -Math.PI / 2;
+  }
+  locomotionActor.add(oriented);
+  locomotionActor.updateMatrixWorld(true);
+  let uprightBox = new THREE.Box3().setFromObject(locomotionActor);
+  locomotionActor.position.y += Math.max(0, -uprightBox.min.y) + 0.02;
+  locomotionActor.updateMatrixWorld(true);
+
+  const targetBones = targetSkin.skeleton.bones;
+  const sourceRoot = null;
+  const norm = n => String(n || '').toLowerCase().replace(/mixamorig|armature|quaternius|character|rig|skeleton/g, '').replace(/[^a-z0-9]/g, '');
+  const canon = n => {
+    const x = norm(n);
+    const aliases = [
+      [/^(hips|hip|pelvis|rootjoint|root)$/, 'hips'], [/^(spine|spine0|spine1|lowerback)$/, 'spine'],
+      [/^(spine2|chest|upperchest)$/, 'chest'], [/^(neck|neck1)$/, 'neck'], [/^(head|headend)$/, 'head'],
+      [/^(leftshoulder|shoulderl|lshoulder)$/, 'leftshoulder'], [/^(rightshoulder|shoulderr|rshoulder)$/, 'rightshoulder'],
+      [/^(leftarm|upperarml|lupperarm|leftupperarm)$/, 'leftupperarm'], [/^(rightarm|upperarmr|rupperarm|rightupperarm)$/, 'rightupperarm'],
+      [/^(leftforearm|lowerarml|lforearm|leftlowerarm)$/, 'leftforearm'], [/^(rightforearm|lowerarmr|rforearm|rightlowerarm)$/, 'rightforearm'],
+      [/^(lefthand|handl|lhand)$/, 'lefthand'], [/^(righthand|handr|rhand)$/, 'righthand'],
+      [/^(leftupleg|upperlegl|leftupperleg|thighl|lthigh)$/, 'leftupleg'], [/^(rightupleg|upperlegr|rightupperleg|thighr|rthigh)$/, 'rightupleg'],
+      [/^(leftleg|lowerlegl|leftcalf|calfl|lcalf)$/, 'leftleg'], [/^(rightleg|lowerlegr|rightcalf|calfr|rcalf)$/, 'rightleg'],
+      [/^(leftfoot|footl|lfoot)$/, 'leftfoot'], [/^(rightfoot|footr|rfoot)$/, 'rightfoot'],
+      [/^(lefttoebase|lefttoe|toel|ltoe)$/, 'lefttoe'], [/^(righttoebase|righttoe|toer|rtoe)$/, 'righttoe']
+    ];
+    for (const [re, val] of aliases) if (re.test(x)) return val;
+    return x;
+  };
+  const sourceBones = [];
+  const donor = window.__cc0AnimationDonor;
+  if (donor?.scene) donor.scene.traverse(o => { if (o.isSkinnedMesh && o.skeleton && (!sourceBones.length || o.skeleton.bones.length > sourceBones.length)) sourceBones.splice(0, sourceBones.length, ...o.skeleton.bones); });
+  if (!sourceBones.length) throw new Error('No se encontró el esqueleto donante de animaciones.');
+  const sourceByCanon = new Map();
+  for (const b of sourceBones) if (!sourceByCanon.has(canon(b.name))) sourceByCanon.set(canon(b.name), b.name);
+  const names = {};
+  let mapped = 0;
+  for (const b of targetBones) {
+    const src = sourceByCanon.get(canon(b.name));
+    if (src) { names[src] = b.name; mapped++; }
+  }
+  if (mapped < 8) throw new Error('Solo se emparejaron ' + mapped + ' huesos con el donante.');
+  const targetBoneNames = new Set(targetBones.map(b => b.name));
+  const sourceBoneByName = new Map(sourceBones.map(b => [b.name, b]));
+  const targetBoneByName = new Map(targetBones.map(b => [b.name, b]));
+  const clips = [];
+  for (const clip of (sourceClips || [])) {
+    try {
+      const tracks = [];
+      for (const original of clip.tracks) {
+        const track = original.clone();
+        let parsed;
+        try { parsed = THREE.PropertyBinding.parseTrackName(track.name); } catch (_) {}
+        if (parsed && parsed.nodeName) {
+          const srcName = parsed.nodeName;
+          const targetName = names[srcName] || srcName;
+          const property = parsed.propertyName || '';
+          if (property === 'position' || property === 'scale') continue;
+          if (/^(root|armature)$/i.test(srcName)) continue;
+          if (targetBoneNames.has(targetName)) {
+            if (property === 'quaternion') {
+              const sb = sourceBoneByName.get(srcName), tb = targetBoneByName.get(targetName);
+              if (sb && tb && track.values.length % 4 === 0) {
+                const invSource = sb.quaternion.clone().invert(), targetRest = tb.quaternion.clone();
+                for (let k = 0; k < track.values.length; k += 4) {
+                  const animated = new THREE.Quaternion(track.values[k], track.values[k + 1], track.values[k + 2], track.values[k + 3]);
+                  animated.premultiply(invSource).premultiply(targetRest).normalize();
+                  track.values[k] = animated.x; track.values[k + 1] = animated.y;
+                  track.values[k + 2] = animated.z; track.values[k + 3] = animated.w;
+                }
+              }
+            }
+            track.name = track.name.replace(srcName, targetName);
+            tracks.push(track);
+          }
+        }
+      }
+      if (tracks.length) clips.push(new THREE.AnimationClip(clip.name, clip.duration, tracks));
+    } catch (e) { console.warn('Se omitió una animación incompatible:', clip.name, e); }
+  }
+  if (!clips.length) throw new Error('No se pudieron transferir animaciones al esqueleto CC0.');
+  locomotionMixer = new THREE.AnimationMixer(targetRoot);
+  const idleC = findClip(clips, ['idle loop', 'idle standing', 'idle']);
+  const walkC = findClip(clips, ['walk loop', 'walk formal loop', 'walk']);
+  const runC = findClip(clips, ['sprint loop', 'jog fwd loop', 'run']);
+  const atkC = findClip(clips, ['sword attack', 'attack']);
+  if (idleC) idleAction = locomotionMixer.clipAction(idleC);
+  if (walkC) walkAction = locomotionMixer.clipAction(walkC);
+  if (runC) runAction = locomotionMixer.clipAction(runC);
+  if (atkC) { attackAction = locomotionMixer.clipAction(atkC); attackAction.setLoop(THREE.LoopOnce, 1); }
+  locomotionMixer.addEventListener('finished', e => {
+    if (e.action === attackAction) { attacking = false; attackAction.fadeOut(0.15); activeAction = null; }
+  });
+  const ini = idleAction || walkAction || clips[0] && locomotionMixer.clipAction(clips[0]);
+  if (ini) { ini.play(); activeAction = ini; }
+  actor.visible = false;
+  locomotionActor.visible = true;
+  document.getElementById('hint').textContent = 'GUERRERO CC0 · ' + clips.length + ' ANIMACIONES · EL REGRESO';
+}
+function loadCC0WithDonor(donorGltf) {
+  window.__cc0AnimationDonor = donorGltf;
+  const cc0Url = 'https://raw.githubusercontent.com/Seyamalam/blood-league-kickoff/main/public/assets/vendor/quaternius/night-striker.glb';
+  gltfLoader.load(cc0Url, targetGltf => {
+    try { setupCC0Locomotion(targetGltf, donorGltf.animations || []); }
+    catch (e) {
+      console.warn('Falló la integración CC0; se mantiene el personaje UAL de respaldo.', e);
+      locomotionActor.clear(); locomotionMixer = null; walkAction = runAction = idleAction = activeAction = attackAction = null;
+      setupLocomotion(donorGltf, 'GUERRERO UAL · RESPALDO');
+    }
+  }, undefined, () => {
+    locomotionActor.clear(); locomotionMixer = null; walkAction = runAction = idleAction = activeAction = attackAction = null;
+    setupLocomotion(donorGltf, 'GUERRERO UAL · RESPALDO');
+  });
+}
+gltfLoader.load('./assets/characters/ual/UAL1_Standard.glb', g => loadCC0WithDonor(g), undefined, () => {
   gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-person-animated.glb', g => setupLocomotion(g, 'RESPALDO'), undefined, () => {});
 });
 
