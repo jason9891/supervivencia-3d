@@ -1,6 +1,6 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 
-export const CHARACTER_DETAILS_VERSION = '1.3-3d-features';
+export const CHARACTER_DETAILS_VERSION = '1.4-face-volume';
 
 const cleanName = value => (value || '')
   .toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')
@@ -26,7 +26,8 @@ export function addHeadFaceTexture(model, modelScale = 1) {
   const inv = 1 / Math.max(modelScale, 0.0001);
   const group = new THREE.Group();
   group.name = 'CharacterFaceDetails3D';
-  // Rasgos con volumen; no se usa textura facial ni un plano rectangular.
+  // Base de rostro con volumen; no se usa textura facial ni un plano rectangular.
+  const faceSkin = new THREE.MeshStandardMaterial({ color: 0x98694f, roughness: 0.9 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x211916, roughness: 0.86 });
   const eyeWhite = new THREE.MeshStandardMaterial({ color: 0xf1e4d1, roughness: 0.65 });
   const iris = new THREE.MeshStandardMaterial({ color: 0x49382b, roughness: 0.45 });
@@ -44,21 +45,26 @@ export function addHeadFaceTexture(model, modelScale = 1) {
     return mesh;
   }
 
-  // Posición elevada con respecto al hueso: en las pruebas anteriores el rostro quedó demasiado bajo.
-  // Frente local +Z; cada rasgo es un objeto 3D separado.
-  ellipsoid('Face_Brow_Left', dark, [-0.052, 0.145, 0.078], [0.043, 0.012, 0.012]);
-  ellipsoid('Face_Brow_Right', dark, [0.052, 0.145, 0.078], [0.043, 0.012, 0.012]);
+  // Frente local +Z. Primero se crea una base ovalada que cubre frente, mejillas y mandíbula.
+  // Los rasgos quedan ligeramente por delante de la piel para evitar que se oculten dentro de la malla.
+  ellipsoid('Face_Skin_Base', faceSkin, [0, 0.092, 0.052], [0.073, 0.105, 0.038], 20);
+  ellipsoid('Face_Cheek_Left', faceSkin, [-0.047, 0.068, 0.068], [0.029, 0.040, 0.027], 14);
+  ellipsoid('Face_Cheek_Right', faceSkin, [0.047, 0.068, 0.068], [0.029, 0.040, 0.027], 14);
+  ellipsoid('Face_Brow_Left', dark, [-0.052, 0.145, 0.094], [0.043, 0.012, 0.010]);
+  ellipsoid('Face_Brow_Right', dark, [0.052, 0.145, 0.094], [0.043, 0.012, 0.010]);
   for (const x of [-0.047, 0.047]) {
-    ellipsoid('Face_Eye_White', eyeWhite, [x, 0.119, 0.082], [0.025, 0.017, 0.012]);
-    ellipsoid('Face_Iris', iris, [x, 0.119, 0.093], [0.010, 0.012, 0.006]);
-    ellipsoid('Face_Pupil', dark, [x, 0.119, 0.098], [0.005, 0.007, 0.003], 10);
+    ellipsoid('Face_Eye_White', eyeWhite, [x, 0.119, 0.096], [0.025, 0.017, 0.012]);
+    ellipsoid('Face_Iris', iris, [x, 0.119, 0.108], [0.010, 0.012, 0.006]);
+    ellipsoid('Face_Pupil', dark, [x, 0.119, 0.113], [0.005, 0.007, 0.003], 10);
   }
-  ellipsoid('Face_Nose', skinShade, [0, 0.091, 0.094], [0.014, 0.029, 0.018]);
-  ellipsoid('Face_Mustache_Left', dark, [-0.018, 0.066, 0.087], [0.023, 0.009, 0.012]);
-  ellipsoid('Face_Mustache_Right', dark, [0.018, 0.066, 0.087], [0.023, 0.009, 0.012]);
-  ellipsoid('Face_Mouth', mouthMat, [0, 0.048, 0.081], [0.018, 0.005, 0.006]);
-  // Barba corta en pequeños volúmenes, sin cubrir todo el rostro.
-  ellipsoid('Face_Beard_Chin', dark, [0, 0.032, 0.064], [0.042, 0.018, 0.009]);
+  ellipsoid('Face_Nose', skinShade, [0, 0.091, 0.113], [0.014, 0.029, 0.019]);
+  ellipsoid('Face_Mustache_Left', dark, [-0.018, 0.066, 0.104], [0.023, 0.009, 0.012]);
+  ellipsoid('Face_Mustache_Right', dark, [0.018, 0.066, 0.104], [0.023, 0.009, 0.012]);
+  ellipsoid('Face_Mouth', mouthMat, [0, 0.048, 0.097], [0.018, 0.005, 0.006]);
+  // Barba corta integrada sobre el volumen de la barbilla.
+  ellipsoid('Face_Beard_Chin', dark, [0, 0.032, 0.083], [0.042, 0.018, 0.009]);
+  ellipsoid('Face_Ear_Left', faceSkin, [-0.073, 0.091, 0.048], [0.015, 0.028, 0.018]);
+  ellipsoid('Face_Ear_Right', faceSkin, [0.073, 0.091, 0.048], [0.015, 0.028, 0.018]);
   head.add(group);
   return true;
 }
