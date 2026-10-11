@@ -1,0 +1,5 @@
+PRUEBA DE CAMBIO
+
+Este archivo temporal confirma que se pueden realizar cambios en el repositorio.
+No modifica el juego, el modelo 3D, el esqueleto ni las animaciones.
+Rama: prueba-cambio-seguro
