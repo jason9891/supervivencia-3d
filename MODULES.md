@@ -9,9 +9,11 @@
 | `index.html` | sí (mapa + UAL) | restaurado — **no sobrescribir** desde combate |
 | `equipment.js` | sí | `respaldo-combate-patio` |
 | `banco.js` | sí | `combate-en-mapa` |
-| `combat.js` | en rama | `respaldo-combate-patio` |
+| `combat.js` | sí | `respaldo-combate-patio` |
 | `session.js` | en rama | `respaldo-combate-patio` |
-| `combat-addon.js` | en rama | `combate-en-mapa` |
+| `combat-addon.js` | sí | `combate-en-mapa` + inventario |
+| `inventario.js` | sí | `inventario-funcional` |
+| `combat-lab.html` | sí | página de pruebas de combate (botón en `index.html`) |
 
 ## Completar la unión (solo archivos nuevos, sin tocar mapa)
 
