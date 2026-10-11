@@ -1,52 +1,69 @@
 <!doctype html>
 <html lang="es">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#101114">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101114">
 <title>Laboratorio visual · Recurso CC0</title>
 <style>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101114;color:#f1e6d2;font-family:system-ui,sans-serif}canvas{display:block;width:100%;height:100%;touch-action:none}
 #top{position:fixed;z-index:5;top:env(safe-area-inset-top);left:0;right:0;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;pointer-events:none}#top strong{font-size:11px;letter-spacing:.07em;text-shadow:0 2px 5px #000}
-button{pointer-events:auto;border:1px solid #c4a574;border-radius:9px;background:#211d17ed;color:#f3d7a0;padding:10px 11px;font-weight:700;font-size:11px}
-#controls{position:fixed;z-index:5;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 16px);display:flex;justify-content:center;flex-wrap:wrap;gap:7px;padding:0 10px}#animControls{display:flex;justify-content:center;flex-wrap:wrap;gap:7px;width:100%}button:disabled{opacity:.45}
+button,select{pointer-events:auto;border:1px solid #c4a574;border-radius:9px;background:#211d17ed;color:#f3d7a0;padding:10px 11px;font-weight:700;font-size:11px}button:disabled{opacity:.45}
+#controls{position:fixed;z-index:5;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 16px);display:flex;justify-content:center;flex-wrap:wrap;gap:7px;padding:0 10px}#animControls{display:flex;justify-content:center;flex-wrap:wrap;gap:7px;width:100%}
 #status{position:fixed;z-index:4;left:12px;right:12px;top:calc(env(safe-area-inset-top) + 54px);text-align:center;font-size:12px;color:#e8dfce;text-shadow:0 2px 5px #000;pointer-events:none}
 #err{position:fixed;z-index:10;left:10px;right:10px;top:30%;padding:12px;background:#401b1b;color:#fff;white-space:pre-wrap;display:none}
-</style>
-</head>
+</style></head>
 <body>
 <div id="top"><strong>LABORATORIO · PRUEBA 6 · MODELO CC0</strong><button id="back">VOLVER</button></div>
-<div id="status">PRUEBA 6 · Modelo humano Quaternius externo · sin máscara ni rasgos añadidos</div>
-<div id="controls"><button data-angle="0">FRENTE</button><button data-angle="1.57079632679">PERFIL D.</button><button data-angle="3.14159265359">NUCA</button><button data-angle="-1.57079632679">PERFIL I.</button><button id="reset">REINICIAR</button><span id="animControls"><button id="idleBtn" disabled>QUIETO · NO DISP.</button><button id="walkBtn" disabled>CAMINAR · NO DISP.</button><button id="runBtn" disabled>CORRER · NO DISP.</button></span><select id="clipSelect" aria-label="Animación disponible" style="max-width:42vw;padding:9px;border-radius:8px;background:#211d17;color:#f3d7a0;border:1px solid #c4a574;display:none"></select></div>
-<div id="err"></div>
+<div id="status">Cargando personaje…</div>
+<div id="controls">
+<button data-angle="0">FRENTE</button><button data-angle="1.57079632679">PERFIL D.</button><button data-angle="3.14159265359">NUCA</button><button data-angle="-1.57079632679">PERFIL I.</button><button id="reset">REINICIAR</button>
+<span id="animControls"><button id="idleBtn" disabled>QUIETO · NO DISP.</button><button id="walkBtn" disabled>CAMINAR · NO DISP.</button><button id="runBtn" disabled>CORRER · NO DISP.</button></span>
+<select id="clipSelect" aria-label="Animación disponible" style="max-width:42vw;display:none"></select>
+</div><div id="err"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
 const err=document.getElementById('err');
-addEventListener('error',e=>{err.style.display='block';err.textContent='Error: '+(e.message||'');});
+function showError(message){err.style.display='block';err.textContent=message;}
+addEventListener('error',e=>showError('Error de la vista: '+(e.message||'error desconocido')));
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x171a20);
-scene.add(new THREE.HemisphereLight(0xc3d6ee,0x34251d,2.0));
+scene.add(new THREE.HemisphereLight(0xc3d6ee,0x34251d,2));
 const key=new THREE.DirectionalLight(0xffe2bd,3);key.position.set(-4,8,6);scene.add(key);
 const fill=new THREE.DirectionalLight(0x8da9d2,1.5);fill.position.set(5,4,-5);scene.add(fill);
-const camera=new THREE.PerspectiveCamera(35,innerWidth/innerHeight,.01,1000);camera.position.set(0,1.5,5);
+const camera=new THREE.PerspectiveCamera(35,innerWidth/innerHeight,.01,1000);camera.position.set(0,1,4.9);
 const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;document.body.appendChild(renderer.domElement);
 const floor=new THREE.Mesh(new THREE.CircleGeometry(2.3,64),new THREE.MeshStandardMaterial({color:0x292c30,roughness:.95}));floor.rotation.x=-Math.PI/2;floor.position.y=-.02;scene.add(floor);
-let root=null,dragging=false,lastX=0,lastY=0,angle=0,mixer=null,activeAction=null;const clock=new THREE.Clock();let animationClips=[];\nconst animButtons={idle:document.getElementById('idleBtn'),walk:document.getElementById('walkBtn'),run:document.getElementById('runBtn')};const clipSelect=document.getElementById('clipSelect');
+let root=null,dragging=false,lastX=0,lastY=0,angle=0,mixer=null,activeAction=null;const clock=new THREE.Clock();let animationClips=[];
+const animButtons={idle:document.getElementById('idleBtn'),walk:document.getElementById('walkBtn'),run:document.getElementById('runBtn')};const clipSelect=document.getElementById('clipSelect');
 const loader=new GLTFLoader();
-const asset='https://raw.githubusercontent.com/Seyamalam/blood-league-kickoff/main/public/assets/vendor/quaternius/night-striker.glb';
-loader.load(asset,g=>{
- const model=g.scene;model.updateMatrixWorld(true);animationClips=g.animations||[];
- const box=new THREE.Box3().setFromObject(model),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3());
- if(!Number.isFinite(size.y)||size.y<=0)throw new Error('El archivo GLB no contiene una malla visible.');
- const scale=1.82/size.y;model.scale.setScalar(scale);model.position.set(-center.x*scale,-box.min.y*scale,-center.z*scale);
- model.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(o.material){o.material.side=THREE.DoubleSide;}}});
- root=new THREE.Group();root.add(model);scene.add(root);
- camera.position.set(0,1.0,Math.max(2.8,size.y*scale*2.7));camera.lookAt(0,.95,0);
- document.getElementById('status').textContent='PRUEBA 6 · Recurso CC0 cargado · modelo '+(g.scene.name||'Quaternius')+' · rostro original del recurso; sin piezas superpuestas';
-},undefined,e=>{err.style.display='block';err.textContent='No se pudo cargar el recurso de prueba. Puede que el repositorio externo no permita la descarga directa.\n'+(e?.message||'');document.getElementById('status').textContent='PRUEBA 6 · carga del recurso fallida; el personaje original sigue intacto';});
-function normalizeName(s){return (s||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();}
+const externalAsset='https://raw.githubusercontent.com/Seyamalam/blood-league-kickoff/main/public/assets/vendor/quaternius/night-striker.glb';
+function mountModel(g,label){
+ if(root){scene.remove(root);root=null;}mixer=null;activeAction=null;animationClips=g.animations||[];
+ const model=g.scene;model.updateMatrixWorld(true);
+ const bounds=new THREE.Box3().setFromObject(model),size=bounds.getSize(new THREE.Vector3()),center=bounds.getCenter(new THREE.Vector3());
+ if(!Number.isFinite(size.y)||size.y<=0)throw new Error('El archivo no contiene una malla 3D visible.');
+ const scale=1.82/size.y;model.scale.setScalar(scale);model.position.set(-center.x*scale,-bounds.min.y*scale,-center.z*scale);
+ model.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(o.material)o.material.side=THREE.DoubleSide;}});
+ root=new THREE.Group();root.add(model);scene.add(root);root.rotation.y=angle;
+ camera.position.set(0,1,4.9);camera.lookAt(0,.95,0);
+ setupAnimations(model,animationClips);
+ document.getElementById('status').textContent='PRUEBA 6 · '+label+' · '+animationClips.length+' animación(es) detectada(s)';
+}
+function loadLocalFallback(reason){
+ document.getElementById('status').textContent='El recurso externo no respondió; cargando personaje de respaldo…';
+ loader.load('./assets/characters/ual/UAL1_Standard.glb',g=>{
+  try{mountModel(g,'MODELO LOCAL DE RESPALDO · revisa el rostro original');}
+  catch(e){showError('No se pudo mostrar el modelo de respaldo: '+e.message+'\nError externo: '+reason);}
+ },undefined,e=>{showError('No se pudo cargar el modelo externo ni el modelo local de respaldo.\nExterno: '+reason+'\nLocal: '+(e?.message||'error de carga'));document.getElementById('status').textContent='PRUEBA 6 · no se pudo cargar ningún modelo';});
+}
+loader.load(externalAsset,g=>{
+ try{mountModel(g,'RECURSO EXTERNO CC0 · rostro original, sin piezas superpuestas');}
+ catch(e){loadLocalFallback(e.message);}
+},undefined,e=>loadLocalFallback(e?.message||'falló la descarga del recurso externo'));
+function normalizeName(s){return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();}
 function setupAnimations(model,clips){
+ for(const b of Object.values(animButtons)){b.disabled=true;b.textContent=b.id==='idleBtn'?'QUIETO · NO DISP.':b.id==='walkBtn'?'CAMINAR · NO DISP.':'CORRER · NO DISP.';}
+ clipSelect.style.display='none';clipSelect.innerHTML='';
  mixer=clips.length?new THREE.AnimationMixer(model):null;
  const groups={
   idle:clips.find(x=>/\b(idle|stand|standing|wait|rest|breath|neutral|quieto|parado)\b/i.test(normalizeName(x.name))),
@@ -55,36 +72,26 @@ function setupAnimations(model,clips){
  };
  for(const key of Object.keys(groups)){
   const clip=groups[key],btn=animButtons[key];
-  if(clip){btn.disabled=false;btn.textContent=key==='idle'?'QUIETO':key==='walk'?'CAMINAR':'CORRER';btn.addEventListener('click',()=>playClip(clip));}
-  else {btn.disabled=true;btn.textContent=(key==='idle'?'QUIETO':key==='walk'?'CAMINAR':'CORRER')+' · NO DISP.';}
+  if(clip){btn.disabled=false;btn.textContent=key==='idle'?'QUIETO':key==='walk'?'CAMINAR':'CORRER';btn.onclick=()=>playClip(clip);}
  }
  if(clips.length){
   clipSelect.style.display='inline-block';
-  clipSelect.innerHTML='';
   clips.forEach((clip,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent=clip.name||('Animación '+(i+1));clipSelect.appendChild(option);});
-  clipSelect.addEventListener('change',()=>playClip(clips[Number(clipSelect.value)]));
+  clipSelect.onchange=()=>playClip(clips[Number(clipSelect.value)]);
   const first=groups.idle||clips[0];playClip(first);
-  const missing=Object.keys(groups).filter(k=>!groups[k]).map(k=>k==='idle'?'quieto':k==='walk'?'caminar':'correr');
-  document.getElementById('status').textContent='PRUEBA 6 · '+clips.length+' animación(es): '+clips.map(x=>x.name||'sin nombre').join(', ')+(missing.length?' · No detecté clips específicos para: '+missing.join(', '):'');
+  document.getElementById('status').textContent='PRUEBA 6 · Animaciones: '+clips.map(x=>x.name||'sin nombre').join(', ');
  }else{
-  document.getElementById('status').textContent='PRUEBA 6 · El GLB no contiene animaciones integradas. Se mantiene el visor giratorio.';
+  document.getElementById('status').textContent='PRUEBA 6 · Este modelo no incluye animaciones integradas.';
  }
 }
-function playClip(clip){
- if(!mixer||!clip)return;
- if(activeAction){activeAction.fadeOut(.18);}
- const action=mixer.clipAction(clip);action.reset().fadeIn(.18).play();activeAction=action;
- const idx=animationClips.indexOf(clip);if(idx>=0)clipSelect.value=String(idx);
-}
+function playClip(clip){if(!mixer||!clip)return;if(activeAction)activeAction.fadeOut(.18);const action=mixer.clipAction(clip);action.reset().fadeIn(.18).play();activeAction=action;const i=animationClips.indexOf(clip);if(i>=0)clipSelect.value=String(i);}
 function setAngle(a){angle=a;if(root)root.rotation.y=a;}
 document.querySelectorAll('[data-angle]').forEach(b=>b.addEventListener('click',()=>setAngle(Number(b.dataset.angle))));
-document.getElementById('reset').addEventListener('click',()=>{setAngle(0);if(root){camera.position.set(0,1,4.9);camera.lookAt(0,.95,0);}});
+document.getElementById('reset').addEventListener('click',()=>{setAngle(0);camera.position.set(0,1,4.9);camera.lookAt(0,.95,0);});
 document.getElementById('back').addEventListener('click',()=>location.href='./character-lab.html');
 renderer.domElement.addEventListener('pointerdown',e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId);});
 renderer.domElement.addEventListener('pointermove',e=>{if(!dragging)return;angle+=(e.clientX-lastX)*.012;if(root)root.rotation.y=angle;camera.position.y=Math.max(.45,Math.min(2.5,camera.position.y-(e.clientY-lastY)*.008));camera.lookAt(0,.95,0);lastX=e.clientX;lastY=e.clientY;});
 const stop=()=>dragging=false;renderer.domElement.addEventListener('pointerup',stop);renderer.domElement.addEventListener('pointercancel',stop);
 function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);}addEventListener('resize',resize);
-function animate(){requestAnimationFrame(animate);if(mixer)mixer.update(Math.min(clock.getDelta(),0.05));renderer.render(scene,camera);}animate();
-</script>
-</body>
-</html>
+function animate(){requestAnimationFrame(animate);if(mixer)mixer.update(Math.min(clock.getDelta(),.05));renderer.render(scene,camera);}animate();
+</script></body></html>
