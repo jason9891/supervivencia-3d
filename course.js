@@ -33,7 +33,7 @@ export function buildCourse(gaps = GAPS) {
 }
 
 export function segmentIndex(course, x, z) {
-  if (Math.abs(x) > HALF_WIDTH) return -1;
+  if (Math.abs(x) > (course.halfWidth ?? HALF_WIDTH)) return -1; // course.halfWidth permite espacios más anchos (p. ej. un patio)
   return course.segments.findIndex(s => z <= s.a && z >= s.b);
 }
 
@@ -59,7 +59,9 @@ export function createPlayer(course) {
 // devuelve eventos: { jumped, landed, fell, reachedGoal }
 export function stepPlayer(p, course, input, dt) {
   const ev = { jumped: false, landed: false, fell: false, reachedGoal: false };
+  // jumpSpeed: velocidad usada para el impulso del salto (por defecto, la misma que `speed`).
   const { f = 0, side = 0, speed = WALK_SPEED, running = false, jump = false, canMove = true } = input;
+  const jumpSpeed = input.jumpSpeed ?? speed;
 
   const len = Math.hypot(side, f);
   const hasInput = canMove && len > 0;
@@ -74,8 +76,8 @@ export function stepPlayer(p, course, input, dt) {
   let tookOff = false;
   if (p.jumpBuffer > 0 && (p.grounded || (p.coyote > 0 && !p.jumping))) {
     const boost = running ? AIR_BOOST_RUN : AIR_BOOST_WALK;
-    p.avx = dx * speed * boost;
-    p.avz = dz * speed * boost;
+    p.avx = dx * jumpSpeed * boost;
+    p.avz = dz * jumpSpeed * boost;
     p.vy = JUMP_V;
     p.y += 0.001;
     p.grounded = false;
