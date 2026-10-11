@@ -215,13 +215,13 @@ function addHeadFaceTexture(model,factor){
  c.beginPath();c.ellipse(256,357,57,18,0,0,Math.PI*2);c.fill();
  c.restore();
  const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.needsUpdate=true;
- const width=.17/Math.max(factor,.0001),height=.205/Math.max(factor,.0001);
+ const width=.19/Math.max(factor,.0001),height=.22/Math.max(factor,.0001);
  const geometry=new THREE.PlaneGeometry(width,height,10,10);
  const pos=geometry.attributes.position;
  for(let i=0;i<pos.count;i++){const x=pos.getX(i);const u=x/(width*.5);pos.setZ(i,.012/Math.max(factor,.0001)*(1-u*u));}
  geometry.computeVertexNormals();
  const decal=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false,side:THREE.DoubleSide,toneMapped:false}));
- decal.name='HeadFaceTextureTest';decal.position.set(0,.015/Math.max(factor,.0001),.085/Math.max(factor,.0001));decal.renderOrder=5;decal.frustumCulled=false;headBone.add(decal);
+ decal.name='HeadFaceTextureTest';decal.position.set(0,.065/Math.max(factor,.0001),.105/Math.max(factor,.0001));decal.renderOrder=5;decal.frustumCulled=false;headBone.add(decal);
  return true;
 }
 
