@@ -1,3 +1,5 @@
+export const CHARACTER_DETAILS_VERSION = '1.1-front-axis';
+
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 
 const cleanName = value => (value || '')
