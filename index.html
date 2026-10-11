@@ -6,29 +6,79 @@
 <meta name="theme-color" content="#101114">
 <title>Supervivencia 3D — Guerrero</title>
 <style>
-*{box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}button{-webkit-appearance:none;appearance:none;cursor:pointer;padding:0;touch-action:none}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101114;touch-action:none}canvas{display:block;width:100%;height:100%;touch-action:none}
-#run{position:fixed;z-index:20;right:max(28px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 126px);width:68px;height:54px;border:1px solid #c4c9c0;border-radius:14px;background:#27352fe8;color:#fff;font:bold 13px system-ui;touch-action:none}#jump{position:fixed;z-index:20;right:max(20px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 28px);width:84px;height:84px;border:2px solid #f3d7a0;border-radius:50%;background:#762b23;color:#fff4df;font:bold 15px system-ui;box-shadow:0 5px 22px #000b;touch-action:none}
-#atk{position:fixed;z-index:20;right:max(116px,calc(env(safe-area-inset-right) + 104px));bottom:calc(env(safe-area-inset-bottom) + 40px);width:72px;height:72px;border:2px solid #d8a8a0;border-radius:50%;background:#5a1f1a;color:#fff4df;font:bold 13px system-ui;box-shadow:0 5px 18px #000b;touch-action:none}#arm{position:fixed;z-index:20;right:max(116px,calc(env(safe-area-inset-right) + 104px));bottom:calc(env(safe-area-inset-bottom) + 126px);width:68px;height:54px;border:1px solid #c4c9c0;border-radius:14px;background:#27352fe8;color:#fff;font:bold 13px system-ui;touch-action:none}#arm.on{background:#6b5a22;border-color:#f3d7a0}
+*{box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+button{-webkit-appearance:none;appearance:none;cursor:pointer;padding:0;touch-action:none;font-family:system-ui}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101114;touch-action:none}
+canvas{display:block;width:100%;height:100%;touch-action:none}
 #pad{position:fixed;z-index:20;left:16px;bottom:24px;display:grid;grid-template-columns:48px 48px 48px;grid-template-rows:48px 48px;gap:5px}
-#pad button{border:1px solid #aab4b4aa;border-radius:12px;background:#20272be8;color:#fff;font:22px system-ui;touch-action:none}
-#stat{position:fixed;z-index:20;top:calc(env(safe-area-inset-top) + 34px);left:0;right:0;text-align:center;color:#f3d7a0;font:bold 13px system-ui;letter-spacing:.08em;text-shadow:0 2px 4px #000;pointer-events:none}
-#hint{position:fixed;z-index:20;top:env(safe-area-inset-top);left:0;right:0;text-align:center;padding:12px;color:#e8dfce;font:12px system-ui;letter-spacing:.08em;text-shadow:0 2px 4px #000;pointer-events:none}
-#error{position:fixed;z-index:30;top:20%;left:8%;right:8%;padding:14px;background:#401b1b;color:#fff;font:14px system-ui;display:none;white-space:pre-wrap}
+#pad button{border:1px solid #aab4b4aa;border-radius:12px;background:#20272be8;color:#fff;font:22px system-ui}
+#act{position:fixed;z-index:20;right:max(10px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 14px);display:grid;grid-template-columns:repeat(2,66px);gap:7px}
+#act button{height:54px;border:1px solid #c4c9c0;border-radius:14px;background:#27352fe8;color:#fff;font-weight:bold;font-size:12px;line-height:1.15}
+#act #atk{height:66px;border:2px solid #d8a8a0;border-radius:50%;background:#5a1f1a;color:#fff4df;font-size:13px;box-shadow:0 5px 18px #000b}
+#act #jump{height:66px;border:2px solid #f3d7a0;border-radius:50%;background:#762b23;color:#fff4df;font-size:13px;box-shadow:0 5px 18px #000b}
+#act #blk{background:#1f3347e8;border-color:#8fb4d8}
+#act #blk.on{background:#2f6aa8;box-shadow:0 0 14px #6aa8ff}
+#act .pot{background:#3a1d2be8;border-color:#e0a0b0}
+#act .pot[data-p=energia]{background:#1d3a2be8;border-color:#a0e0b0}
+#act .pot[data-p=furia]{background:#4a2c10e8;border-color:#f0b070}
+#act .pot.empty{opacity:.4}
+#hud{position:fixed;z-index:20;left:max(10px,env(safe-area-inset-left));top:calc(env(safe-area-inset-top) + 56px);width:min(46vw,230px);pointer-events:none}
+.bar{height:11px;border:1px solid #0009;border-radius:6px;background:#0008;overflow:hidden;margin-bottom:5px}
+.bar i{display:block;height:100%;width:100%}
+#hpFill{background:linear-gradient(#e0483c,#9a241c)}
+#stFill{background:linear-gradient(#6cd16c,#2f8f3a)}
+#eqline{color:#e8dfce;font:11px system-ui;text-shadow:0 1px 3px #000;line-height:1.35}
+#hud.fury #hpFill{box-shadow:0 0 10px #ffb060}
+#stat{position:fixed;z-index:20;top:calc(env(safe-area-inset-top) + 30px);left:0;right:0;text-align:center;color:#f3d7a0;font:bold 12px system-ui;letter-spacing:.06em;text-shadow:0 2px 4px #000;pointer-events:none}
+#obj{position:fixed;z-index:20;top:calc(env(safe-area-inset-top) + 46px);left:0;right:0;text-align:center;color:#fff;font:bold 13px system-ui;text-shadow:0 2px 4px #000;pointer-events:none}
+#hint{position:fixed;z-index:20;top:env(safe-area-inset-top);left:0;right:0;text-align:center;padding:10px;color:#e8dfce;font:11px system-ui;letter-spacing:.06em;text-shadow:0 2px 4px #000;pointer-events:none}
+#toast{position:fixed;z-index:25;top:34%;left:0;right:0;text-align:center;color:#ffe9b0;font:bold 20px system-ui;text-shadow:0 2px 8px #000;pointer-events:none;opacity:0;transition:opacity .25s}
+#toast.show{opacity:1}
+#eqmenu{position:fixed;z-index:40;left:50%;top:50%;transform:translate(-50%,-50%);width:min(88vw,360px);padding:14px;background:#14181dee;border:1px solid #6a7480;border-radius:16px;display:none}
+#eqmenu h3{margin:0 0 10px;color:#f3d7a0;font:bold 15px system-ui;text-align:center}
+#eqmenu button{display:block;width:100%;margin:0 0 8px;padding:12px;border:1px solid #6a7480;border-radius:12px;background:#222a31;color:#fff;font-size:14px;text-align:left}
+#eqmenu button b{color:#f3d7a0;display:inline-block;width:86px}
+#eqmenu .st{color:#cfd6dc;font:12px system-ui;text-align:center;margin:2px 0 10px}
+#eqmenu #eqclose{background:#762b23;text-align:center;font-weight:bold}
+#end{position:fixed;z-index:45;inset:0;background:#000b;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#ffe9b0;font:bold 28px system-ui;text-align:center}
+#end small{font:15px system-ui;color:#e8dfce}
+#end button{padding:14px 26px;border:2px solid #f3d7a0;border-radius:14px;background:#762b23;color:#fff4df;font-size:16px;font-weight:bold}
+#error{position:fixed;z-index:50;top:20%;left:8%;right:8%;padding:14px;background:#401b1b;color:#fff;font:14px system-ui;display:none;white-space:pre-wrap}
 </style>
 </head>
 <body>
-<div id="stat"></div><div id="hint">SUPERVIVENCIA 3D · SALTA LOS BARRANCOS</div>
+<div id="hint">SUPERVIVENCIA 3D</div>
+<div id="stat"></div><div id="obj"></div>
+<div id="hud"><div class="bar"><i id="hpFill"></i></div><div class="bar"><i id="stFill"></i></div><div id="eqline"></div></div>
+<div id="toast"></div>
 <div id="pad"><button data-k="w" style="grid-column:2;grid-row:1">▲</button><button data-k="a" style="grid-column:1;grid-row:2">◀</button><button data-k="s" style="grid-column:2;grid-row:2">▼</button><button data-k="d" style="grid-column:3;grid-row:2">▶</button></div>
-<button id="atk">ATACAR</button><button id="arm">ARMA</button><button id="run">CORRER</button><button id="jump">⬆<br>SALTAR</button><div id="error"></div>
+<div id="act">
+<button id="atk">ATACAR</button><button id="jump">SALTAR</button>
+<button id="blk">BLOQUEAR</button><button id="run">CORRER</button>
+<button class="pot" data-p="vida">VIDA</button><button class="pot" data-p="energia">ENERGÍA</button>
+<button class="pot" data-p="furia">FURIA</button><button id="eqb">EQUIPO</button>
+</div>
+<div id="eqmenu"><h3>EQUIPO</h3><div id="eqrows"></div><div class="st" id="eqstats"></div><button id="eqclose">CERRAR</button></div>
+<div id="end"><div id="endtxt"></div><small id="endsub"></small><button id="again">JUGAR DE NUEVO</button></div>
+<div id="error"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
-import { buildCourse, createPlayer, stepPlayer, HALF_WIDTH, WALK_SPEED, RUN_SPEED } from './course.js';
-const errorBox=document.getElementById('error');
-addEventListener('error',e=>{errorBox.style.display='block';errorBox.textContent='Error del juego: '+(e.message||'desconocido')});
-addEventListener('unhandledrejection',e=>{errorBox.style.display='block';errorBox.textContent='Error de carga: '+(e.reason?.message||e.reason||'desconocido')});
-const scene=new THREE.Scene();scene.background=new THREE.Color(0x101318);scene.fog=new THREE.Fog(0x101318,12,36);
+import { clone as skeletonClone } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/utils/SkeletonUtils.js';
+import { buildCourse, createPlayer, HALF_WIDTH, WALK_SPEED, RUN_SPEED } from './course.js';
+import { createSession, stepSession, equipSlot, equipmentRows, ENEMY_LOOK } from './session.js';
+import { createEquipment, tintModel } from './equipment.js';
+import * as C from './combat.js';
+
+const $=id=>document.getElementById(id);
+const errorBox=$('error');
+const showError=t=>{errorBox.style.display='block';errorBox.textContent=t};
+addEventListener('error',e=>showError('Error del juego: '+(e.message||'desconocido')));
+addEventListener('unhandledrejection',e=>showError('Error de carga: '+(e.reason?.message||e.reason||'desconocido')));
+
+// ---------- Escena ----------
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x101318);scene.fog=new THREE.Fog(0x101318,12,40);
 const camera=new THREE.PerspectiveCamera(48,innerWidth/innerHeight,.1,100);
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.25;document.body.appendChild(renderer.domElement);
@@ -36,10 +86,9 @@ scene.add(new THREE.HemisphereLight(0x9fb4d0,0x241915,2.1));
 const key=new THREE.DirectionalLight(0xffd7ac,3.2);key.position.set(-4,8,5);scene.add(key);
 const rim=new THREE.DirectionalLight(0x9a352b,2.2);rim.position.set(3,3,-4);scene.add(rim);
 const mat=(color,roughness=.8,metalness=0)=>new THREE.MeshStandardMaterial({color,roughness,metalness});
-const skin=mat(0x98694f),skinLight=mat(0xb68160),hair=mat(0x211a17),pants=mat(0x302720),cloth=mat(0x493029),wrap=mat(0x806044),eye=mat(0x171211);
-function addMesh(parent,geo,material,pos,scale=[1,1,1],rot=[0,0,0]){const o=new THREE.Mesh(geo,material);o.position.set(...pos);o.scale.set(...scale);o.rotation.set(...rot);o.castShadow=true;o.receiveShadow=true;parent.add(o);return o}
-function capsule(parent,material,a,b,r){const v1=new THREE.Vector3(...a),v2=new THREE.Vector3(...b),d=v2.clone().sub(v1);const o=addMesh(parent,new THREE.CapsuleGeometry(r,Math.max(.01,d.length()-2*r),4,8),material,v1.clone().add(v2).multiplyScalar(.5).toArray());o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());return o}
-// Camino lineal con barrancos (la lógica está en course.js).
+function addMesh(parent,geo,material,pos,scale=[1,1,1],rot=[0,0,0]){const o=new THREE.Mesh(geo,material);o.position.set(...pos);o.scale.set(...scale);o.rotation.set(...rot);parent.add(o);return o}
+
+// ---------- Camino con barrancos (lógica en course.js) ----------
 const course=buildCourse();
 const rockMat=mat(0x3b403b,.95),edgeMat=new THREE.MeshStandardMaterial({color:0x6a3b1c,emissive:0xb5651d,emissiveIntensity:.9,roughness:.6});
 course.segments.forEach((seg,i)=>{
@@ -49,161 +98,230 @@ course.segments.forEach((seg,i)=>{
  if(i<course.segments.length-1)addMesh(scene,new THREE.BoxGeometry(HALF_WIDTH*2,.05,.14),edgeMat,[0,.02,seg.b+.07]);
 });
 addMesh(scene,new THREE.PlaneGeometry(200,200),mat(0x050507,1),[0,-14,-20],[1,1,1],[-Math.PI/2,0,0]);
-{const last=course.segments[course.segments.length-1];
- const goalMat=new THREE.MeshStandardMaterial({color:0xf3d7a0,emissive:0xf3d7a0,emissiveIntensity:.8});
- addMesh(scene,new THREE.CylinderGeometry(.12,.12,3.2,10),goalMat,[-1.4,1.6,last.b+1.5]);
- addMesh(scene,new THREE.CylinderGeometry(.12,.12,3.2,10),goalMat,[1.4,1.6,last.b+1.5]);
- addMesh(scene,new THREE.BoxGeometry(2.9,.14,.14),goalMat,[0,3.2,last.b+1.5]);}
+
+// ---------- Jugador y partida ----------
 const player=createPlayer(course);
-const statBox=document.getElementById('stat');let lastStat='';
-function updateStat(){const total=course.segments.length-1;const t=player.best>=total?'¡META! · CAÍDAS '+player.falls:'BARRANCOS '+player.best+'/'+total+' · CAÍDAS '+player.falls;if(t!==lastStat){statBox.textContent=t;lastStat=t}}
-// Simple, visible, unarmored humanoid; kept independent from the uploaded GLB while import is validated.
-const actor=new THREE.Group();scene.add(actor);
-addMesh(actor,new THREE.CapsuleGeometry(.24,.43,6,12),skin,[0,1.48,0],[1.12,1.15,.8]);
-addMesh(actor,new THREE.SphereGeometry(.23,16,12),skinLight,[0,1.81,0],[.86,1.03,.86]);
-addMesh(actor,new THREE.SphereGeometry(.205,12,10),hair,[0,1.94,-.035],[1,.62,.92]);
-addMesh(actor,new THREE.BoxGeometry(.08,.025,.025),eye,[-.085,1.84,.18]);
-addMesh(actor,new THREE.BoxGeometry(.08,.025,.025),eye,[.085,1.84,.18]);
-addMesh(actor,new THREE.CapsuleGeometry(.25,.2,4,10),pants,[0,1.15,0],[1.08,.8,.9]);
-addMesh(actor,new THREE.BoxGeometry(.43,.12,.31),wrap,[0,1.23,.02]);
-const legs=[],arms=[];
-for(const side of [-1,1]){
- const leg=new THREE.Group();leg.position.set(side*.13,1.08,0);actor.add(leg);legs.push(leg);
- capsule(leg,pants,[0,-.02,0],[0,-.37,.015],.105);
- addMesh(leg,new THREE.SphereGeometry(.09,10,8),skin,[0,-.39,.025],[1,.85,1]);
- capsule(leg,skin,[0,-.40,.02],[0,-.70,.02],.065);
- addMesh(leg,new THREE.BoxGeometry(.14,.11,.23),pants,[0,-.82,.065]);
- addMesh(leg,new THREE.BoxGeometry(.145,.07,.25),hair,[0,-.87,.09]);
- const arm=new THREE.Group();arm.position.set(side*.30,1.65,0);actor.add(arm);arms.push(arm);
- addMesh(arm,new THREE.SphereGeometry(.105,10,8),skinLight,[side*.02,-.12,.025],[.88,1.2,.92]);
- capsule(arm,skin,[side*.02,-.13,.02],[side*.035,-.36,.02],.078);
- addMesh(arm,new THREE.SphereGeometry(.07,10,8),skin,[side*.035,-.37,.02]);
- capsule(arm,skin,[side*.035,-.39,.02],[side*.045,-.63,.06],.06);
- addMesh(arm,new THREE.SphereGeometry(.07,10,8),skinLight,[side*.045,-.66,.07],[.95,1.1,.9]);
- addMesh(arm,new THREE.CylinderGeometry(.066,.066,.075,8),wrap,[side*.04,-.56,.05]);
-}
-// Cargar el modelo humano real del repositorio sin ocultar el respaldo hasta que esté listo.
-const importedActor=new THREE.Group();scene.add(importedActor);importedActor.visible=false;
-let importedMixer=null;
-const gltfLoader=new GLTFLoader();
-const locomotionActor=new THREE.Group();scene.add(locomotionActor);locomotionActor.visible=false;
-let locomotionMixer=null,walkAction=null,runAction=null,idleAction=null,activeAction=null,locomotionModelLoaded=false;
-function selectLocomotion(next){if(!next||next===activeAction)return;if(activeAction)activeAction.fadeOut(.16);next.reset().fadeIn(.16).play();activeAction=next;}
-const runButton=document.getElementById('run');runButton.addEventListener('pointerdown',e=>{e.preventDefault();keys.run=true;runButton.setPointerCapture(e.pointerId)});const stopRun=()=>keys.run=false;runButton.addEventListener('pointerup',stopRun);runButton.addEventListener('pointercancel',stopRun);runButton.addEventListener('lostpointercapture',stopRun);
-gltfLoader.load('./assets/characters/human-base-rigged.glb',gltf=>{
- const model=gltf.scene;
- model.updateMatrixWorld(true);
- const bounds=new THREE.Box3().setFromObject(model);
- const size=bounds.getSize(new THREE.Vector3());
- const center=bounds.getCenter(new THREE.Vector3());
- if(size.y>0){
-  const factor=1.82/size.y;
-  model.scale.setScalar(factor);
-  model.position.set(-center.x*factor,-bounds.min.y*factor,-center.z*factor);
- }
- model.traverse(obj=>{if(obj.isMesh){obj.castShadow=true;obj.receiveShadow=true;}});
- importedActor.add(model);
- // No reproducir automáticamente el primer clip: puede ser T-pose, golpe o una animación no locomotora.\n if(gltf.animations&&gltf.animations.length){importedMixer=new THREE.AnimationMixer(model);}
- if(!locomotionModelLoaded){actor.visible=false;importedActor.visible=true;document.getElementById('hint').textContent='MODELO HUMANO GLB CARGADO · MOVER Y SALTAR';}
- else{actor.visible=false;importedActor.visible=false;}
-},undefined,error=>{
- console.error('No se pudo cargar human-base-rigged.glb',error);
- errorBox.style.display='block';
- errorBox.textContent='No se pudo cargar el modelo humano GLB. Se mantiene el personaje provisional. '+(error?.message||'');
-});
- 
-// Personaje Quaternius (CC0) con 43 animaciones. Si falla, se usa el hombre de traje como respaldo.
-let attackAction=null,swordIdleAction=null,jumpStartAction=null,jumpLoopAction=null,attacking=false,armed=false;
-const normName=n=>(n||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
-// Nombres exactos (ya normalizados) de cada acción, en orden de preferencia.
-const CLIP_NAMES={
- idle:['idle loop','idle standing','idle'],
- walk:['walk loop','walk formal loop','walk relaxed','walk brisk'],
- run:['sprint loop','jog fwd loop','run','jog'],
- attack:['sword attack'],
- swordIdle:['sword idle'],
- jumpStart:['jump start'],
- jumpLoop:['jump loop']
-};
-function findClip(clips,names){for(const n of names){const c=clips.find(item=>normName(item.name)===n);if(c)return c;}return undefined;}
-function toggleArm(){armed=!armed;document.getElementById('arm').classList.toggle('on',armed);}
-function attack(){
- if(!attackAction||attacking||!player.grounded)return;
- attacking=true;
- if(activeAction)activeAction.fadeOut(.1);
- attackAction.reset().fadeIn(.1).play();
- activeAction=attackAction;
-}
-function setupLocomotion(gltf,label){
- const model=gltf.scene;
- model.updateMatrixWorld(true);
- const bounds=new THREE.Box3().setFromObject(model);
- const size=bounds.getSize(new THREE.Vector3());
- const center=bounds.getCenter(new THREE.Vector3());
- if(size.y>0){
-  const factor=1.82/size.y;
-  model.scale.setScalar(factor);
-  model.position.set(-center.x*factor,-bounds.min.y*factor,-center.z*factor);
- }
- model.traverse(obj=>{if(obj.isMesh){obj.castShadow=true;obj.receiveShadow=true;obj.frustumCulled=false;}});
- locomotionActor.add(model);
- locomotionModelLoaded=true;
- locomotionMixer=new THREE.AnimationMixer(model);
- const clips=gltf.animations||[];
- const idleClip=findClip(clips,CLIP_NAMES.idle),walkClip=findClip(clips,CLIP_NAMES.walk),runClip=findClip(clips,CLIP_NAMES.run);
- const attackClip=findClip(clips,CLIP_NAMES.attack),swordIdleClip=findClip(clips,CLIP_NAMES.swordIdle);
- if(idleClip)idleAction=locomotionMixer.clipAction(idleClip);
- if(walkClip)walkAction=locomotionMixer.clipAction(walkClip);
- if(runClip)runAction=locomotionMixer.clipAction(runClip);
- if(swordIdleClip)swordIdleAction=locomotionMixer.clipAction(swordIdleClip);
- const jumpStartClip=findClip(clips,CLIP_NAMES.jumpStart),jumpLoopClip=findClip(clips,CLIP_NAMES.jumpLoop);
- if(jumpStartClip){jumpStartAction=locomotionMixer.clipAction(jumpStartClip);jumpStartAction.setLoop(THREE.LoopOnce,1);jumpStartAction.clampWhenFinished=true;}
- if(jumpLoopClip)jumpLoopAction=locomotionMixer.clipAction(jumpLoopClip);
- if(attackClip){attackAction=locomotionMixer.clipAction(attackClip);attackAction.setLoop(THREE.LoopOnce,1);attackAction.clampWhenFinished=false;}
- locomotionMixer.addEventListener('finished',e=>{if(e.action===attackAction){attacking=false;attackAction.fadeOut(.15);activeAction=null;}});
- const initial=idleAction||walkAction||null;
- if(initial){initial.play();activeAction=initial;}
- actor.visible=false;
- importedActor.visible=false;
- locomotionActor.visible=true;
- document.getElementById('hint').textContent=label+' · '+clips.length+' ANIMACIONES · DOBLE TOQUE ▲ = CORRER · SALTA CORRIENDO = MÁS ALCANCE';
- console.info('Clips disponibles:',clips.map(a=>a.name),'selección:',{idle:idleClip?.name,walk:walkClip?.name,run:runClip?.name,attack:attackClip?.name,swordIdle:swordIdleClip?.name});
-}
-gltfLoader.load('./assets/characters/ual/UAL1_Standard.glb',gltf=>setupLocomotion(gltf,'GUERRERO UAL'),undefined,error=>{
- console.warn('No se pudo cargar UAL1_Standard.glb; se usa el hombre de traje como respaldo.',error);
- gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-person-animated.glb',gltf=>setupLocomotion(gltf,'MODELO DE RESPALDO'),undefined,err=>console.warn('No se pudo cargar el respaldo; se conserva el personaje base.',err));
+const S=createSession(course,player);
+
+// Portal final: sellado con barrotes hasta derrotar a todos los enemigos.
+const last=course.segments[course.segments.length-1];
+const goalMat=new THREE.MeshStandardMaterial({color:0xf3d7a0,emissive:0xf3d7a0,emissiveIntensity:.8});
+const gz=last.b+1.5;
+addMesh(scene,new THREE.CylinderGeometry(.12,.12,3.2,10),goalMat,[-1.4,1.6,gz]);
+addMesh(scene,new THREE.CylinderGeometry(.12,.12,3.2,10),goalMat,[1.4,1.6,gz]);
+addMesh(scene,new THREE.BoxGeometry(2.9,.14,.14),goalMat,[0,3.2,gz]);
+const portalGlow=addMesh(scene,new THREE.PlaneGeometry(2.7,3.05),new THREE.MeshBasicMaterial({color:0xffe9a0,transparent:true,opacity:.28,side:THREE.DoubleSide}),[0,1.6,gz]);portalGlow.visible=false;
+const bars=new THREE.Group();scene.add(bars);
+const barMat=new THREE.MeshStandardMaterial({color:0x5a1f1a,emissive:0x8a2a20,emissiveIntensity:.7,metalness:.6,roughness:.4});
+for(let i=-2;i<=2;i++)addMesh(bars,new THREE.BoxGeometry(.08,3,.08),barMat,[i*.6,1.5,S.gateZ-.1]);
+addMesh(bars,new THREE.BoxGeometry(3,.08,.08),barMat,[0,2.4,S.gateZ-.1]);addMesh(bars,new THREE.BoxGeometry(3,.08,.08),barMat,[0,.6,S.gateZ-.1]);
+
+// Cofres (se abren al acercarse cuando ya no hay enemigos en su plataforma).
+const chestWood=mat(0x5a3a22,.8),chestGold=new THREE.MeshStandardMaterial({color:0xc9a14a,emissive:0x8a6a20,emissiveIntensity:.8,metalness:.6,roughness:.4});
+S.chests.forEach(c=>{
+ const g=new THREE.Group();g.position.set(c.x,0,c.z);scene.add(g);
+ addMesh(g,new THREE.BoxGeometry(.8,.45,.5),chestWood,[0,.225,0]);
+ addMesh(g,new THREE.BoxGeometry(.82,.08,.52),chestGold,[0,.48,0]);
+ addMesh(g,new THREE.BoxGeometry(.12,.2,.54),chestGold,[0,.3,0]);
+ c.mesh=g;
 });
 
-document.getElementById('atk').addEventListener('pointerdown',e=>{e.preventDefault();attack()});
-document.getElementById('arm').addEventListener('pointerdown',e=>{e.preventDefault();toggleArm()});
+// ---------- Personaje de respaldo (si no carga el modelo animado) ----------
+const skin=mat(0x98694f),pants=mat(0x302720),wrap=mat(0x806044);
+function fallbackBody(color){const g=new THREE.Group();
+ addMesh(g,new THREE.CapsuleGeometry(.24,.9,6,12),mat(color),[0,1.1,0]);
+ addMesh(g,new THREE.SphereGeometry(.22,14,10),skin,[0,1.85,0]);return g}
+const actor=fallbackBody(0x3a4a5a);scene.add(actor);
+const heroRoot=new THREE.Group();scene.add(heroRoot);heroRoot.visible=false;
 
+// ---------- Interfaz ----------
+const hpFill=$('hpFill'),stFill=$('stFill'),hudBox=$('hud'),eqline=$('eqline'),statBox=$('stat'),objBox=$('obj'),toast=$('toast');
+let toastT=0;
+function say(t){toast.textContent=t;toast.classList.add('show');toastT=1.8}
+const cache={};
+function setText(el,id,t){if(cache[id]!==t){cache[id]=t;el.textContent=t}}
+function updateHud(){
+ const p=player,st=S.stats;
+ hpFill.style.width=Math.max(0,p.hp/p.maxHp*100)+'%';
+ stFill.style.width=Math.max(0,p.stamina/C.MAX_STAMINA*100)+'%';
+ hudBox.classList.toggle('fury',p.fury>0);
+ setText(eqline,'eq',C.WEAPONS[S.eq.weapon].name+' · DEF '+st.defense+' · PESO '+st.weight+(p.fury>0?' · FURIA':'')+(p.blocking?' · GUARDIA':''));
+ setText(objBox,'obj',S.objective.text);
+ setText(statBox,'stat','CAÍDAS '+player.falls+' · MUERTES '+S.deaths);
+ $('blk').classList.toggle('on',p.blocking);
+ document.querySelectorAll('.pot').forEach(b=>{const k=b.dataset.p,n=S.inv[k];setText(b,'pot'+k,C.POTIONS[k].short+' ×'+n);b.classList.toggle('empty',n<=0)});
+}
+// Menú de equipo (pausa la partida).
+const eqmenu=$('eqmenu');
+function renderMenu(){
+ const rows=equipmentRows(S);$('eqrows').innerHTML='';
+ for(const r of rows){const b=document.createElement('button');b.innerHTML='<b>'+r.label+'</b>'+r.name+(r.count>1?'  ▸':'');
+  b.addEventListener('pointerdown',e=>{e.preventDefault();if(r.count>1){equipSlot(S,r.slot,1);applyAllEquipment();renderMenu()}});$('eqrows').appendChild(b)}
+ const st=S.stats;$('eqstats').textContent='Defensa '+st.defense+' · Peso '+st.weight+' · Velocidad '+Math.round(st.speedMul*100)+'% · Recuperación '+Math.round(st.regenMul*100)+'%'+(st.hasShield?' · Escudo':' · Bloqueo con arma');
+}
+function openMenu(){S.paused=true;renderMenu();eqmenu.style.display='block'}
+function closeMenu(){S.paused=false;eqmenu.style.display='none'}
+$('eqb').addEventListener('pointerdown',e=>{e.preventDefault();S.paused?closeMenu():openMenu()});
+$('eqclose').addEventListener('pointerdown',e=>{e.preventDefault();closeMenu()});
+$('again').addEventListener('pointerdown',e=>{e.preventDefault();location.reload()});
+document.addEventListener('contextmenu',e=>e.preventDefault());document.addEventListener('selectstart',e=>e.preventDefault());
+
+// ---------- Controles ----------
 const keys={};
-// Doble toque en una dirección = correr mientras se mantenga pulsada (como en los juegos de acción clásicos).
 const DIRS=['w','a','s','d','arrowup','arrowleft','arrowdown','arrowright'];const tapAt={};let runLatch=false;
 function press(k,repeat){if(DIRS.includes(k)&&!keys[k]&&!repeat){const now=performance.now();if(now-(tapAt[k]??-1e9)<320)runLatch=true;tapAt[k]=now}keys[k]=true}
 function release(k){keys[k]=false;if(!DIRS.some(d=>keys[d]))runLatch=false}
+let atkQ=false,jumpQ=false,potionQ=null;
 document.querySelectorAll('[data-k]').forEach(b=>{const k=b.dataset.k;b.addEventListener('pointerdown',e=>{e.preventDefault();press(k,false);b.setPointerCapture(e.pointerId)});const off=()=>release(k);b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('lostpointercapture',off)});
-addEventListener('keydown',e=>{const k=e.key.toLowerCase();press(k,e.repeat);if(k===' '){e.preventDefault();jump()}if(k==='j')attack();if(k==='e'&&!e.repeat)toggleArm();});addEventListener('keyup',e=>release(e.key.toLowerCase()));
-let jumpQueued=false;function jump(){jumpQueued=true}document.getElementById('jump').addEventListener('pointerdown',e=>{e.preventDefault();jump()});
-let elapsed=0;const clock=new THREE.Clock();const camOffset=new THREE.Vector3(0,3.1,6.2);camera.position.set(player.x+camOffset.x,camOffset.y,player.z+camOffset.z);
-document.addEventListener('contextmenu',e=>e.preventDefault());document.addEventListener('selectstart',e=>e.preventDefault());
-function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;if(importedMixer)importedMixer.update(dt);
-const f=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0),side=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),running=!!(keys.run||keys.shift||runLatch),speed=running?RUN_SPEED:WALK_SPEED;
-const moving=!attacking&&!!(f||side);
-stepPlayer(player,course,{f,side,speed,running,jump:jumpQueued,canMove:!attacking},dt);jumpQueued=false;
-actor.position.set(player.x,player.y,player.z);actor.rotation.y=player.facing;
-if(moving){const gait=elapsed*9;legs[0].rotation.x=Math.sin(gait)*.48;legs[1].rotation.x=-Math.sin(gait)*.48;arms[0].rotation.x=-Math.sin(gait)*.18;arms[1].rotation.x=Math.sin(gait)*.18}else{legs.forEach(l=>l.rotation.x*=.85);arms.forEach(a=>a.rotation.x*=.85)}
-if(locomotionMixer){
- if(!attacking){
-  let next;
-  if(!player.grounded)next=(player.jumping&&player.airTime<.3?(jumpStartAction||jumpLoopAction):(jumpLoopAction||jumpStartAction))||idleAction;
-  else next=moving?(running?(runAction||walkAction):(walkAction||idleAction)):(armed&&swordIdleAction?swordIdleAction:(idleAction||walkAction));
-  selectLocomotion(next);
- }
- locomotionMixer.update(dt);
+function hold(id,name){const b=$(id);b.addEventListener('pointerdown',e=>{e.preventDefault();keys[name]=true;b.setPointerCapture(e.pointerId)});const off=()=>keys[name]=false;b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('lostpointercapture',off)}
+hold('run','run');hold('blk','block');
+$('atk').addEventListener('pointerdown',e=>{e.preventDefault();atkQ=true});
+$('jump').addEventListener('pointerdown',e=>{e.preventDefault();jumpQ=true});
+document.querySelectorAll('.pot').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();potionQ=b.dataset.p}));
+addEventListener('keydown',e=>{const k=e.key.toLowerCase();press(k,e.repeat);
+ if(k===' '){e.preventDefault();jumpQ=true}
+ if(k==='j'&&!e.repeat)atkQ=true;
+ if(k==='1')potionQ='vida';if(k==='2')potionQ='energia';if(k==='3')potionQ='furia';
+ if((k==='i'||k==='tab')&&!e.repeat){e.preventDefault();S.paused?closeMenu():openMenu()}
+ if(k==='k')keys.block=true});
+addEventListener('keyup',e=>{const k=e.key.toLowerCase();release(k);if(k==='k')keys.block=false});
+
+// ---------- Modelos y animación ----------
+const gltfLoader=new GLTFLoader();
+const eqKit=createEquipment(THREE);
+let heroModel=null,heroAnim=null,srcGltf=null;const heroStore={nodes:[]};
+function makeAnim(model,clips){
+ const mixer=new THREE.AnimationMixer(model);const actions={};
+ const get=name=>{const c=clips.find(x=>x.name===name);return c?(actions[name]??(actions[name]=mixer.clipAction(c))):null};
+ let cur=null,curKey=null;
+ return{mixer,get,
+  play(d){ // d = {key,name,once,clamp,ts}
+   if(d.key===curKey)return;
+   const a=get(d.name)||get('Idle_Loop');if(!a)return;
+   if(cur&&cur!==a)cur.fadeOut(.12);
+   a.reset();a.enabled=true;
+   if(d.once){a.setLoop(THREE.LoopOnce,1);a.clampWhenFinished=!!d.clamp}else{a.setLoop(THREE.LoopRepeat,Infinity);a.clampWhenFinished=false}
+   a.setEffectiveTimeScale(d.ts||1);a.setEffectiveWeight(1);a.fadeIn(.12).play();
+   cur=a;curKey=d.key},
+  update(dt){mixer.update(dt)}};
 }
-importedActor.position.copy(actor.position);importedActor.rotation.y=actor.rotation.y;locomotionActor.position.copy(actor.position);locomotionActor.rotation.y=actor.rotation.y;
-const camY=Math.max(player.y,-.6);
-camera.position.lerp(new THREE.Vector3(actor.position.x+camOffset.x,camOffset.y+camY,actor.position.z+camOffset.z),Math.min(1,dt*3));camera.lookAt(actor.position.x,1.05+camY,actor.position.z);updateStat();renderer.render(scene,camera)}
-function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight)}addEventListener('resize',resize);animate();
+function applyAllEquipment(){
+ try{if(heroModel)eqKit.apply(heroModel,S.eq,heroStore);
+  for(const f of foes){if(f.model&&!f.equipped){eqKit.apply(f.model,ENEMY_LOOK[f.e.kind],f.store);f.equipped=true}}}
+ catch(err){console.warn('No se pudo colocar el equipo',err)}
+}
+
+// Enemigos: modelo clonado + barra de vida.
+const foes=[];
+function makeFoeVisual(e){
+ const def=e.def,root=new THREE.Group();root.scale.setScalar(def.scale);scene.add(root);
+ const f={e,root,model:null,anim:null,store:{nodes:[]},equipped:false,serial:0,prevState:'idle',bar:null,fill:null,fallback:null};
+ // Barra de vida sobre la cabeza.
+ const bar=new THREE.Group();const back=addMesh(bar,new THREE.PlaneGeometry(.9,.1),new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.65}),[0,0,0]);
+ const fill=addMesh(bar,new THREE.PlaneGeometry(.86,.07),new THREE.MeshBasicMaterial({color:0xd0372b}),[0,0,.001]);
+ bar.position.set(0,2.15,0);root.add(bar);f.bar=bar;f.fill=fill;
+ // Cuerpo de respaldo (se oculta cuando el modelo animado está listo).
+ const fb=fallbackBody(def.tint);root.add(fb);f.fallback=fb;
+ if(srcGltf)attachFoeModel(f);
+ foes.push(f);return f;
+}
+function attachFoeModel(f){
+ try{
+  const m=skeletonClone(srcGltf.scene);
+  m.traverse(o=>{if(o.isMesh)o.frustumCulled=false});
+  tintModel(m,f.e.def.tint);
+  f.root.add(m);f.model=m;f.anim=makeAnim(m,srcGltf.animations||[]);
+  if(f.fallback)f.fallback.visible=false;
+ }catch(err){console.warn('No se pudo clonar el modelo del enemigo',err)}
+}
+S.enemies.forEach(makeFoeVisual);
+
+gltfLoader.load('./assets/characters/ual/UAL1_Standard.glb',gltf=>{
+ try{
+  srcGltf=gltf;const model=gltf.scene;
+  model.updateMatrixWorld(true);
+  const bounds=new THREE.Box3().setFromObject(model);const size=bounds.getSize(new THREE.Vector3());const center=bounds.getCenter(new THREE.Vector3());
+  if(size.y>0){const factor=1.82/size.y;model.scale.setScalar(factor);model.position.set(-center.x*factor,-bounds.min.y*factor,-center.z*factor)}
+  model.traverse(o=>{if(o.isMesh){o.frustumCulled=false}});
+  tintModel(model,0xaab4c2);
+  heroRoot.add(model);heroModel=model;heroAnim=makeAnim(model,gltf.animations||[]);
+  actor.visible=false;heroRoot.visible=true;
+  foes.forEach(f=>{if(!f.model)attachFoeModel(f)});
+  applyAllEquipment();
+  $('hint').textContent='GUERRERO UAL · DOBLE TOQUE ▲ = CORRER · J ATACAR · K BLOQUEAR · I EQUIPO';
+ }catch(err){console.warn('Error al preparar el personaje',err);showError('No se pudo preparar el personaje animado: '+(err?.message||err))}
+},undefined,error=>console.warn('No se pudo cargar UAL1_Standard.glb; se usa el personaje de respaldo.',error));
+
+// ---------- Bucle principal ----------
+let elapsed=0,hurtT=0,drinkT=0,atkSerial=0,lastAtk=null,hurtSerial=0,drinkSerial=0,ended=false;
+const clock=new THREE.Clock();const camOffset=new THREE.Vector3(0,3.1,6.2);camera.position.set(player.x+camOffset.x,camOffset.y,player.z+camOffset.z);
+function handleEvents(evs){
+ for(const ev of evs){
+  if(ev.kind==='msg')say(ev.text);
+  else if(ev.kind==='hurt'){hurtT=.35;hurtSerial++}
+  else if(ev.kind==='potion'){drinkT=.5;drinkSerial++}
+  else if(ev.kind==='chest'){const c=ev.chest;if(c.mesh){c.mesh.children[1].position.y=.7;c.mesh.children[1].rotation.x=-.7}}
+  else if(ev.kind==='death'){say('HAS CAÍDO')}
+  else if(ev.kind==='victory'&&!ended){ended=true;$('endtxt').textContent='¡VICTORIA!';$('endsub').textContent='Muertes: '+S.deaths+' · Caídas: '+player.falls;$('end').style.display='flex'}
+ }
+}
+function heroDesired(moving,running){
+ const p=player;
+ if(p.dead)return{key:'death',name:'Death01',once:true,clamp:true};
+ if(p.attack){const a=p.attack;return{key:'atk'+atkSerial,name:'Sword_Attack',once:true,ts:Math.min(2.4,Math.max(.7,.42/a.hit))}}
+ if(hurtT>0)return{key:'hurt'+hurtSerial,name:'Hit_Chest',once:true,ts:1.2};
+ if(drinkT>0)return{key:'drink'+drinkSerial,name:'Interact',once:true,ts:2.2};
+ if(p.blocking)return{key:'block',name:'Crouch_Idle_Loop'};
+ if(!p.grounded)return p.jumping&&p.airTime<.3?{key:'jstart',name:'Jump_Start',once:true,clamp:true}:{key:'jloop',name:'Jump_Loop'};
+ if(moving)return running?{key:'run',name:'Sprint_Loop'}:{key:'walk',name:'Walk_Loop'};
+ return{key:'idle',name:'Sword_Idle'};
+}
+function foeDesired(f){
+ const e=f.e;
+ if(e.state!==f.prevState){if(e.state==='windup')f.serial++;f.prevState=e.state}
+ if(e.dead)return{key:'dead',name:'Death01',once:true,clamp:true};
+ if(e.state==='hurt')return{key:'hurt',name:'Hit_Chest',once:true,ts:1.2};
+ if(e.state==='windup'||e.state==='recover')return{key:'atk'+f.serial,name:'Sword_Attack',once:true,ts:Math.min(2.4,Math.max(.5,.42/e.def.windup))};
+ if(e.state==='chase')return{key:'walk',name:'Walk_Loop'};
+ return{key:'idle',name:'Sword_Idle'};
+}
+function animate(){
+ requestAnimationFrame(animate);
+ const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;
+ const f=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0),side=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0);
+ const running=!!(keys.run||keys.shift||runLatch),moving=!!(f||side)&&!player.attack&&!player.dead;
+
+ const input={f,side,speed:running?RUN_SPEED:WALK_SPEED,running,jump:jumpQ,attack:atkQ,block:!!keys.block,potion:potionQ};
+ jumpQ=false;atkQ=false;potionQ=null;
+ handleEvents(stepSession(S,input,dt));
+ if(player.attack!==lastAtk){if(player.attack)atkSerial++;lastAtk=player.attack}
+ hurtT=Math.max(0,hurtT-dt);drinkT=Math.max(0,drinkT-dt);
+ if(toastT>0){toastT-=dt;if(toastT<=0)toast.classList.remove('show')}
+
+ // Jugador
+ actor.position.set(player.x,player.y,player.z);actor.rotation.y=player.facing;
+ heroRoot.position.copy(actor.position);heroRoot.rotation.y=player.facing;
+ if(heroAnim){heroAnim.play(heroDesired(moving,running));heroAnim.update(dt)}
+ // Enemigos
+ for(const fo of foes){
+  const e=fo.e;fo.root.position.set(e.x,0,e.z);fo.root.rotation.y=e.facing;
+  if(fo.anim){fo.anim.play(foeDesired(fo));fo.anim.update(dt)}
+  const ratio=Math.max(0,e.hp/e.maxHp);fo.fill.scale.x=Math.max(.001,ratio);fo.fill.position.x=-(1-ratio)*.43;
+  fo.bar.visible=!e.dead;fo.bar.quaternion.copy(camera.quaternion);
+  if(e.dead&&e.deadT>5)fo.root.visible=false;
+ }
+ // Portal y cofres
+ const open=S.enemies.every(e=>e.dead);bars.visible=!open;portalGlow.visible=open;
+ for(const c of S.chests){if(c.mesh&&!c.opened)c.mesh.rotation.y=Math.sin(elapsed*1.5)*.15}
+ updateHud();
+ const camY=Math.max(player.y,-.6);
+ camera.position.lerp(new THREE.Vector3(player.x+camOffset.x,camOffset.y+camY,player.z+camOffset.z),Math.min(1,dt*3));
+ camera.lookAt(player.x,1.05+camY,player.z);
+ renderer.render(scene,camera);
+}
+function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight)}
+addEventListener('resize',resize);
+try{applyAllEquipment()}catch(err){console.warn(err)}
+window.__sv3={S,player}; // gancho para pruebas
+animate();
 </script></body></html>
