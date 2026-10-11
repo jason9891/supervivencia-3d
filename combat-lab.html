@@ -39,6 +39,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.m
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
 import { createPlayer, stepPlayer, WALK_SPEED, RUN_SPEED } from './course.js';
 import { createCombatAddon } from './combat-addon.js';
+import * as SW from './swing-style.js';
 
 // Laboratorio: arena plana, sin mapa. Mismo personaje y mismos controles que el juego.
 const errorBox = document.getElementById('error');
@@ -74,7 +75,10 @@ player.checkpoint = { x: 0, z: 4 };
 
 const hint = document.getElementById('hint');
 const actor = new THREE.Group(); scene.add(actor);
-let mixer = null, idleA = null, walkA = null, runA = null, attackA = null, activeA = null, attacking = false;
+let mixer = null, idleA = null, walkA = null, runA = null, activeA = null, attacking = false;
+const clipPool = new Map();   // nombre normalizado → clip (UAL1 + UAL2 si existe)
+const actionCache = new Map();
+let swing = null;              // golpe en curso: { style, t, adv, action }
 const normName = n => (n || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 const findClip = (clips, names) => { for (const n of names) { const c = clips.find(i => normName(i.name) === n); if (c) return c; } };
 function select(next) {
@@ -93,12 +97,11 @@ function setup(gltf) {
   const idle = findClip(clips, ['idle loop', 'idle standing', 'idle']);
   const walk = findClip(clips, ['walk loop', 'walk formal loop', 'walk']);
   const run = findClip(clips, ['sprint loop', 'jog fwd loop', 'run']);
-  const atk = findClip(clips, ['sword attack']);
   if (idle) idleA = mixer.clipAction(idle);
   if (walk) walkA = mixer.clipAction(walk);
   if (run) runA = mixer.clipAction(run);
-  if (atk) { attackA = mixer.clipAction(atk); attackA.setLoop(THREE.LoopOnce, 1); }
-  mixer.addEventListener('finished', e => { if (e.action === attackA) { attacking = false; attackA.fadeOut(0.15); activeA = null; } });
+  for (const c of clips) clipPool.set(normName(c.name), c);
+  loadOptionalClips();
   const ini = idleA || walkA; if (ini) { ini.play(); activeA = ini; }
 }
 // Solo se lee el personaje; no se modifica su modelo ni su aspecto.
@@ -106,16 +109,59 @@ new GLTFLoader().load('./assets/characters/ual/UAL1_Standard.glb', setup, undefi
   errorBox.style.display = 'block'; errorBox.textContent = 'No se pudo cargar el personaje. Revisa la conexión y recarga.';
 });
 
-function playAttackAnim() {
-  if (!attackA) return;
+// Clips extra (opcional): si pones UAL2_Standard.glb en assets/characters/ual/, cada golpe usa un clip distinto.
+// Comparten esqueleto con UAL1, así que sus animaciones se aplican al mismo personaje.
+function loadOptionalClips() {
+  new GLTFLoader().load('./assets/characters/ual/UAL2_Standard.glb', g => {
+    for (const c of g.animations || []) clipPool.set(normName(c.name), c);
+    hint.textContent = 'LABORATORIO DE COMBATE · ' + clipPool.size + ' ANIMACIONES';
+  }, undefined, () => {});
+}
+
+// Segundo del clip en que cae el golpe: se mide como el pico de velocidad del brazo derecho.
+const strikeCache = new Map();
+function strikeTime(name) {
+  if (strikeCache.has(name)) return strikeCache.get(name);
+  const clip = clipPool.get(name);
+  let best = SW.STRIKE_AT[name] ?? (clip ? clip.duration * 0.4 : 0.4);
+  try {
+    const peaks = new Map();
+    for (const tr of clip.tracks) {
+      if (!/(upperarm_r|lowerarm_r|hand_r)\.quaternion$/.test(tr.name)) continue;
+      const v = tr.values, t = tr.times;
+      for (let i = 1; i < t.length; i++) {
+        let dot = 0; for (let k = 0; k < 4; k++) dot += v[i * 4 + k] * v[(i - 1) * 4 + k];
+        const sp = 2 * Math.acos(Math.min(1, Math.abs(dot))) / Math.max(1e-4, t[i] - t[i - 1]);
+        const key = Math.round((t[i] + t[i - 1]) * 50) / 100;
+        peaks.set(key, (peaks.get(key) || 0) + sp);
+      }
+    }
+    let top = 0; for (const [k, sp] of peaks) if (sp > top) { top = sp; best = k; }
+  } catch { /* sin pistas: se usa el valor por defecto */ }
+  strikeCache.set(name, best);
+  return best;
+}
+
+// Cada golpe empieza aquí: elige clip, lo acelera para que el impacto coincida con el del juego y guarda su postura.
+function playAttackAnim(a) {
+  const chainLen = combat.bench.fighter.chain.length;
+  const name = SW.pickClip(a.type, chainLen, !!a.combo, n => clipPool.has(n));
+  const style = SW.swingStyle(a, chainLen);
+  let action = null;
+  if (name) {
+    action = actionCache.get(name);
+    if (!action) { action = mixer.clipAction(clipPool.get(name)); action.setLoop(THREE.LoopOnce, 1); action.clampWhenFinished = true; actionCache.set(name, action); }
+    action.setEffectiveTimeScale(SW.playbackRate(strikeTime(name), a, style));
+    if (activeA && activeA !== action) activeA.fadeOut(0.08);
+    action.reset().fadeIn(0.06).play(); activeA = action;
+  }
+  swing = { style, t: 0, adv: 0, action };
   attacking = true;
-  if (activeA) activeA.fadeOut(0.1);
-  attackA.reset().fadeIn(0.1).play(); activeA = attackA;
 }
 
 const combat = createCombatAddon({
   THREE, scene, camera, player,
-  onSwing: a => { playAttackAnim(); hint.textContent = (a.combo ? 'COMBO · ' + a.combo.name : a.data.name).toUpperCase(); },
+  onSwing: a => { playAttackAnim(a); hint.textContent = (a.combo ? 'COMBO · ' + a.combo.name : a.data.name).toUpperCase(); },
 });
 
 const keys = {};
@@ -132,7 +178,15 @@ function press(k, repeat) {
 function release(k) { keys[k] = false; if (!DIRS.some(d => keys[d])) runLatch = false; }
 const dirF = () => (keys.w || keys.arrowup ? 1 : 0) - (keys.s || keys.arrowdown ? 1 : 0);
 const dirS = () => (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
-function attack() { combat.pressAttack(dirF(), dirS()); }
+// Las flechas eligen el TIPO de golpe; si hay un muñeco cerca, el personaje se orienta hacia él (así el golpe lateral no se va al vacío).
+function attack() {
+  const d = combat.bench.dummies[0];
+  if (d && !d.dead && !combat.bench.fighter.attack) {
+    const dx = d.x - player.x, dz = d.z - player.z;
+    if (Math.hypot(dx, dz) < 6) player.facing = Math.atan2(dx, dz);
+  }
+  combat.pressAttack(dirF(), dirS());
+}
 document.querySelectorAll('[data-k]').forEach(b => {
   const k = b.dataset.k;
   b.addEventListener('pointerdown', e => { e.preventDefault(); press(k, false); b.setPointerCapture(e.pointerId); });
@@ -164,6 +218,7 @@ function animate() {
   const f = dirF(), side = dirS();
   const running = !!(keys.run || keys.shift || runLatch);
   const speed = running ? RUN_SPEED : WALK_SPEED;
+  attacking = !!combat.bench.fighter.attack;
   stepPlayer(player, course, { f, side, speed, running, jump: jumpQueued, canMove: !attacking && !combat.panelOpen }, dt);
   jumpQueued = false;
   // Suelo plano y borde de la arena.
@@ -171,8 +226,30 @@ function animate() {
   const r = Math.hypot(player.x, player.z);
   if (r > ARENA_R - 0.5) { const k = (ARENA_R - 0.5) / r; player.x *= k; player.z *= k; }
 
+  // Postura del golpe: giro del cuerpo, inclinación y avance (el personaje solo se mueve como grupo; no se toca su modelo).
+  actor.rotation.order = 'YXZ';
+  let pose = null;
+  if (swing && attacking) {
+    swing.t += dt;
+    pose = SW.swingPose(swing.style, swing.t);
+    const d = pose.advance - swing.adv; swing.adv = pose.advance;
+    player.x += Math.sin(player.facing) * d; player.z += Math.cos(player.facing) * d;
+    const dm = combat.bench.dummies[0];
+    if (dm && !dm.dead) { // el muñeco es sólido
+      const dx = player.x - dm.x, dz = player.z - dm.z, dist = Math.hypot(dx, dz), min = 0.95;
+      if (dist < min && dist > 1e-4) { player.x = dm.x + dx / dist * min; player.z = dm.z + dz / dist * min; }
+    }
+    const r2 = Math.hypot(player.x, player.z);
+    if (r2 > ARENA_R - 0.5) { const k = (ARENA_R - 0.5) / r2; player.x *= k; player.z *= k; }
+  } else if (swing) {
+    if (swing.action && activeA === swing.action) { swing.action.fadeOut(0.15); activeA = null; }
+    swing = null;
+  }
   actor.position.set(player.x, player.y, player.z);
-  actor.rotation.y = player.facing;
+  actor.rotation.y = player.facing + (pose ? pose.yaw : 0);
+  actor.rotation.x = pose ? pose.pitch : 0;
+  actor.rotation.z = pose ? pose.roll : 0;
+  actor.scale.setScalar(pose ? pose.scale : 1);
   if (mixer) {
     if (!attacking) {
       const next = !player.grounded ? idleA : ((f || side) ? (running ? (runA || walkA) : (walkA || idleA)) : (idleA || walkA));

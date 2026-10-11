@@ -13,6 +13,7 @@
 | `session.js` | en rama | `respaldo-combate-patio` |
 | `combat-addon.js` | sí | `combate-en-mapa` + inventario |
 | `inventario.js` | sí | `inventario-funcional` |
+| `swing-style.js` | sí | postura y clip de cada golpe |
 | `combat-lab.html` | sí | página de pruebas de combate (botón en `index.html`) |
 
 ## Completar la unión (solo archivos nuevos, sin tocar mapa)
