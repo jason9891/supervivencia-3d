@@ -212,9 +212,42 @@ function attack(){
  attackAction.reset().fadeIn(.1).play();
  activeAction=attackAction;
 }
+function addWarriorFace(model){
+ const head=model.getObjectByName('Head')||model.getObjectByName('head');
+ if(!head){console.warn('No se encontró hueso de cabeza; se conserva el modelo original.');return false;}
+ if(head.getObjectByName('procedural-warrior-face'))return true;
+ const face=new THREE.Group();face.name='procedural-warrior-face';
+ const skinMat=new THREE.MeshStandardMaterial({color:0xb87954,roughness:.86});
+ const hairMat=new THREE.MeshStandardMaterial({color:0x211713,roughness:.92});
+ const beardMat=new THREE.MeshStandardMaterial({color:0x30221d,roughness:1});
+ const eyeWhite=new THREE.MeshStandardMaterial({color:0xe8dfd0,roughness:.35});
+ const irisMat=new THREE.MeshStandardMaterial({color:0x5a3924,roughness:.4});
+ const pupilMat=new THREE.MeshStandardMaterial({color:0x100d0b,roughness:.25});
+ const browMat=new THREE.MeshStandardMaterial({color:0x241815,roughness:1});
+ const add=(name,geo,mat,pos,scale)=>{const m=new THREE.Mesh(geo,mat);m.name=name;m.position.set(...pos);if(scale)m.scale.set(...scale);m.castShadow=true;m.receiveShadow=true;face.add(m);return m;};
+ // Detalles superpuestos a la cabeza; todos siguen el hueso Head y sus animaciones.
+ add('cabello oscuro',new THREE.SphereGeometry(.105,16,12),hairMat,[0,.105,-.006],[1.04,.77,1.02]);
+ add('patilla izquierda',new THREE.SphereGeometry(.025,10,8),hairMat,[-.083,.025,.035],[.72,1.7,.8]);
+ add('patilla derecha',new THREE.SphereGeometry(.025,10,8),hairMat,[.083,.025,.035],[.72,1.7,.8]);
+ for(const side of [-1,1]){
+  add('esclerótica',new THREE.SphereGeometry(.014,12,8),eyeWhite,[side*.038,.054,.091],[1,.82,.55]);
+  add('iris',new THREE.SphereGeometry(.0075,10,8),irisMat,[side*.038,.054,.099],[1,1,.45]);
+  add('pupila',new THREE.SphereGeometry(.0038,8,6),pupilMat,[side*.038,.054,.102],[1,1,.4]);
+  add('ceja marcada',new THREE.SphereGeometry(.022,10,7),browMat,[side*.039,.078,.088],[1.15,.34,.55]);
+ }
+ add('puente nariz',new THREE.SphereGeometry(.014,10,8),skinMat,[0,.035,.105],[.72,1.8,.7]);
+ add('punta nariz',new THREE.SphereGeometry(.018,10,8),skinMat,[0,.014,.115],[.95,.72,.8]);
+ add('barba mandíbula',new THREE.SphereGeometry(.073,14,10),beardMat,[0,-.027,.045],[1.05,.72,.88]);
+ add('barba mentón',new THREE.SphereGeometry(.047,12,8),beardMat,[0,-.067,.064],[1,.68,.78]);
+ add('bigote',new THREE.SphereGeometry(.032,12,8),beardMat,[0,-.004,.099],[1.2,.38,.45]);
+ // Mantener los detalles delante de la cara sin alterar el rig ni los clips.
+ head.add(face);
+ return true;
+}
 function setupLocomotion(gltf,label){
  const model=gltf.scene;
  model.updateMatrixWorld(true);
+ addWarriorFace(model);
  const bounds=new THREE.Box3().setFromObject(model);
  const size=bounds.getSize(new THREE.Vector3());
  const center=bounds.getCenter(new THREE.Vector3());
