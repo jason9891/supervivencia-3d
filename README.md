@@ -20,6 +20,25 @@ Prototipo de supervivencia 3D para móviles, ejecutable en el navegador y pensad
 - Reúne 3 de madera y 2 piedras para fabricar un hacha.
 - Salud, hambre y sed cambian durante la partida.
 
+## Inventario y banco de pruebas de combate
+
+Botón **INVENTARIO** (arriba a la derecha, o tecla **I**). No modifica el mapa ni el personaje: solo agrega su propia interfaz y un muñeco de entrenamiento.
+
+- **Equipo:** arma (espada, hacha, maza), casco, pechera, grebas y escudo, en tres niveles. Muestra defensa, peso, velocidad y bloqueo.
+- **Golpes y combos** del arma elegida. El golpe depende de lo que mantengas al pulsar **ATACAR**: ▲ adelante = estocada, ↔ a un lado = tajo, quieto = golpe alto. Si encadenas golpes sin esperar se activan los combos (por ejemplo, con la espada: lado → lado → adelante = *Cruz y estocada*).
+- **Pociones** de vida, energía y furia (teclas 1, 2 y 3 fuera del inventario).
+- **Banco de pruebas:** coloca un muñeco de paja o uno blindado frente a ti, golpéalo y mira el daño flotante, la energía y los combos. También puedes recibir un *golpe de prueba* para ver cuánto reduce el daño tu armadura.
+
+Cómo está enganchado: `index.html` tiene cuatro líneas marcadas con `[combate]` (el `import`, la creación del addon, el cuerpo de `attack()` y `combat.update(dt)`). Todo lo demás vive en archivos propios:
+
+- `combat.js`: reglas de armas, combos, armaduras, pociones y daño.
+- `banco.js`: lógica del banco de pruebas (sin three.js).
+- `combat-addon.js`: interfaz y muñecos (la única parte que toca three.js).
+
+```
+node tests/banco.test.mjs   # armas, combos, armadura, pociones y muñecos
+```
+
 ## Notas
 
 - El personaje y sus 43 animaciones son de Quaternius (Universal Animation Library, CC0), en `assets/characters/ual/`.
