@@ -9,7 +9,7 @@
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101114;color:#f1e6d2;font-family:system-ui,sans-serif}canvas{display:block;width:100%;height:100%;touch-action:none}
 #top{position:fixed;z-index:5;top:env(safe-area-inset-top);left:0;right:0;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;pointer-events:none}#top strong{font-size:11px;letter-spacing:.07em;text-shadow:0 2px 5px #000}
 button{pointer-events:auto;border:1px solid #c4a574;border-radius:9px;background:#211d17ed;color:#f3d7a0;padding:10px 11px;font-weight:700;font-size:11px}
-#controls{position:fixed;z-index:5;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 16px);display:flex;justify-content:center;flex-wrap:wrap;gap:7px;padding:0 10px}
+#controls{position:fixed;z-index:5;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 16px);display:flex;justify-content:center;flex-wrap:wrap;gap:7px;padding:0 10px}#animControls{display:flex;justify-content:center;flex-wrap:wrap;gap:7px;width:100%}button:disabled{opacity:.45}
 #status{position:fixed;z-index:4;left:12px;right:12px;top:calc(env(safe-area-inset-top) + 54px);text-align:center;font-size:12px;color:#e8dfce;text-shadow:0 2px 5px #000;pointer-events:none}
 #err{position:fixed;z-index:10;left:10px;right:10px;top:30%;padding:12px;background:#401b1b;color:#fff;white-space:pre-wrap;display:none}
 </style>
@@ -17,7 +17,7 @@ button{pointer-events:auto;border:1px solid #c4a574;border-radius:9px;background
 <body>
 <div id="top"><strong>LABORATORIO · PRUEBA 6 · MODELO CC0</strong><button id="back">VOLVER</button></div>
 <div id="status">PRUEBA 6 · Modelo humano Quaternius externo · sin máscara ni rasgos añadidos</div>
-<div id="controls"><button data-angle="0">FRENTE</button><button data-angle="1.57079632679">PERFIL D.</button><button data-angle="3.14159265359">NUCA</button><button data-angle="-1.57079632679">PERFIL I.</button><button id="reset">REINICIAR</button></div>
+<div id="controls"><button data-angle="0">FRENTE</button><button data-angle="1.57079632679">PERFIL D.</button><button data-angle="3.14159265359">NUCA</button><button data-angle="-1.57079632679">PERFIL I.</button><button id="reset">REINICIAR</button><span id="animControls"><button id="idleBtn" disabled>QUIETO · NO DISP.</button><button id="walkBtn" disabled>CAMINAR · NO DISP.</button><button id="runBtn" disabled>CORRER · NO DISP.</button></span><select id="clipSelect" aria-label="Animación disponible" style="max-width:42vw;padding:9px;border-radius:8px;background:#211d17;color:#f3d7a0;border:1px solid #c4a574;display:none"></select></div>
 <div id="err"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
 <script type="module">
@@ -32,11 +32,11 @@ const fill=new THREE.DirectionalLight(0x8da9d2,1.5);fill.position.set(5,4,-5);sc
 const camera=new THREE.PerspectiveCamera(35,innerWidth/innerHeight,.01,1000);camera.position.set(0,1.5,5);
 const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;document.body.appendChild(renderer.domElement);
 const floor=new THREE.Mesh(new THREE.CircleGeometry(2.3,64),new THREE.MeshStandardMaterial({color:0x292c30,roughness:.95}));floor.rotation.x=-Math.PI/2;floor.position.y=-.02;scene.add(floor);
-let root=null,dragging=false,lastX=0,lastY=0,angle=0;
+let root=null,dragging=false,lastX=0,lastY=0,angle=0,mixer=null,activeAction=null;const clock=new THREE.Clock();let animationClips=[];\nconst animButtons={idle:document.getElementById('idleBtn'),walk:document.getElementById('walkBtn'),run:document.getElementById('runBtn')};const clipSelect=document.getElementById('clipSelect');
 const loader=new GLTFLoader();
 const asset='https://raw.githubusercontent.com/Seyamalam/blood-league-kickoff/main/public/assets/vendor/quaternius/night-striker.glb';
 loader.load(asset,g=>{
- const model=g.scene;model.updateMatrixWorld(true);
+ const model=g.scene;model.updateMatrixWorld(true);animationClips=g.animations||[];
  const box=new THREE.Box3().setFromObject(model),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3());
  if(!Number.isFinite(size.y)||size.y<=0)throw new Error('El archivo GLB no contiene una malla visible.');
  const scale=1.82/size.y;model.scale.setScalar(scale);model.position.set(-center.x*scale,-box.min.y*scale,-center.z*scale);
@@ -45,6 +45,37 @@ loader.load(asset,g=>{
  camera.position.set(0,1.0,Math.max(2.8,size.y*scale*2.7));camera.lookAt(0,.95,0);
  document.getElementById('status').textContent='PRUEBA 6 · Recurso CC0 cargado · modelo '+(g.scene.name||'Quaternius')+' · rostro original del recurso; sin piezas superpuestas';
 },undefined,e=>{err.style.display='block';err.textContent='No se pudo cargar el recurso de prueba. Puede que el repositorio externo no permita la descarga directa.\n'+(e?.message||'');document.getElementById('status').textContent='PRUEBA 6 · carga del recurso fallida; el personaje original sigue intacto';});
+function normalizeName(s){return (s||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();}
+function setupAnimations(model,clips){
+ mixer=clips.length?new THREE.AnimationMixer(model):null;
+ const groups={
+  idle:clips.find(x=>/\\b(idle|stand|standing|wait|rest|breath|neutral|quieto|parado)\\b/i.test(normalizeName(x.name))),
+  walk:clips.find(x=>/\\b(walk|walking|walkcycle|caminar|paseo)\\b/i.test(normalizeName(x.name))),
+  run:clips.find(x=>/\\b(run|running|sprint|jog|correr|trot)\\b/i.test(normalizeName(x.name)))
+ };
+ for(const key of Object.keys(groups)){
+  const clip=groups[key],btn=animButtons[key];
+  if(clip){btn.disabled=false;btn.textContent=key==='idle'?'QUIETO':key==='walk'?'CAMINAR':'CORRER';btn.addEventListener('click',()=>playClip(clip));}
+  else {btn.disabled=true;btn.textContent=(key==='idle'?'QUIETO':key==='walk'?'CAMINAR':'CORRER')+' · NO DISP.';}
+ }
+ if(clips.length){
+  clipSelect.style.display='inline-block';
+  clipSelect.innerHTML='';
+  clips.forEach((clip,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent=clip.name||('Animación '+(i+1));clipSelect.appendChild(option);});
+  clipSelect.addEventListener('change',()=>playClip(clips[Number(clipSelect.value)]));
+  const first=groups.idle||clips[0];playClip(first);
+  const missing=Object.keys(groups).filter(k=>!groups[k]).map(k=>k==='idle'?'quieto':k==='walk'?'caminar':'correr');
+  document.getElementById('status').textContent='PRUEBA 6 · '+clips.length+' animación(es): '+clips.map(x=>x.name||'sin nombre').join(', ')+(missing.length?' · No detecté clips específicos para: '+missing.join(', '):'');
+ }else{
+  document.getElementById('status').textContent='PRUEBA 6 · El GLB no contiene animaciones integradas. Se mantiene el visor giratorio.';
+ }
+}
+function playClip(clip){
+ if(!mixer||!clip)return;
+ if(activeAction){activeAction.fadeOut(.18);}
+ const action=mixer.clipAction(clip);action.reset().fadeIn(.18).play();activeAction=action;
+ const idx=animationClips.indexOf(clip);if(idx>=0)clipSelect.value=String(idx);
+}
 function setAngle(a){angle=a;if(root)root.rotation.y=a;}
 document.querySelectorAll('[data-angle]').forEach(b=>b.addEventListener('click',()=>setAngle(Number(b.dataset.angle))));
 document.getElementById('reset').addEventListener('click',()=>{setAngle(0);if(root){camera.position.set(0,1,4.9);camera.lookAt(0,.95,0);}});
@@ -53,7 +84,7 @@ renderer.domElement.addEventListener('pointerdown',e=>{dragging=true;lastX=e.cli
 renderer.domElement.addEventListener('pointermove',e=>{if(!dragging)return;angle+=(e.clientX-lastX)*.012;if(root)root.rotation.y=angle;camera.position.y=Math.max(.45,Math.min(2.5,camera.position.y-(e.clientY-lastY)*.008));camera.lookAt(0,.95,0);lastX=e.clientX;lastY=e.clientY;});
 const stop=()=>dragging=false;renderer.domElement.addEventListener('pointerup',stop);renderer.domElement.addEventListener('pointercancel',stop);
 function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);}addEventListener('resize',resize);
-function animate(){requestAnimationFrame(animate);renderer.render(scene,camera);}animate();
+function animate(){requestAnimationFrame(animate);if(mixer)mixer.update(Math.min(clock.getDelta(),0.05));renderer.render(scene,camera);}animate();
 </script>
 </body>
 </html>
