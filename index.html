@@ -14,49 +14,93 @@
 #stat{position:fixed;z-index:20;top:calc(env(safe-area-inset-top) + 34px);left:0;right:0;text-align:center;color:#f3d7a0;font:bold 13px system-ui;letter-spacing:.08em;text-shadow:0 2px 4px #000;pointer-events:none}
 #hint{position:fixed;z-index:20;top:env(safe-area-inset-top);left:0;right:0;text-align:center;padding:12px;color:#e8dfce;font:12px system-ui;letter-spacing:.08em;text-shadow:0 2px 4px #000;pointer-events:none}
 #error{position:fixed;z-index:30;top:20%;left:8%;right:8%;padding:14px;background:#401b1b;color:#fff;font:14px system-ui;display:none;white-space:pre-wrap}
+#story{position:fixed;z-index:40;inset:0;display:none;align-items:center;justify-content:center;background:#000a;padding:20px}
+#story .box{max-width:340px;background:#1a1814ee;border:1px solid #c4a574;border-radius:12px;padding:18px 20px;color:#e8dfce;font:14px/1.45 system-ui}
+#story h3{margin:0 0 10px;color:#f3d7a0;font-size:15px;letter-spacing:.06em}
+#story p{margin:0 0 14px;white-space:pre-wrap}
+#story button{display:block;width:100%;padding:10px;border:1px solid #c4a574;border-radius:8px;background:#2a241c;color:#f3d7a0;font:bold 13px system-ui}
 </style>
 </head>
 <body>
-<div id="stat"></div><div id="hint">SUPERVIVENCIA 3D · SALTA LOS BARRANCOS</div>
+<div id="stat"></div><div id="hint">EL REGRESO · EXPLORA EL CASTILLO</div>
 <div id="pad"><button data-k="w" style="grid-column:2;grid-row:1">▲</button><button data-k="a" style="grid-column:1;grid-row:2">◀</button><button data-k="s" style="grid-column:2;grid-row:2">▼</button><button data-k="d" style="grid-column:3;grid-row:2">▶</button></div>
 <button id="atk">ATACAR</button><button id="arm">ARMA</button><button id="run">CORRER</button><button id="jump">⬆<br>SALTAR</button><div id="error"></div>
+<div id="story"><div class="box"><h3 id="storyTitle"></h3><p id="storyText"></p><button id="storyClose">Cerrar</button></div></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
 import { buildCourse, createPlayer, stepPlayer, HALF_WIDTH, WALK_SPEED, RUN_SPEED } from './course.js';
+import { buildMap1, getCurrentZone, STORY_PAGE, distanceToPage } from './map1.js';
+
 const errorBox=document.getElementById('error');
 addEventListener('error',e=>{errorBox.style.display='block';errorBox.textContent='Error del juego: '+(e.message||'desconocido')});
 addEventListener('unhandledrejection',e=>{errorBox.style.display='block';errorBox.textContent='Error de carga: '+(e.reason?.message||e.reason||'desconocido')});
-const scene=new THREE.Scene();scene.background=new THREE.Color(0x101318);scene.fog=new THREE.Fog(0x101318,12,36);
-const camera=new THREE.PerspectiveCamera(48,innerWidth/innerHeight,.1,100);
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x0a0c10);
+scene.fog=new THREE.FogExp2(0x0a0c10, 0.028);
+const camera=new THREE.PerspectiveCamera(48,innerWidth/innerHeight,.1,120);
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.25;document.body.appendChild(renderer.domElement);
-scene.add(new THREE.HemisphereLight(0x9fb4d0,0x241915,2.1));
-const key=new THREE.DirectionalLight(0xffd7ac,3.2);key.position.set(-4,8,5);scene.add(key);
-const rim=new THREE.DirectionalLight(0x9a352b,2.2);rim.position.set(3,3,-4);scene.add(rim);
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;document.body.appendChild(renderer.domElement);
+
+// Iluminación más oscura y atmosférica (estilo Blade)
+scene.add(new THREE.HemisphereLight(0x6a7a8a,0x1a120e,0.7));
+const key=new THREE.DirectionalLight(0xc8d4e0,1.4);key.position.set(-6,14,4);scene.add(key);
+const rim=new THREE.DirectionalLight(0x8a3a2a,1.1);rim.position.set(4,3,-5);scene.add(rim);
+// Antorchas (luces puntuales)
+function addTorchLight(x,y,z){const l=new THREE.PointLight(0xffaa55,2.0,11,1.5);l.position.set(x,y,z);scene.add(l);}
+addTorchLight(-8,2.8,14);
+addTorchLight(8,2.8,14);
+addTorchLight(-6,2.6,-6);
+addTorchLight(6,2.6,-6);
+addTorchLight(-5,2.8,-26);
+addTorchLight(5,2.8,-26);
+addTorchLight(-7,3.2,-40);
+addTorchLight(7,3.2,-40);
+
 const mat=(color,roughness=.8,metalness=0)=>new THREE.MeshStandardMaterial({color,roughness,metalness});
 const skin=mat(0x98694f),skinLight=mat(0xb68160),hair=mat(0x211a17),pants=mat(0x302720),cloth=mat(0x493029),wrap=mat(0x806044),eye=mat(0x171211);
 function addMesh(parent,geo,material,pos,scale=[1,1,1],rot=[0,0,0]){const o=new THREE.Mesh(geo,material);o.position.set(...pos);o.scale.set(...scale);o.rotation.set(...rot);o.castShadow=true;o.receiveShadow=true;parent.add(o);return o}
 function capsule(parent,material,a,b,r){const v1=new THREE.Vector3(...a),v2=new THREE.Vector3(...b),d=v2.clone().sub(v1);const o=addMesh(parent,new THREE.CapsuleGeometry(r,Math.max(.01,d.length()-2*r),4,8),material,v1.clone().add(v2).multiplyScalar(.5).toArray());o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());return o}
-// Camino lineal con barrancos (la lógica está en course.js).
-const course=buildCourse();
-const rockMat=mat(0x3b403b,.95),edgeMat=new THREE.MeshStandardMaterial({color:0x6a3b1c,emissive:0xb5651d,emissiveIntensity:.9,roughness:.6});
-course.segments.forEach((seg,i)=>{
- const len=seg.a-seg.b,zc=(seg.a+seg.b)/2;
- addMesh(scene,new THREE.BoxGeometry(HALF_WIDTH*2,10,len),rockMat,[0,-5,zc]);
- if(i>0)addMesh(scene,new THREE.BoxGeometry(HALF_WIDTH*2,.05,.14),edgeMat,[0,.02,seg.a-.07]);
- if(i<course.segments.length-1)addMesh(scene,new THREE.BoxGeometry(HALF_WIDTH*2,.05,.14),edgeMat,[0,.02,seg.b+.07]);
-});
-addMesh(scene,new THREE.PlaneGeometry(200,200),mat(0x050507,1),[0,-14,-20],[1,1,1],[-Math.PI/2,0,0]);
-{const last=course.segments[course.segments.length-1];
- const goalMat=new THREE.MeshStandardMaterial({color:0xf3d7a0,emissive:0xf3d7a0,emissiveIntensity:.8});
- addMesh(scene,new THREE.CylinderGeometry(.12,.12,3.2,10),goalMat,[-1.4,1.6,last.b+1.5]);
- addMesh(scene,new THREE.CylinderGeometry(.12,.12,3.2,10),goalMat,[1.4,1.6,last.b+1.5]);
- addMesh(scene,new THREE.BoxGeometry(2.9,.14,.14),goalMat,[0,3.2,last.b+1.5]);}
-const player=createPlayer(course);
+
+// === MAPA 1: El Regreso (solo geometría y props) ===
+const mapData = buildMap1(scene);
+const herbs = mapData.herbs;
+let pageRead = false;
+
+// Mantener course.js para no romper física del personaje.
+// Creamos un segmento muy amplio para que el jugador pueda explorar el mapa libremente.
+const course = {
+  segments: [{ a: 40, b: -60 }],
+  gaps: 0
+};
+const player = createPlayer(course);
+// Spawn en la entrada del castillo
+player.x = 0;
+player.z = 28;
+player.checkpoint = { x: 0, z: 28 };
+player.facing = Math.PI; // mirando hacia -Z (hacia el interior)
+
 const statBox=document.getElementById('stat');let lastStat='';
-function updateStat(){const total=course.segments.length-1;const t=player.best>=total?'¡META! · CAÍDAS '+player.falls:'BARRANCOS '+player.best+'/'+total+' · CAÍDAS '+player.falls;if(t!==lastStat){statBox.textContent=t;lastStat=t}}
+function updateStat(){
+  const zone = getCurrentZone(player.x, player.z) || 'exterior';
+  const t = zone.toUpperCase() + (pageRead ? ' · PÁGINA LEÍDA' : '');
+  if(t!==lastStat){statBox.textContent=t;lastStat=t}
+}
+
+// Overlay de la página de historia
+const storyEl = document.getElementById('story');
+document.getElementById('storyClose').addEventListener('pointerdown', () => { storyEl.style.display = 'none'; });
+function showStoryPage() {
+  if (pageRead) return;
+  document.getElementById('storyTitle').textContent = STORY_PAGE.title;
+  document.getElementById('storyText').textContent = STORY_PAGE.text;
+  storyEl.style.display = 'flex';
+  pageRead = true;
+  if (mapData.pageMesh) mapData.pageMesh.visible = false;
+}
+
 // Simple, visible, unarmored humanoid; kept independent from the uploaded GLB while import is validated.
 const actor=new THREE.Group();scene.add(actor);
 addMesh(actor,new THREE.CapsuleGeometry(.24,.43,6,12),skin,[0,1.48,0],[1.12,1.15,.8]);
@@ -104,7 +148,7 @@ gltfLoader.load('./assets/characters/human-base-rigged.glb',gltf=>{
  model.traverse(obj=>{if(obj.isMesh){obj.castShadow=true;obj.receiveShadow=true;}});
  importedActor.add(model);
  // No reproducir automáticamente el primer clip: puede ser T-pose, golpe o una animación no locomotora.\n if(gltf.animations&&gltf.animations.length){importedMixer=new THREE.AnimationMixer(model);}
- if(!locomotionModelLoaded){actor.visible=false;importedActor.visible=true;document.getElementById('hint').textContent='MODELO HUMANO GLB CARGADO · MOVER Y SALTAR';}
+ if(!locomotionModelLoaded){actor.visible=false;importedActor.visible=true;document.getElementById('hint').textContent='MODELO HUMANO GLB CARGADO · EXPLORA EL CASTILLO';}
  else{actor.visible=false;importedActor.visible=false;}
 },undefined,error=>{
  console.error('No se pudo cargar human-base-rigged.glb',error);
@@ -166,7 +210,7 @@ function setupLocomotion(gltf,label){
  actor.visible=false;
  importedActor.visible=false;
  locomotionActor.visible=true;
- document.getElementById('hint').textContent=label+' · '+clips.length+' ANIMACIONES · DOBLE TOQUE ▲ = CORRER · SALTA CORRIENDO = MÁS ALCANCE';
+ document.getElementById('hint').textContent=label+' · MAPA: EL REGRESO · EXPLORA';
  console.info('Clips disponibles:',clips.map(a=>a.name),'selección:',{idle:idleClip?.name,walk:walkClip?.name,run:runClip?.name,attack:attackClip?.name,swordIdle:swordIdleClip?.name});
 }
 gltfLoader.load('./assets/characters/ual/UAL1_Standard.glb',gltf=>setupLocomotion(gltf,'GUERRERO UAL'),undefined,error=>{
@@ -191,6 +235,12 @@ function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDel
 const f=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0),side=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),running=!!(keys.run||keys.shift||runLatch),speed=running?RUN_SPEED:WALK_SPEED;
 const moving=!attacking&&!!(f||side);
 stepPlayer(player,course,{f,side,speed,running,jump:jumpQueued,canMove:!attacking},dt);jumpQueued=false;
+
+// Trigger de la página de la biblioteca (opcional)
+if (!pageRead && distanceToPage(player.x, player.y, player.z) < 2.4) {
+  showStoryPage();
+}
+
 actor.position.set(player.x,player.y,player.z);actor.rotation.y=player.facing;
 if(moving){const gait=elapsed*9;legs[0].rotation.x=Math.sin(gait)*.48;legs[1].rotation.x=-Math.sin(gait)*.48;arms[0].rotation.x=-Math.sin(gait)*.18;arms[1].rotation.x=Math.sin(gait)*.18}else{legs.forEach(l=>l.rotation.x*=.85);arms.forEach(a=>a.rotation.x*=.85)}
 if(locomotionMixer){
