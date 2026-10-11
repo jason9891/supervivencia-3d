@@ -33,7 +33,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 <div id="stat"></div>
 <button type="button" id="characterLab" onclick="location.href='./character-lab.html'">VISUAL · PERSONAJE</button>
 <button type="button" id="combatLab" onclick="location.href='./combat-lab.html'">COMBATE · PRUEBAS</button>
-<div id="hint">EL REGRESO · RAMPA DIAGONAL</div>
+<div id="hint">EL REGRESO · CROQUIS EJES</div>
 <div id="pad">
 <button data-k="w" style="grid-column:2;grid-row:1">▲</button>
 <button data-k="a" style="grid-column:1;grid-row:2">◀</button>
@@ -91,9 +91,9 @@ let pageRead = false, hasKey = false, leverPulled = false, gateClosed = false, f
 
 const course = { segments: [{ a: 100, b: -100 }], gaps: 0, freeMap: true };
 const player = createPlayer(course);
-player.x = -70; player.z = -85; player.y = 0;
-player.checkpoint = { x: -70, z: -85 };
-player.facing = 0.7;
+player.x = 8; player.z = -12; player.y = 0;
+player.checkpoint = { x: 8, z: -12 };
+player.facing = 0;
 
 const statBox = document.getElementById('stat');
 let lastStat = '';
@@ -168,7 +168,7 @@ function setupLocomotion(gltf, label) {
   if (ini) { ini.play(); activeAction = ini; }
   actor.visible = false;
   locomotionActor.visible = true;
-  document.getElementById('hint').textContent = label + ' · RAMPA DIAGONAL';
+  document.getElementById('hint').textContent = label + ' · EL REGRESO';
 }
 gltfLoader.load('./assets/characters/ual/UAL1_Standard.glb', g => setupLocomotion(g, 'GUERRERO UAL'), undefined, () => {
   gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-person-animated.glb', g => setupLocomotion(g, 'RESPALDO'), undefined, () => {});
@@ -217,7 +217,7 @@ let jumpQueued = false;
 document.getElementById('jump').addEventListener('pointerdown', e => { e.preventDefault(); jumpQueued = true; });
 
 const clock = new THREE.Clock();
-const camOffset = new THREE.Vector3(0, 3.4, 7.5);
+const camOffset = new THREE.Vector3(0, 3.6, -8.5);
 camera.position.set(player.x + camOffset.x, camOffset.y, player.z + camOffset.z);
 document.addEventListener('contextmenu', e => e.preventDefault());
 
@@ -234,7 +234,7 @@ function animate() {
   resolveWallCollisions(player);
   resolveGround(player);
 
-  if (!gateClosed && player.x > 12 && player.x < 30 && player.z > -26 && player.z < -14) {
+  if (!gateClosed && player.x > 30 && player.x < 42 && player.z > 56 && player.z < 68) {
     closePassageGate(mapData);
     gateClosed = true;
     document.getElementById('hint').textContent = 'La reja cae... algo anda mal';
