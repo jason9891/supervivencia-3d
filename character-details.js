@@ -6,7 +6,7 @@ const cleanName = value => (value || '')
 
 /**
  * Detalle facial aislado. No modifica materiales, malla original, rig ni animaciones.
- * Solo crea un plano en el lado frontal local -Z (rotación PI), nunca en cuatro direcciones.
+ * Solo crea un plano facial en el lado frontal local +Z; nunca duplica la cara en varias direcciones.
  */
 export function addHeadFaceTexture(model, modelScale = 1) {
   let head = null;
@@ -87,8 +87,8 @@ export function addHeadFaceTexture(model, modelScale = 1) {
   });
   const face = new THREE.Mesh(geometry, material);
   face.name = 'CharacterFaceDetails';
-  face.position.set(0, 0.105 * inv, -0.115 * inv);
-  face.rotation.y = Math.PI;
+  face.position.set(0, 0.105 * inv, 0.115 * inv);
+  face.rotation.y = 0;
   face.renderOrder = 5;
   face.frustumCulled = false;
   head.add(face);
