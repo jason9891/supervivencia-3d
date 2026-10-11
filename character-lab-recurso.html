@@ -49,9 +49,9 @@ function normalizeName(s){return (s||'').normalize('NFD').replace(/[\\u0300-\\u0
 function setupAnimations(model,clips){
  mixer=clips.length?new THREE.AnimationMixer(model):null;
  const groups={
-  idle:clips.find(x=>/\\b(idle|stand|standing|wait|rest|breath|neutral|quieto|parado)\\b/i.test(normalizeName(x.name))),
-  walk:clips.find(x=>/\\b(walk|walking|walkcycle|caminar|paseo)\\b/i.test(normalizeName(x.name))),
-  run:clips.find(x=>/\\b(run|running|sprint|jog|correr|trot)\\b/i.test(normalizeName(x.name)))
+  idle:clips.find(x=>/\b(idle|stand|standing|wait|rest|breath|neutral|quieto|parado)\b/i.test(normalizeName(x.name))),
+  walk:clips.find(x=>/\b(walk|walking|walkcycle|caminar|paseo)\b/i.test(normalizeName(x.name))),
+  run:clips.find(x=>/\b(run|running|sprint|jog|correr|trot)\b/i.test(normalizeName(x.name)))
  };
  for(const key of Object.keys(groups)){
   const clip=groups[key],btn=animButtons[key];
