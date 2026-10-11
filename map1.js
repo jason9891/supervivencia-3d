@@ -1,16 +1,19 @@
 // map1.js — Mapa 1: El Regreso
-// Inicio largo tipo mapa del enano (Blade). Patio central.
-// Biblioteca en ala oeste (no en el camino al jefe).
-// Gradas sólidas, pegadas a la pared, con material de piedra.
+// Inicio con desnivel: río bajo → camino de piedras enormes → reja → patio elevado.
+// Sistema de plataformas (alturas) para no ser un mundo plano.
 
 import * as THREE from 'three';
 
 export const MAP1_NAME = 'El Regreso';
 
+/** Nivel del patio / interior del castillo */
+export const CASTLE_Y = 2.6;
+
 export const ZONES = {
-  approach:  { minX: -7,  maxX: 7,  minZ: 28,  maxZ: 78 },
-  gate:      { minX: -8,  maxX: 8,  minZ: 18,  maxZ: 30 },
-  courtyard: { minX: -18, maxX: 18, minZ: -16, maxZ: 18 },
+  river:     { minX: -14, maxX: 14, minZ: 88,  maxZ: 115 },
+  approach:  { minX: -10, maxX: 10, minZ: 55,  maxZ: 90 },
+  gate:      { minX: -9,  maxX: 9,  minZ: 42,  maxZ: 58 },
+  courtyard: { minX: -18, maxX: 18, minZ: -16, maxZ: 42 },
   easthall:  { minX: 16,  maxX: 34, minZ: -12, maxZ: 12 },
   library:   { minX: -38, maxX: -16, minZ: -16, maxZ: 16 },
   southhall: { minX: -12, maxX: 12, minZ: -40, maxZ: -16 },
@@ -29,13 +32,53 @@ export const STORY_PAGE = {
   text: `...los sellos se debilitan.\nLo que creíamos leyenda ha vuelto a caminar.\nSi lees esto, ya es demasiado tarde para huir.\nBusca las seis runas. Solo ellas pueden volver a dormir al que no debe despertar.`,
 };
 
-const PAGE_POS = new THREE.Vector3(-28, 0.95, -4);
+const PAGE_POS = new THREE.Vector3(-28, CASTLE_Y + 0.95, -4);
 
 const PLAYER_R = 0.4;
 export const WALLS = [];
+/** Plataformas caminables: { minX, maxX, minZ, maxZ, y } */
+export const PLATFORMS = [];
 
 function addWall(minX, maxX, minZ, maxZ) {
   WALLS.push({ minX, maxX, minZ, maxZ });
+}
+
+function addPlatform(minX, maxX, minZ, maxZ, y) {
+  PLATFORMS.push({ minX, maxX, minZ, maxZ, y });
+}
+
+/** Altura del suelo bajo (x,z). 0 si no hay plataforma. */
+export function getGroundHeight(x, z) {
+  let best = -Infinity;
+  for (const p of PLATFORMS) {
+    if (x >= p.minX && x <= p.maxX && z >= p.minZ && z <= p.maxZ) {
+      if (p.y > best) best = p.y;
+    }
+  }
+  return best === -Infinity ? 0 : best;
+}
+
+/**
+ * Ajusta player.y al suelo más alto bajo los pies.
+ * Respeta saltos (solo aterriza si está cayendo cerca del suelo).
+ */
+export function resolveGround(player) {
+  const gy = getGroundHeight(player.x, player.z);
+  const feet = player.y;
+  // Si está por encima del suelo y cayendo (o casi en el suelo), aterriza
+  if (feet <= gy + 0.35) {
+    if (player.vy <= 0.5) {
+      player.y = gy;
+      player.vy = 0;
+      player.grounded = true;
+      player.jumping = false;
+      player.avx = 0;
+      player.avz = 0;
+    }
+  } else if (player.grounded && Math.abs(feet - gy) > 0.5) {
+    // Se fue del borde de una plataforma
+    player.grounded = false;
+  }
 }
 
 export function resolveWallCollisions(player) {
@@ -68,6 +111,7 @@ export function resolveWallCollisions(player) {
 
 export function buildMap1(scene) {
   WALLS.length = 0;
+  PLATFORMS.length = 0;
 
   const mat = (color, roughness = 0.84, metalness = 0) =>
     new THREE.MeshStandardMaterial({ color, roughness, metalness });
@@ -81,6 +125,10 @@ export function buildMap1(scene) {
   const moss  = mat(0x4a6b42, 0.92);
   const tile  = mat(0x555a52, 0.9);
   const stepMat = mat(0x5a6058, 0.88);
+  const rockMat = mat(0x5a5850, 0.95);
+  const water = mat(0x2a4a5a, 0.3, 0.15);
+  water.transparent = true;
+  water.opacity = 0.75;
 
   function box(w, h, d, material, x, y, z, solid = false) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
@@ -105,185 +153,87 @@ export function buildMap1(scene) {
     return m;
   }
 
-  /** Escalera pegada a la pared: peldaños sólidos de piedra (no se atraviesan). */
-  function buildStairs(baseX, baseZ, dir = 1) {
-    const stepW = 2.4;
-    const stepD = 0.85;
-    const stepH = 0.38;
-    const steps = 8;
-    for (let i = 0; i < steps; i++) {
-      const h = stepH * (i + 1);
-      const z = baseZ + dir * (i * stepD + stepD / 2);
-      box(stepW, h, stepD, stepMat, baseX, h / 2, z, true);
-    }
-    const railX = baseX + stepW / 2 + 0.08;
-    box(0.12, 1.1, steps * stepD, iron, railX, 1.0, baseZ + dir * (steps * stepD) / 2);
+  /** Roca grande irregular (varias cajas/cilindros apilados) */
+  function bigRock(x, y, z, scale = 1) {
+    const s = scale;
+    cyl(0.9 * s, 1.1 * s, 1.4 * s, rockMat, x, y + 0.7 * s, z, true);
+    box(1.6 * s, 1.0 * s, 1.3 * s, dark, x + 0.3 * s, y + 0.5 * s, z - 0.2 * s, true);
+    cyl(0.5 * s, 0.6 * s, 0.9 * s, moss, x - 0.4 * s, y + 0.45 * s, z + 0.3 * s, true);
+  }
+
+  /** Peldaño caminable (visual + plataforma + colisión de borde) */
+  function stepPad(w, d, surfaceY, x, z, thickness = 0.45) {
+    box(w, thickness, d, stepMat, x, surfaceY - thickness / 2, z, false);
+    addPlatform(x - w / 2, x + w / 2, z - d / 2, z + d / 2, surfaceY);
+    // Bordillos laterales para no caer tan fácil
+    addWall(x - w / 2 - 0.15, x - w / 2, z - d / 2, z + d / 2);
+    addWall(x + w / 2, x + w / 2 + 0.15, z - d / 2, z + d / 2);
+  }
+
+  function floorPad(w, d, surfaceY, x, z, material = floor) {
+    const th = 0.4;
+    box(w, th, d, material, x, surfaceY - th / 2, z, false);
+    addPlatform(x - w / 2, x + w / 2, z - d / 2, z + d / 2, surfaceY);
   }
 
   // =====================================================================
-  // 1. PASILLO LARGO (estilo inicio del enano)
+  // 0. RÍO / LAGO BAJO (inicio)
   // =====================================================================
-  box(11, 0.4, 52, floor, 0, -0.2, 53);
-  box(1.3, 6.0, 52, dark, -5.8, 2.8, 53, true);
-  box(1.3, 6.0, 52, dark,  5.8, 2.8, 53, true);
-  for (let z = 72; z >= 32; z -= 5) {
-    cyl(0.28, 0.32, 5.2, stone, -3.6, 2.4, z, true);
-    cyl(0.28, 0.32, 5.2, stone,  3.6, 2.4, z, true);
+  // Agua (no caminable)
+  const riverMesh = new THREE.Mesh(new THREE.PlaneGeometry(40, 28), water);
+  riverMesh.rotation.x = -Math.PI / 2;
+  riverMesh.position.set(0, -0.15, 102);
+  scene.add(riverMesh);
+  // Orilla caminable baja
+  floorPad(16, 12, 0.0, 0, 108, dirt);
+  floorPad(14, 8, 0.0, 0, 98, dirt);
+  // Piedras enormes a los lados del río
+  bigRock(-7, 0, 106, 1.4);
+  bigRock(7.5, 0, 104, 1.3);
+  bigRock(-8, 0, 96, 1.1);
+  bigRock(8, 0, 97, 1.2);
+  bigRock(-6, 0, 112, 1.0);
+  bigRock(6.5, 0, 110, 0.95);
+  // Vegetación / musgo en orilla
+  cyl(0.2, 0.25, 0.8, moss, -3, 0.3, 105);
+  cyl(0.18, 0.22, 0.7, moss, 4, 0.25, 100);
+
+  // =====================================================================
+  // 1. CAMINO ASCENDENTE con piedras enormes (desnivel)
+  //    Sube de y=0 → CASTLE_Y por tramos
+  // =====================================================================
+  const climbSteps = [
+    // [z center, surfaceY, width]
+    [92, 0.35, 10],
+    [88, 0.7, 9.5],
+    [84, 1.05, 9],
+    [80, 1.4, 9],
+    [76, 1.75, 8.5],
+    [72, 2.1, 8.5],
+    [68, 2.35, 9],
+    [64, 2.5, 10],
+    [60, CASTLE_Y, 11],
+  ];
+  for (const [z, y, w] of climbSteps) {
+    stepPad(w, 4.2, y, 0, z, 0.5);
   }
-  box(1.2, 0.4, 0.9, dark, -1.5, 0.15, 60);
-  box(0.9, 0.35, 1.1, stone, 1.8, 0.12, 48);
-  box(1.4, 0.3, 0.8, wood, -0.5, 0.1, 40);
-  cyl(0.22, 0.26, 1.0, moss, 2.0, 0.4, 55, true);
-
-  // Reja CERRADA solo DETRÁS del spawn (no bloquea el avance)
-  box(11, 5.5, 0.5, iron, 0, 2.5, 78.5, true);
-  for (let i = -4; i <= 4; i += 1.1) {
-    box(0.12, 5.0, 0.12, iron, i, 2.4, 78.4);
-  }
-
-  // =====================================================================
-  // 2. PÓRTICO / paso abierto al patio (la reja del pórtico NO bloquea)
-  // =====================================================================
-  box(14, 0.4, 8, floor, 0, -0.2, 24);
-  box(1.4, 5.5, 8, dark, -6.5, 2.5, 24, true);
-  box(1.4, 5.5, 8, dark,  6.5, 2.5, 24, true);
-  box(14, 1.2, 1.3, dark, 0, 5.4, 27.2);
-  // Reja visual semi-abierta / ya pasada (sin colisión en el centro)
-  const gate = box(3, 5.0, 0.35, iron, -4.5, 2.4, 27.3, true); // hoja izquierda
-  gate.name = 'mainGate';
-  box(3, 5.0, 0.35, iron, 4.5, 2.4, 27.3, true); // hoja derecha
-  // Centro libre para pasar
+  // Piedras enormes flanqueando el camino
+  bigRock(-6.5, 0.3, 90, 1.3);
+  bigRock(6.8, 0.2, 86, 1.4);
+  bigRock(-7, 0.5, 78, 1.5);
+  bigRock(7.2, 0.6, 74, 1.35);
+  bigRock(-6.8, 0.8, 68, 1.4);
+  bigRock(7, 1.0, 65, 1.3);
+  bigRock(-7.5, 1.2, 58, 1.2);
+  bigRock(7.5, 1.3, 56, 1.25);
 
   // =====================================================================
-  // 3. PATIO CENTRAL
+  // 2. REJA (nivel del castillo) — se cierra detrás
   // =====================================================================
-  box(34, 0.35, 32, dirt, 0, -0.17, 0);
-  cyl(2.3, 2.4, 0.45, stone, 0, 0.12, 0, true);
-  cyl(1.5, 1.6, 0.65, dark, 0, 0.5, 0, true);
-  cyl(0.32, 0.38, 1.1, stone, 0, 1.15, 0, true);
-
-  box(9, 2.0, 0.85, stone, -11, 0.9, 15.5, true);
-  box(9, 2.0, 0.85, stone,  11, 0.9, 15.5, true);
-  box(9, 2.0, 0.85, stone, -11, 0.9, -15.5, true);
-  box(9, 2.0, 0.85, stone,  11, 0.9, -15.5, true);
-  box(0.85, 2.0, 9, stone, -16.5, 0.9, -9, true);
-  box(0.85, 2.0, 9, stone, -16.5, 0.9,  9, true);
-  box(0.85, 2.0, 9, stone,  16.5, 0.9, -9, true);
-  box(0.85, 2.0, 9, stone,  16.5, 0.9,  9, true);
-
-  cyl(2.0, 2.2, 4.2, stone, -15, 1.9, 14, true);
-  cyl(2.0, 2.2, 4.2, stone,  15, 1.9, 14, true);
-  cyl(2.0, 2.2, 4.2, stone, -15, 1.9, -14, true);
-  cyl(2.0, 2.2, 4.2, stone,  15, 1.9, -14, true);
-
-  box(1.5, 0.45, 1.0, dark, -7, 0.18, 5);
-  box(1.2, 0.35, 0.9, stone, 6, 0.12, -4);
-  box(1.8, 0.3, 0.8, wood, -3, 0.1, -8);
-  cyl(0.25, 0.3, 1.2, moss, 4, 0.5, 7, true);
-
-  const herbs = [];
-  function createHerb(x, z) {
-    const group = new THREE.Group();
-    const leafMat = mat(0x5a9a48, 0.85);
-    for (let i = 0; i < 3; i++) {
-      const leaf = new THREE.Mesh(
-        new THREE.ConeGeometry(0.14 + Math.random() * 0.05, 0.26 + Math.random() * 0.08, 5),
-        leafMat
-      );
-      leaf.position.set((Math.random() - 0.5) * 0.18, 0.13, (Math.random() - 0.5) * 0.18);
-      leaf.rotation.z = (Math.random() - 0.5) * 0.4;
-      leaf.castShadow = true;
-      group.add(leaf);
-    }
-    group.position.set(x, 0, z);
-    group.userData = { type: 'herb', heal: 8, collected: false };
-    scene.add(group);
-    herbs.push(group);
-  }
-  [[-9, 6], [8, 4], [-4, -9], [5, -7], [-11, -2], [10, 9], [-2, 10], [3, -11]].forEach(([x, z]) => createHerb(x, z));
-
-  // =====================================================================
-  // 4. ALA ESTE
-  // =====================================================================
-  box(14, 0.4, 22, floor, 24, -0.2, 0);
-  box(1.1, 4.6, 22, dark, 30.5, 2.1, 0, true);
-  box(14, 4.6, 1.1, dark, 24, 2.1, 10.5, true);
-  box(14, 4.6, 1.1, dark, 24, 2.1, -10.5, true);
-  box(14, 0.35, 22, dark, 24, 4.5, 0);
-  cyl(0.32, 0.36, 3.8, stone, 20, 1.8, 4, true);
-  cyl(0.32, 0.36, 3.8, stone, 20, 1.8, -4, true);
-  box(2.4, 0.5, 1.0, wood, 26, 0.25, -2);
-
-  // =====================================================================
-  // 5. BIBLIOTECA — OESTE (exploración, no camino al jefe)
-  // =====================================================================
-  box(18, 0.4, 28, tile, -26, -0.2, 0);
-  box(1.2, 6.5, 28, dark, -34.5, 3.0, 0, true);
-  box(18, 6.5, 1.2, dark, -26, 3.0, 13.5, true);
-  box(18, 6.5, 1.2, dark, -26, 3.0, -13.5, true);
-  box(18, 0.35, 28, dark, -26, 6.5, 0);
-
-  // Mezzanine contra el muro oeste
-  box(5.5, 0.32, 18, wood, -30.5, 3.4, 0);
-  box(0.12, 0.9, 18, iron, -27.7, 3.95, 0);
-
-  // Gradas: junto al muro norte, subiendo hacia el mezzanine
-  buildStairs(-30.5, 8.5, -1);
-
-  box(0.55, 3.0, 10, wood, -33.5, 1.4, 4);
-  box(0.55, 3.0, 8, wood, -33.5, 1.4, -6);
-  box(8, 3.0, 0.55, wood, -28, 1.4, -12.5);
-  box(8, 3.0, 0.55, wood, -28, 1.4, 12.5);
-  const s1 = box(4.5, 0.3, 1.0, wood, -22, 0.35, 3);
-  s1.rotation.z = 0.4;
-  const s2 = box(3.8, 0.28, 0.9, wood, -24, 0.3, -7);
-  s2.rotation.z = -0.5;
-  box(0.35, 0.12, 0.28, mat(0x6a4030), -23, 0.2, 1);
-  box(0.3, 0.1, 0.25, mat(0x3a4a5a), -25, 0.18, -5);
-
-  const pageMesh = box(0.4, 0.03, 0.5, mat(0xf0e6d0, 0.6), PAGE_POS.x, PAGE_POS.y, PAGE_POS.z);
-  pageMesh.rotation.x = -Math.PI / 2 + 0.12;
-  pageMesh.userData = { type: 'storyPage', read: false };
-
-  // =====================================================================
-  // 6. SALÓN SUR → jefe (camino principal, sin biblioteca)
-  // =====================================================================
-  box(20, 0.4, 22, floor, 0, -0.2, -28);
-  box(1.2, 4.8, 22, dark, -10, 2.2, -28, true);
-  box(1.2, 4.8, 22, dark,  10, 2.2, -28, true);
-  box(20, 0.3, 8, dark, 0, 4.6, -24);
-  box(20, 0.3, 6, dark, 0, 4.6, -32);
-  cyl(0.3, 0.35, 2.0, stone, -4, 0.9, -26, true);
-  box(1.6, 0.45, 1.1, dark, 3, 0.18, -30);
-
-  // =====================================================================
-  // 7. SALA DEL JEFE
-  // =====================================================================
-  box(28, 0.45, 22, tile, 0, -0.22, -50);
-  box(1.3, 6.5, 22, dark, -14, 3.0, -50, true);
-  box(1.3, 6.5, 22, dark,  14, 3.0, -50, true);
-  box(5, 6.5, 1.2, dark, -9, 3.0, -39.5, true);
-  box(5, 6.5, 1.2, dark,  9, 3.0, -39.5, true);
-  box(28, 6.5, 1.3, dark, 0, 3.0, -60.5, true);
-  box(3.5, 1.3, 1.0, iron, 0, 5.8, -60.2);
-  box(28, 0.35, 22, dark, 0, 6.5, -50);
-  cyl(0.45, 0.5, 6.0, stone, -7, 2.8, -48, true);
-  cyl(0.45, 0.5, 6.0, stone,  7, 2.8, -48, true);
-  cyl(0.4, 0.45, 5.5, stone, -7, 2.5, -55, true);
-  cyl(0.4, 0.45, 5.5, stone,  7, 2.5, -55, true);
-
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(160, 180),
-    mat(0x141814, 1)
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.set(0, -0.5, 0);
-  ground.receiveShadow = true;
-  scene.add(ground);
-
-  return { gate, herbs, pageMesh, pagePos: PAGE_POS.clone() };
-}
-
-export function distanceToPage(x, y, z) {
-  return Math.hypot(x - PAGE_POS.x, y - PAGE_POS.y, z - PAGE_POS.z);
-}
+  floorPad(14, 10, CASTLE_Y, 0, 50, floor);
+  // Muros del pórtico
+  box(1.5, 5.5, 10, dark, -6.5, CASTLE_Y + 2.5, 50, true);
+  box(1.5, 5.5, 10, dark,  6.5, CASTLE_Y + 2.5, 50, true);
+  box(14, 1.2, 1.4, dark, 0, CASTLE_Y + 5.2, 54);
+  // Hojas de reja: centro ABIERTO al pasar; tras pasar, muro sólido detrás del spawn del patio
+  // Para 
