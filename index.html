@@ -43,6 +43,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
 import { createPlayer, stepPlayer, WALK_SPEED, RUN_SPEED } from './course.js';
+import { addHeadFaceTexture } from './character-details.js';
 import {
   buildMap1, getCurrentZone, STORY_PAGE,
   distanceToPage, distanceToKey, distanceToLever, distanceToFood,
@@ -148,12 +149,15 @@ function setupLocomotion(gltf, label) {
   const bounds = new THREE.Box3().setFromObject(model);
   const size = bounds.getSize(new THREE.Vector3());
   const center = bounds.getCenter(new THREE.Vector3());
+  let characterScale = 1;
   if (size.y > 0) {
-    const f = 1.82 / size.y;
-    model.scale.setScalar(f);
-    model.position.set(-center.x * f, -bounds.min.y * f, -center.z * f);
+    characterScale = 1.82 / size.y;
+    model.scale.setScalar(characterScale);
+    model.position.set(-center.x * characterScale, -bounds.min.y * characterScale, -center.z * characterScale);
   }
   model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  // Detalles de rostro aislados: una sola cara al frente, sin alterar rig ni animaciones.
+  addHeadFaceTexture(model, characterScale);
   locomotionActor.add(model);
   locomotionMixer = new THREE.AnimationMixer(model);
   const clips = gltf.animations || [];
