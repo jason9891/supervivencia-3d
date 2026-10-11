@@ -1,38 +1,51 @@
 # Módulos del proyecto (unión sin sobrescribir)
 
-## Qué hay en main ahora
+## Estado de main
 
-| Archivo | Rol | Origen |
-|---------|-----|--------|
-| `map1.js` | Mapa El Regreso (croquis) | trabajo de mapa |
-| `course.js` | Movimiento + `freeMap` | mapa |
-| `index.html` | Entrada del juego (mapa + personaje) | restaurado; **no** importa combate aún |
-| `combat.js` | Reglas de combate, armas, enemigos | `respaldo-combate-patio` |
-| `equipment.js` | Visual de equipo sobre huesos | `respaldo-combate-patio` |
-| `session.js` | Une course + combat | `respaldo-combate-patio` |
-| `banco.js` | Banco de pruebas de equipo | `combate-en-mapa` |
-| `combat-addon.js` | UI inventario / muñecos | `combate-en-mapa` |
+| Archivo | En main | Origen |
+|---------|---------|--------|
+| `map1.js` | sí (croquis) | mapa — **no sobrescribir** |
+| `course.js` | sí (`freeMap`) | mapa — **no sobrescribir** |
+| `index.html` | sí (mapa + UAL) | restaurado — **no sobrescribir** desde combate |
+| `equipment.js` | sí | `respaldo-combate-patio` |
+| `banco.js` | sí | `combate-en-mapa` |
+| `combat.js` | en rama | `respaldo-combate-patio` |
+| `session.js` | en rama | `respaldo-combate-patio` |
+| `combat-addon.js` | en rama | `combate-en-mapa` |
 
-## Cómo enganchar combate sin tocar el mapa
+## Completar la unión (solo archivos nuevos, sin tocar mapa)
 
-En `index.html` (solo cuando quieras):
+En tu máquina:
+
+```bash
+git checkout main
+git pull
+# Copia módulos de combate SIN cambiar index ni map1:
+git checkout respaldo-combate-patio -- combat.js session.js
+git checkout combate-en-mapa -- combat-addon.js
+git add combat.js session.js combat-addon.js
+git commit -m "Add remaining combat modules (no index/map overwrite)"
+git push
+```
+
+## Enganchar combate cuando quieras (opcional)
+
+`combat-addon.js` no modifica el mapa ni el personaje: solo lee posición y añade UI.
 
 ```js
 import { createCombatAddon } from './combat-addon.js';
-// tras crear scene, camera, player:
 const combat = createCombatAddon({ THREE, scene, camera, player, onSwing: () => {} });
-// en el bucle:
-// if (attackPressed) combat.pressAttack(f, side);
-// combat.update(dt);
+// en el bucle: combat.pressAttack(f, side); combat.update(dt);
 ```
-
-`combat-addon.js` está pensado para **no modificar** el mapa ni el personaje: solo lee posición y añade UI/muñecos.
 
 ## Ramas
 
-- `main` — unión modular (este estado)
-- `mapa-el-regreso` — solo mapa
-- `respaldo-combate-patio` / `combate-en-mapa` / `combate-blade` — historial de combate
-- `animaciones-ual` — animaciones personaje
+| Rama | Uso |
+|------|-----|
+| `main` | unión estable |
+| `mapa-el-regreso` | solo mapa |
+| `respaldo-combate-patio` | combate + patio |
+| `combate-en-mapa` | combate + addon |
+| `animaciones-ual` | personaje / animaciones |
 
-No editar `map1.js` desde ramas de combate ni `combat*.js` desde ramas de mapa.
+**Regla:** no editar `map1.js` desde ramas de combate; no editar `combat*.js` / `equipment.js` desde ramas de mapa.
