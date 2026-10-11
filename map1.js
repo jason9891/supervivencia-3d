@@ -1,21 +1,20 @@
 // map1.js — Mapa 1: El Regreso
-// Layout inspirado en fortaleza con patio central.
-// La reja queda DETRÁS del spawn (ya cerrada); el jugador explora el patio y los salones conectados.
+// Inicio largo tipo mapa del enano (Blade). Patio central.
+// Biblioteca en ala oeste (no en el camino al jefe).
+// Gradas sólidas, pegadas a la pared, con material de piedra.
 
 import * as THREE from 'three';
 
 export const MAP1_NAME = 'El Regreso';
 
-/** Zonas (AABB en XZ). Origen = centro del patio. */
 export const ZONES = {
-  courtyard: { minX: -18, maxX: 18, minZ: -18, maxZ: 18 },
-  gate:      { minX: -8,  maxX: 8,  minZ: 16,  maxZ: 28 },
-  northhall: { minX: -16, maxX: 16, minZ: 16,  maxZ: 36 },
-  westhall:  { minX: -36, maxX: -16, minZ: -14, maxZ: 14 },
-  easthall:  { minX: 16,  maxX: 36, minZ: -14, maxZ: 14 },
-  library:   { minX: -14, maxX: 14, minZ: -40, maxZ: -16 },
-  southwing: { minX: -12, maxX: 12, minZ: -52, maxZ: -38 },
-  boss:      { minX: -16, maxX: 16, minZ: -72, maxZ: -50 },
+  approach:  { minX: -7,  maxX: 7,  minZ: 28,  maxZ: 78 },
+  gate:      { minX: -8,  maxX: 8,  minZ: 18,  maxZ: 30 },
+  courtyard: { minX: -18, maxX: 18, minZ: -16, maxZ: 18 },
+  easthall:  { minX: 16,  maxX: 34, minZ: -12, maxZ: 12 },
+  library:   { minX: -38, maxX: -16, minZ: -16, maxZ: 16 },
+  southhall: { minX: -12, maxX: 12, minZ: -40, maxZ: -16 },
+  boss:      { minX: -16, maxX: 16, minZ: -64, maxZ: -38 },
 };
 
 export function getCurrentZone(x, z) {
@@ -30,8 +29,8 @@ export const STORY_PAGE = {
   text: `...los sellos se debilitan.\nLo que creíamos leyenda ha vuelto a caminar.\nSi lees esto, ya es demasiado tarde para huir.\nBusca las seis runas. Solo ellas pueden volver a dormir al que no debe despertar.`,
 };
 
-// Página en la biblioteca (sur del patio)
-const PAGE_POS = new THREE.Vector3(-2.5, 0.95, -28);
+// Página en la biblioteca (ala OESTE)
+const PAGE_POS = new THREE.Vector3(-28, 0.95, -4);
 
 const PLAYER_R = 0.4;
 export const WALLS = [];
@@ -82,6 +81,7 @@ export function buildMap1(scene) {
   const iron  = mat(0x3a3a40, 0.4, 0.55);
   const moss  = mat(0x4a6b42, 0.92);
   const tile  = mat(0x555a52, 0.9);
+  const stepMat = mat(0x5a6058, 0.88); // gradas: piedra visible
 
   function box(w, h, d, material, x, y, z, solid = false) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
@@ -106,73 +106,103 @@ export function buildMap1(scene) {
     return m;
   }
 
-  // =====================================================================
-  // PATIO CENTRAL (abierto, espacio muerto amplio)
-  // =====================================================================
-  box(36, 0.35, 36, dirt, 0, -0.17, 0);
-
-  // Fuente octogonal al centro (decorativa + colisión ligera)
-  cyl(2.4, 2.5, 0.5, stone, 0, 0.15, 0, true);
-  cyl(1.6, 1.7, 0.7, dark, 0, 0.55, 0, true);
-  cyl(0.35, 0.4, 1.2, stone, 0, 1.2, 0, true);
-
-  // =====================================================================
-  // REJA AL NORTE (DETRÁS del spawn — ya cerrada, no bloquea el avance)
-  // El jugador aparece mirando al sur, con la reja a su espalda.
-  // =====================================================================
-  // Suelo del pórtico norte
-  box(14, 0.4, 10, floor, 0, -0.2, 22);
-  // Muros del pórtico
-  box(1.4, 5.5, 10, dark, -6.5, 2.5, 22, true);
-  box(1.4, 5.5, 10, dark,  6.5, 2.5, 22, true);
-  // Dintel
-  box(14, 1.2, 1.4, dark, 0, 5.5, 26.5);
-  // Reja CERRADA detrás (z alto) — no impide explorar el patio
-  const gate = box(12, 5.0, 0.4, iron, 0, 2.4, 26.8, true);
-  gate.name = 'mainGate';
-  for (let i = -4.5; i <= 4.5; i += 1.15) {
-    box(0.12, 4.6, 0.12, iron, i, 2.3, 26.75);
+  /** Escalera realista pegada a la pared (peldaños sólidos, no se atraviesan). */
+  function buildStairs(baseX, baseZ, dir = 1) {
+    // dir: 1 = sube hacia +Z, -1 hacia -Z
+    // Pegada al muro oeste de la biblioteca (x negativo)
+    const stepW = 2.4;
+    const stepD = 0.85;
+    const stepH = 0.38;
+    const steps = 8;
+    for (let i = 0; i < steps; i++) {
+      const h = stepH * (i + 1);
+      const z = baseZ + dir * (i * stepD + stepD / 2);
+      // Peldaño sólido (colisión completa)
+      box(stepW, h, stepD, stepMat, baseX, h / 2, z, true);
+    }
+    // Barandilla lateral (hacia el centro de la sala)
+    const railX = baseX + stepW / 2 + 0.08;
+    box(0.12, 1.1, steps * stepD, iron, railX, 1.0, baseZ + dir * (steps * stepD) / 2);
   }
 
   // =====================================================================
-  // MUROS DEL PATIO (perímetro con huecos hacia los salones)
-  // Norte del patio (hacia reja): hueco central ya abierto
-  box(10, 2.2, 0.9, stone, -12, 1.0, 17.5, true);
-  box(10, 2.2, 0.9, stone,  12, 1.0, 17.5, true);
-  // Sur del patio (hacia biblioteca): hueco central
-  box(10, 2.2, 0.9, stone, -12, 1.0, -17.5, true);
-  box(10, 2.2, 0.9, stone,  12, 1.0, -17.5, true);
-  // Oeste del patio (hacia westhall): hueco
-  box(0.9, 2.2, 10, stone, -17.5, 1.0, -10, true);
-  box(0.9, 2.2, 10, stone, -17.5, 1.0,  10, true);
-  // Este del patio (hacia easthall): hueco
-  box(0.9, 2.2, 10, stone,  17.5, 1.0, -10, true);
-  box(0.9, 2.2, 10, stone,  17.5, 1.0,  10, true);
+  // 1. PASILLO LARGO DE APROXIMACIÓN (estilo inicio del enano en Blade)
+  //    Sin techo, estrecho, pilares rítmicos, mucho espacio muerto lineal.
+  //    z: 78 → 28
+  // =====================================================================
+  box(11, 0.4, 52, floor, 0, -0.2, 53);
+  box(1.3, 6.0, 52, dark, -5.8, 2.8, 53, true);
+  box(1.3, 6.0, 52, dark,  5.8, 2.8, 53, true);
+  // Pilares a lo largo (ritmo + atmósfera)
+  for (let z = 72; z >= 32; z -= 5) {
+    cyl(0.28, 0.32, 5.2, stone, -3.6, 2.4, z, true);
+    cyl(0.28, 0.32, 5.2, stone,  3.6, 2.4, z, true);
+  }
+  // Escombros ocasionales en el pasillo
+  box(1.2, 0.4, 0.9, dark, -1.5, 0.15, 60);
+  box(0.9, 0.35, 1.1, stone, 1.8, 0.12, 48);
+  box(1.4, 0.3, 0.8, wood, -0.5, 0.1, 40);
+  cyl(0.22, 0.26, 1.0, moss, 2.0, 0.4, 55, true);
 
-  // Torres de esquina del patio (como en el mapa de referencia)
-  cyl(2.2, 2.4, 4.5, stone, -16, 2.0, 16, true);
-  cyl(2.2, 2.4, 4.5, stone,  16, 2.0, 16, true);
-  cyl(2.2, 2.4, 4.5, stone, -16, 2.0, -16, true);
-  cyl(2.2, 2.4, 4.5, stone,  16, 2.0, -16, true);
+  // =====================================================================
+  // 2. REJA (al final del pasillo; el jugador spawnea YA DENTRO del patio)
+  // =====================================================================
+  box(14, 0.4, 8, floor, 0, -0.2, 24);
+  box(1.4, 5.5, 8, dark, -6.5, 2.5, 24, true);
+  box(1.4, 5.5, 8, dark,  6.5, 2.5, 24, true);
+  box(14, 1.2, 1.3, dark, 0, 5.4, 27.2);
+  const gate = box(12, 5.0, 0.4, iron, 0, 2.4, 27.5, true);
+  gate.name = 'mainGate';
+  for (let i = -4.5; i <= 4.5; i += 1.15) {
+    box(0.12, 4.6, 0.12, iron, i, 2.3, 27.45);
+  }
 
-  // Escombros / espacio muerto en el patio
-  box(1.6, 0.5, 1.1, dark, -8, 0.2, 6);
-  box(1.3, 0.4, 1.0, stone, 7, 0.15, -5);
-  box(2.0, 0.35, 0.9, wood, -4, 0.15, -9);
-  cyl(0.28, 0.32, 1.3, moss, 5, 0.55, 8, true);
-  cyl(0.25, 0.3, 1.1, moss, -6, 0.45, -7, true);
+  // =====================================================================
+  // 3. PATIO CENTRAL
+  // =====================================================================
+  box(34, 0.35, 32, dirt, 0, -0.17, 0);
 
-  // Hierbas en el patio
+  // Fuente central
+  cyl(2.3, 2.4, 0.45, stone, 0, 0.12, 0, true);
+  cyl(1.5, 1.6, 0.65, dark, 0, 0.5, 0, true);
+  cyl(0.32, 0.38, 1.1, stone, 0, 1.15, 0, true);
+
+  // Muros del patio con huecos
+  // Norte (hacia reja): hueco
+  box(9, 2.0, 0.85, stone, -11, 0.9, 15.5, true);
+  box(9, 2.0, 0.85, stone,  11, 0.9, 15.5, true);
+  // Sur (hacia camino del jefe): hueco
+  box(9, 2.0, 0.85, stone, -11, 0.9, -15.5, true);
+  box(9, 2.0, 0.85, stone,  11, 0.9, -15.5, true);
+  // Oeste (hacia biblioteca): hueco
+  box(0.85, 2.0, 9, stone, -16.5, 0.9, -9, true);
+  box(0.85, 2.0, 9, stone, -16.5, 0.9,  9, true);
+  // Este (hacia ala este): hueco
+  box(0.85, 2.0, 9, stone,  16.5, 0.9, -9, true);
+  box(0.85, 2.0, 9, stone,  16.5, 0.9,  9, true);
+
+  // Torres de esquina
+  cyl(2.0, 2.2, 4.2, stone, -15, 1.9, 14, true);
+  cyl(2.0, 2.2, 4.2, stone,  15, 1.9, 14, true);
+  cyl(2.0, 2.2, 4.2, stone, -15, 1.9, -14, true);
+  cyl(2.0, 2.2, 4.2, stone,  15, 1.9, -14, true);
+
+  // Escombros / espacio muerto
+  box(1.5, 0.45, 1.0, dark, -7, 0.18, 5);
+  box(1.2, 0.35, 0.9, stone, 6, 0.12, -4);
+  box(1.8, 0.3, 0.8, wood, -3, 0.1, -8);
+  cyl(0.25, 0.3, 1.2, moss, 4, 0.5, 7, true);
+
   const herbs = [];
   function createHerb(x, z) {
     const group = new THREE.Group();
     const leafMat = mat(0x5a9a48, 0.85);
     for (let i = 0; i < 3; i++) {
       const leaf = new THREE.Mesh(
-        new THREE.ConeGeometry(0.15 + Math.random() * 0.05, 0.28 + Math.random() * 0.08, 5),
+        new THREE.ConeGeometry(0.14 + Math.random() * 0.05, 0.26 + Math.random() * 0.08, 5),
         leafMat
       );
-      leaf.position.set((Math.random() - 0.5) * 0.2, 0.14, (Math.random() - 0.5) * 0.2);
+      leaf.position.set((Math.random() - 0.5) * 0.18, 0.13, (Math.random() - 0.5) * 0.18);
       leaf.rotation.z = (Math.random() - 0.5) * 0.4;
       leaf.castShadow = true;
       group.add(leaf);
@@ -182,121 +212,91 @@ export function buildMap1(scene) {
     scene.add(group);
     herbs.push(group);
   }
-  [[-10, 8], [9, 5], [-5, -10], [6, -8], [-12, -3], [11, 10], [-3, 12], [4, -12]].forEach(([x, z]) => createHerb(x, z));
+  [[-9, 6], [8, 4], [-4, -9], [5, -7], [-11, -2], [10, 9], [-2, 10], [3, -11]].forEach(([x, z]) => createHerb(x, z));
 
   // =====================================================================
-  // SALÓN NORTE (atrás de la reja, vacío / abandonado) — con techo
+  // 4. ALA ESTE — salón vacío (exploración)
   // =====================================================================
-  box(28, 0.4, 14, tile, 0, -0.2, 28);
-  box(1.2, 5.0, 14, dark, -14, 2.3, 28, true);
-  box(1.2, 5.0, 14, dark,  14, 2.3, 28, true);
-  box(28, 5.0, 1.2, dark, 0, 2.3, 34.5, true); // fondo norte
-  box(28, 0.35, 14, dark, 0, 5.0, 28); // techo
-  // Props vacíos
-  box(3.0, 0.7, 1.2, wood, -5, 0.35, 30);
-  box(2.2, 0.5, 1.0, wood, 6, 0.25, 27);
+  box(14, 0.4, 22, floor, 24, -0.2, 0);
+  box(1.1, 4.6, 22, dark, 30.5, 2.1, 0, true);
+  box(14, 4.6, 1.1, dark, 24, 2.1, 10.5, true);
+  box(14, 4.6, 1.1, dark, 24, 2.1, -10.5, true);
+  box(14, 0.35, 22, dark, 24, 4.5, 0);
+  cyl(0.32, 0.36, 3.8, stone, 20, 1.8, 4, true);
+  cyl(0.32, 0.36, 3.8, stone, 20, 1.8, -4, true);
+  box(2.4, 0.5, 1.0, wood, 26, 0.25, -2);
 
   // =====================================================================
-  // ALA OESTE (salón vacío) — con techo
+  // 5. BIBLIOTECA — ALA OESTE (no está en el camino al jefe)
   // =====================================================================
-  box(16, 0.4, 26, floor, -26, -0.2, 0);
-  box(1.2, 4.8, 26, dark, -33.5, 2.2, 0, true);
-  box(16, 4.8, 1.2, dark, -26, 2.2, 12.5, true);
-  box(16, 4.8, 1.2, dark, -26, 2.2, -12.5, true);
-  // Este abierto al patio (sin muro en el hueco)
-  box(16, 0.35, 26, dark, -26, 4.7, 0); // techo
-  cyl(0.35, 0.4, 4.0, stone, -22, 1.9, 6, true);
-  cyl(0.35, 0.4, 4.0, stone, -22, 1.9, -6, true);
-  box(2.5, 0.6, 1.3, wood, -28, 0.3, 2);
-  box(1.8, 1.2, 0.7, iron, -30, 0.6, -5);
+  box(18, 0.4, 28, tile, -26, -0.2, 0);
+  box(1.2, 6.5, 28, dark, -34.5, 3.0, 0, true); // muro oeste
+  box(18, 6.5, 1.2, dark, -26, 3.0, 13.5, true); // norte
+  box(18, 6.5, 1.2, dark, -26, 3.0, -13.5, true); // sur
+  // Este abierto al patio (hueco ya en muro del patio)
+  box(18, 0.35, 28, dark, -26, 6.5, 0); // techo alto
 
-  // =====================================================================
-  // ALA ESTE (salón vacío) — con techo
-  // =====================================================================
-  box(16, 0.4, 26, floor, 26, -0.2, 0);
-  box(1.2, 4.8, 26, dark, 33.5, 2.2, 0, true);
-  box(16, 4.8, 1.2, dark, 26, 2.2, 12.5, true);
-  box(16, 4.8, 1.2, dark, 26, 2.2, -12.5, true);
-  box(16, 0.35, 26, dark, 26, 4.7, 0);
-  cyl(0.35, 0.4, 4.0, stone, 22, 1.9, 6, true);
-  cyl(0.35, 0.4, 4.0, stone, 22, 1.9, -6, true);
-  box(2.8, 0.55, 1.1, wood, 28, 0.28, -3);
-  box(1.4, 0.9, 0.8, stone, 30, 0.45, 5);
+  // Mezzanine solo en el lado oeste (contra el muro), realista
+  box(5.5, 0.32, 18, wood, -30.5, 3.4, 0);
+  // Barandilla del mezzanine (hacia el centro de la biblioteca)
+  box(0.12, 0.9, 18, iron, -27.7, 3.95, 0);
 
-  // =====================================================================
-  // BIBLIOTECA (sur del patio, dos niveles visuales) — con techo
-  // =====================================================================
-  box(24, 0.4, 22, tile, 0, -0.2, -28);
-  box(1.2, 7.0, 22, dark, -12, 3.3, -28, true);
-  box(1.2, 7.0, 22, dark,  12, 3.3, -28, true);
-  // Sur de la biblioteca (hacia southwing): hueco
-  box(7, 7.0, 1.2, dark, -8.5, 3.3, -38.5, true);
-  box(7, 7.0, 1.2, dark,  8.5, 3.3, -38.5, true);
-  // Norte ya conectado al patio por el hueco del muro del patio
-  box(24, 0.35, 22, dark, 0, 7.0, -28); // techo alto
+  // Gradas: pegadas al muro norte de la biblioteca, suben hacia el mezzanine oeste
+  // Base junto al muro norte, alineadas con el balcón
+  buildStairs(-30.5, 8.5, -1); // sube hacia el sur (hacia el centro del mezzanine)
 
-  // Mezzanine
-  box(4.5, 0.3, 16, wood, -7.5, 3.5, -28);
-  box(4.5, 0.3, 16, wood,  7.5, 3.5, -28);
-  box(0.12, 0.85, 16, iron, -5.3, 4.0, -28);
-  box(0.12, 0.85, 16, iron,  5.3, 4.0, -28);
-  // Escalera simple
-  box(2.0, 0.85, 1.3, stone, -7.5, 0.4, -20);
-  box(2.0, 1.7, 1.3, stone, -7.5, 0.8, -21.5);
-  box(2.0, 2.55, 1.3, stone, -7.5, 1.2, -23);
-  box(2.0, 3.4, 1.3, stone, -7.5, 1.6, -24.5);
-
-  // Estanterías y libros
-  const s1 = box(5.0, 0.3, 1.1, wood, -3.5, 0.35, -26);
-  s1.rotation.z = 0.45;
-  const s2 = box(4.2, 0.28, 1.0, wood, 3.2, 0.3, -32);
-  s2.rotation.z = -0.55;
-  box(0.55, 3.2, 7, wood, -10.5, 1.5, -30);
-  box(0.55, 3.2, 5, wood,  10.5, 1.5, -34);
-  box(0.35, 0.12, 0.28, mat(0x6a4030), -2, 0.2, -24);
-  box(0.3, 0.1, 0.25, mat(0x3a4a5a), 1.5, 0.18, -30);
+  // Estanterías en las paredes (no en medio del camino)
+  box(0.55, 3.0, 10, wood, -33.5, 1.4, 4);
+  box(0.55, 3.0, 8, wood, -33.5, 1.4, -6);
+  box(8, 3.0, 0.55, wood, -28, 1.4, -12.5);
+  box(8, 3.0, 0.55, wood, -28, 1.4, 12.5);
+  // Estanterías caídas (decoración, colisión suave)
+  const s1 = box(4.5, 0.3, 1.0, wood, -22, 0.35, 3);
+  s1.rotation.z = 0.4;
+  const s2 = box(3.8, 0.28, 0.9, wood, -24, 0.3, -7);
+  s2.rotation.z = -0.5;
+  box(0.35, 0.12, 0.28, mat(0x6a4030), -23, 0.2, 1);
+  box(0.3, 0.1, 0.25, mat(0x3a4a5a), -25, 0.18, -5);
 
   const pageMesh = box(0.4, 0.03, 0.5, mat(0xf0e6d0, 0.6), PAGE_POS.x, PAGE_POS.y, PAGE_POS.z);
   pageMesh.rotation.x = -Math.PI / 2 + 0.12;
   pageMesh.userData = { type: 'storyPage', read: false };
 
   // =====================================================================
-  // ALA SUR / PASILLO HACIA EL JEFE (espacio muerto)
+  // 6. SALÓN SUR — camino principal hacia el jefe (sin biblioteca)
   // =====================================================================
-  box(18, 0.4, 14, floor, 0, -0.2, -45);
-  box(1.2, 4.5, 14, dark, -9, 2.0, -45, true);
-  box(1.2, 4.5, 14, dark,  9, 2.0, -45, true);
-  // Techo parcial
-  box(18, 0.3, 6, dark, 0, 4.4, -42);
-  box(18, 0.3, 5, dark, 0, 4.4, -48);
-  cyl(0.3, 0.35, 1.8, stone, -3, 0.8, -44, true);
-  box(1.8, 0.5, 1.2, dark, 2, 0.2, -47);
+  box(20, 0.4, 22, floor, 0, -0.2, -28);
+  box(1.2, 4.8, 22, dark, -10, 2.2, -28, true);
+  box(1.2, 4.8, 22, dark,  10, 2.2, -28, true);
+  // Norte abierto al patio; sur abierto al boss
+  box(20, 0.3, 8, dark, 0, 4.6, -24); // techo parcial
+  box(20, 0.3, 6, dark, 0, 4.6, -32);
+  cyl(0.3, 0.35, 2.0, stone, -4, 0.9, -26, true);
+  box(1.6, 0.45, 1.1, dark, 3, 0.18, -30);
 
   // =====================================================================
-  // SALA DEL JEFE
+  // 7. SALA DEL JEFE
   // =====================================================================
-  box(28, 0.45, 20, tile, 0, -0.22, -60);
-  box(1.3, 6.5, 20, dark, -14, 3.0, -60, true);
-  box(1.3, 6.5, 20, dark,  14, 3.0, -60, true);
-  // Entrada norte (desde southwing): hueco
-  box(5, 6.5, 1.2, dark, -9, 3.0, -50.5, true);
-  box(5, 6.5, 1.2, dark,  9, 3.0, -50.5, true);
-  // Muro sur sellado
-  box(28, 6.5, 1.3, dark, 0, 3.0, -69.5, true);
-  box(3.5, 1.3, 1.0, iron, 0, 5.8, -69.2);
-  box(28, 0.35, 20, dark, 0, 6.5, -60); // techo
-  cyl(0.45, 0.5, 6.0, stone, -7, 2.8, -58, true);
-  cyl(0.45, 0.5, 6.0, stone,  7, 2.8, -58, true);
-  cyl(0.4, 0.45, 5.5, stone, -7, 2.5, -64, true);
-  cyl(0.4, 0.45, 5.5, stone,  7, 2.5, -64, true);
+  box(28, 0.45, 22, tile, 0, -0.22, -50);
+  box(1.3, 6.5, 22, dark, -14, 3.0, -50, true);
+  box(1.3, 6.5, 22, dark,  14, 3.0, -50, true);
+  box(5, 6.5, 1.2, dark, -9, 3.0, -39.5, true);
+  box(5, 6.5, 1.2, dark,  9, 3.0, -39.5, true);
+  box(28, 6.5, 1.3, dark, 0, 3.0, -60.5, true);
+  box(3.5, 1.3, 1.0, iron, 0, 5.8, -60.2);
+  box(28, 0.35, 22, dark, 0, 6.5, -50);
+  cyl(0.45, 0.5, 6.0, stone, -7, 2.8, -48, true);
+  cyl(0.45, 0.5, 6.0, stone,  7, 2.8, -48, true);
+  cyl(0.4, 0.45, 5.5, stone, -7, 2.5, -55, true);
+  cyl(0.4, 0.45, 5.5, stone,  7, 2.5, -55, true);
 
   // Suelo de respaldo
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(140, 160),
+    new THREE.PlaneGeometry(160, 180),
     mat(0x141814, 1)
   );
   ground.rotation.x = -Math.PI / 2;
-  ground.position.set(0, -0.5, -15);
+  ground.position.set(0, -0.5, 0);
   ground.receiveShadow = true;
   scene.add(ground);
 
