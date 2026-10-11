@@ -22,7 +22,7 @@
 </style>
 </head>
 <body>
-<div id="stat"></div><div id="hint">EL REGRESO · ORILLA DEL RÍO</div>
+<div id="stat"></div><div id="hint">EL REGRESO · EL VETERANO REGRESA</div>
 <div id="pad"><button data-k="w" style="grid-column:2;grid-row:1">▲</button><button data-k="a" style="grid-column:1;grid-row:2">◀</button><button data-k="s" style="grid-column:2;grid-row:2">▼</button><button data-k="d" style="grid-column:3;grid-row:2">▶</button></div>
 <button id="atk">ATACAR</button><button id="arm">ARMA</button><button id="run">CORRER</button><button id="jump">⬆<br>SALTAR</button><div id="error"></div>
 <div id="story"><div class="box"><h3 id="storyTitle"></h3><p id="storyText"></p><button id="storyClose">Cerrar</button></div></div>
@@ -74,32 +74,23 @@ function addTorchLight(x,y,z){
   l.castShadow=false;
   scene.add(l);
 }
-// Rio / orilla
-addTorchLight(-5,2.2,108);
-addTorchLight(5,2.2,108);
-// Camino de subida
+addTorchLight(-5,2.2,110);
+addTorchLight(5,2.2,110);
 addTorchLight(-4,2.5,90);
 addTorchLight(4,2.5,90);
-addTorchLight(-4,3.0,75);
-addTorchLight(4,3.0,75);
-addTorchLight(-4,3.5,62);
-addTorchLight(4,3.5,62);
-// Reja
-addTorchLight(-5,5.0,50);
-addTorchLight(5,5.0,50);
-// Patio
-addTorchLight(-12,5.2,18);
-addTorchLight(12,5.2,18);
-addTorchLight(-12,5.2,2);
-addTorchLight(12,5.2,2);
-// Biblioteca
-addTorchLight(-28,5.5,14);
-addTorchLight(-28,5.5,6);
-// Este
-addTorchLight(26,5.2,12);
-// Sur + jefe
-addTorchLight(-5,5.2,-18);
-addTorchLight(5,5.2,-18);
+addTorchLight(-4,3.2,72);
+addTorchLight(4,3.2,72);
+addTorchLight(-4,5.0,50);
+addTorchLight(4,5.0,50);
+addTorchLight(-10,5.0,30);
+addTorchLight(10,5.0,28);
+addTorchLight(0,5.0,18);
+addTorchLight(-8,5.0,10);
+addTorchLight(8,5.0,12);
+addTorchLight(-15,5.2,18);
+addTorchLight(18,5.0,18);
+addTorchLight(-3,5.0,-16);
+addTorchLight(3,5.0,-16);
 addTorchLight(-8,5.5,-40);
 addTorchLight(8,5.5,-40);
 
@@ -114,17 +105,16 @@ let pageRead = false;
 
 const course = { segments: [{ a: 120, b: -70 }], gaps: 0 };
 const player = createPlayer(course);
-// Spawn en la orilla del río (punto más bajo)
 player.x = 0;
-player.z = 108;
+player.z = 110;
 player.y = 0;
-player.checkpoint = { x: 0, z: 108 };
+player.checkpoint = { x: 0, z: 110 };
 player.facing = Math.PI;
 
 const statBox=document.getElementById('stat');let lastStat='';
 function updateStat(){
   const zone = getCurrentZone(player.x, player.z) || 'exterior';
-  const t = zone.toUpperCase() + (pageRead ? ' · PÁGINA LEÍDA' : '');
+  const t = zone.toUpperCase() + (pageRead ? ' · NOTAS DEL SABIO' : '');
   if(t!==lastStat){statBox.textContent=t;lastStat=t}
 }
 
@@ -184,110 +174,40 @@ gltfLoader.load('./assets/characters/human-base-rigged.glb',gltf=>{
  model.traverse(obj=>{if(obj.isMesh){obj.castShadow=true;obj.receiveShadow=true;}});
  importedActor.add(model);
  if(gltf.animations&&gltf.animations.length){importedMixer=new THREE.AnimationMixer(model);}
- if(!locomotionModelLoaded){actor.visible=false;importedActor.visible=true;document.getElementById('hint').textContent='MODELO HUMANO GLB CARGADO · EXPLORA EL CASTILLO';}
+ if(!locomotionModelLoaded){actor.visible=false;importedActor.visible=true;}
  else{actor.visible=false;importedActor.visible=false;}
-},undefined,error=>{
- console.error('No se pudo cargar human-base-rigged.glb',error);
- errorBox.style.display='block';
- errorBox.textContent='No se pudo cargar el modelo humano GLB. Se mantiene el personaje provisional. '+(error?.message||'');
-});
+},undefined,error=>{});
 
 let attackAction=null,swordIdleAction=null,jumpStartAction=null,jumpLoopAction=null,attacking=false,armed=false;
 const normName=n=>(n||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
-const CLIP_NAMES={
- idle:['idle loop','idle standing','idle'],
- walk:['walk loop','walk formal loop','walk relaxed','walk brisk'],
- run:['sprint loop','jog fwd loop','run','jog'],
- attack:['sword attack'],
- swordIdle:['sword idle'],
- jumpStart:['jump start'],
- jumpLoop:['jump loop']
-};
+const CLIP_NAMES={idle:['idle loop','idle standing','idle'],walk:['walk loop','walk formal loop','walk relaxed','walk brisk'],run:['sprint loop','jog fwd loop','run','jog'],attack:['sword attack'],swordIdle:['sword idle'],jumpStart:['jump start'],jumpLoop:['jump loop']};
 function findClip(clips,names){for(const n of names){const c=clips.find(item=>normName(item.name)===n);if(c)return c;}return undefined;}
 function toggleArm(){armed=!armed;document.getElementById('arm').classList.toggle('on',armed);}
-function attack(){
- if(!attackAction||attacking||!player.grounded)return;
- attacking=true;
- if(activeAction)activeAction.fadeOut(.1);
- attackAction.reset().fadeIn(.1).play();
- activeAction=attackAction;
-}
-function addWarriorFace(model){
- const head=model.getObjectByName('Head')||model.getObjectByName('head');
- if(!head){console.warn('No se encontró hueso de cabeza; se conserva el modelo original.');return false;}
- if(head.getObjectByName('procedural-warrior-face'))return true;
- const face=new THREE.Group();face.name='procedural-warrior-face';
- const skinMat=new THREE.MeshStandardMaterial({color:0xb87954,roughness:.86});
- const hairMat=new THREE.MeshStandardMaterial({color:0x211713,roughness:.92});
- const beardMat=new THREE.MeshStandardMaterial({color:0x30221d,roughness:1});
- const eyeWhite=new THREE.MeshStandardMaterial({color:0xe8dfd0,roughness:.35});
- const irisMat=new THREE.MeshStandardMaterial({color:0x5a3924,roughness:.4});
- const pupilMat=new THREE.MeshStandardMaterial({color:0x100d0b,roughness:.25});
- const browMat=new THREE.MeshStandardMaterial({color:0x241815,roughness:1});
- const add=(name,geo,mat,pos,scale)=>{const m=new THREE.Mesh(geo,mat);m.name=name;m.position.set(...pos);if(scale)m.scale.set(...scale);m.castShadow=true;m.receiveShadow=true;face.add(m);return m;};
- // Detalles superpuestos a la cabeza; todos siguen el hueso Head y sus animaciones.
- add('cabello oscuro',new THREE.SphereGeometry(.105,16,12),hairMat,[0,.105,-.006],[1.04,.77,1.02]);
- add('patilla izquierda',new THREE.SphereGeometry(.025,10,8),hairMat,[-.083,.025,.035],[.72,1.7,.8]);
- add('patilla derecha',new THREE.SphereGeometry(.025,10,8),hairMat,[.083,.025,.035],[.72,1.7,.8]);
- for(const side of [-1,1]){
-  add('esclerótica',new THREE.SphereGeometry(.014,12,8),eyeWhite,[side*.038,.054,.091],[1,.82,.55]);
-  add('iris',new THREE.SphereGeometry(.0075,10,8),irisMat,[side*.038,.054,.099],[1,1,.45]);
-  add('pupila',new THREE.SphereGeometry(.0038,8,6),pupilMat,[side*.038,.054,.102],[1,1,.4]);
-  add('ceja marcada',new THREE.SphereGeometry(.022,10,7),browMat,[side*.039,.078,.088],[1.15,.34,.55]);
- }
- add('puente nariz',new THREE.SphereGeometry(.014,10,8),skinMat,[0,.035,.105],[.72,1.8,.7]);
- add('punta nariz',new THREE.SphereGeometry(.018,10,8),skinMat,[0,.014,.115],[.95,.72,.8]);
- add('barba mandíbula',new THREE.SphereGeometry(.073,14,10),beardMat,[0,-.027,.045],[1.05,.72,.88]);
- add('barba mentón',new THREE.SphereGeometry(.047,12,8),beardMat,[0,-.067,.064],[1,.68,.78]);
- add('bigote',new THREE.SphereGeometry(.032,12,8),beardMat,[0,-.004,.099],[1.2,.38,.45]);
- // Mantener los detalles delante de la cara sin alterar el rig ni los clips.
- head.add(face);
- return true;
-}
+function attack(){if(!attackAction||attacking||!player.grounded)return;attacking=true;if(activeAction)activeAction.fadeOut(.1);attackAction.reset().fadeIn(.1).play();activeAction=attackAction;}
 function setupLocomotion(gltf,label){
- const model=gltf.scene;
- model.updateMatrixWorld(true);
- addWarriorFace(model);
- const bounds=new THREE.Box3().setFromObject(model);
- const size=bounds.getSize(new THREE.Vector3());
- const center=bounds.getCenter(new THREE.Vector3());
- if(size.y>0){
-  const factor=1.82/size.y;
-  model.scale.setScalar(factor);
-  model.position.set(-center.x*factor,-bounds.min.y*factor,-center.z*factor);
- }
+ const model=gltf.scene;model.updateMatrixWorld(true);
+ const bounds=new THREE.Box3().setFromObject(model);const size=bounds.getSize(new THREE.Vector3());const center=bounds.getCenter(new THREE.Vector3());
+ if(size.y>0){const factor=1.82/size.y;model.scale.setScalar(factor);model.position.set(-center.x*factor,-bounds.min.y*factor,-center.z*factor);}
  model.traverse(obj=>{if(obj.isMesh){obj.castShadow=true;obj.receiveShadow=true;obj.frustumCulled=false;}});
- locomotionActor.add(model);
- locomotionModelLoaded=true;
- locomotionMixer=new THREE.AnimationMixer(model);
+ locomotionActor.add(model);locomotionModelLoaded=true;locomotionMixer=new THREE.AnimationMixer(model);
  const clips=gltf.animations||[];
  const idleClip=findClip(clips,CLIP_NAMES.idle),walkClip=findClip(clips,CLIP_NAMES.walk),runClip=findClip(clips,CLIP_NAMES.run);
  const attackClip=findClip(clips,CLIP_NAMES.attack),swordIdleClip=findClip(clips,CLIP_NAMES.swordIdle);
- if(idleClip)idleAction=locomotionMixer.clipAction(idleClip);
- if(walkClip)walkAction=locomotionMixer.clipAction(walkClip);
- if(runClip)runAction=locomotionMixer.clipAction(runClip);
- if(swordIdleClip)swordIdleAction=locomotionMixer.clipAction(swordIdleClip);
+ if(idleClip)idleAction=locomotionMixer.clipAction(idleClip);if(walkClip)walkAction=locomotionMixer.clipAction(walkClip);if(runClip)runAction=locomotionMixer.clipAction(runClip);if(swordIdleClip)swordIdleAction=locomotionMixer.clipAction(swordIdleClip);
  const jumpStartClip=findClip(clips,CLIP_NAMES.jumpStart),jumpLoopClip=findClip(clips,CLIP_NAMES.jumpLoop);
  if(jumpStartClip){jumpStartAction=locomotionMixer.clipAction(jumpStartClip);jumpStartAction.setLoop(THREE.LoopOnce,1);jumpStartAction.clampWhenFinished=true;}
  if(jumpLoopClip)jumpLoopAction=locomotionMixer.clipAction(jumpLoopClip);
  if(attackClip){attackAction=locomotionMixer.clipAction(attackClip);attackAction.setLoop(THREE.LoopOnce,1);attackAction.clampWhenFinished=false;}
  locomotionMixer.addEventListener('finished',e=>{if(e.action===attackAction){attacking=false;attackAction.fadeOut(.15);activeAction=null;}});
- const initial=idleAction||walkAction||null;
- if(initial){initial.play();activeAction=initial;}
- actor.visible=false;
- importedActor.visible=false;
- locomotionActor.visible=true;
- document.getElementById('hint').textContent=label+' · CASTILLO · EXPLORA';
- console.info('Clips disponibles:',clips.map(a=>a.name),'selección:',{idle:idleClip?.name,walk:walkClip?.name,run:runClip?.name,attack:attackClip?.name,swordIdle:swordIdleClip?.name});
+ const initial=idleAction||walkAction||null;if(initial){initial.play();activeAction=initial;}
+ actor.visible=false;importedActor.visible=false;locomotionActor.visible=true;
+ document.getElementById('hint').textContent=label+' · EL REGRESO';
 }
 gltfLoader.load('./assets/characters/ual/UAL1_Standard.glb',gltf=>setupLocomotion(gltf,'GUERRERO UAL'),undefined,error=>{
- console.warn('No se pudo cargar UAL1_Standard.glb; se usa el hombre de traje como respaldo.',error);
- gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-person-animated.glb',gltf=>setupLocomotion(gltf,'MODELO DE RESPALDO'),undefined,err=>console.warn('No se pudo cargar el respaldo; se conserva el personaje base.',err));
+ gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-person-animated.glb',gltf=>setupLocomotion(gltf,'RESPALDO'),undefined,err=>{});
 });
-
 document.getElementById('atk').addEventListener('pointerdown',e=>{e.preventDefault();attack()});
 document.getElementById('arm').addEventListener('pointerdown',e=>{e.preventDefault();toggleArm()});
-
 const keys={};
 const DIRS=['w','a','s','d','arrowup','arrowleft','arrowdown','arrowright'];const tapAt={};let runLatch=false;
 function press(k,repeat){if(DIRS.includes(k)&&!keys[k]&&!repeat){const now=performance.now();if(now-(tapAt[k]??-1e9)<320)runLatch=true;tapAt[k]=now}keys[k]=true}
@@ -297,47 +217,24 @@ addEventListener('keydown',e=>{const k=e.key.toLowerCase();press(k,e.repeat);if(
 let jumpQueued=false;function jump(){jumpQueued=true}document.getElementById('jump').addEventListener('pointerdown',e=>{e.preventDefault();jump()});
 let elapsed=0;const clock=new THREE.Clock();const camOffset=new THREE.Vector3(0,3.1,6.2);camera.position.set(player.x+camOffset.x,camOffset.y,player.z+camOffset.z);
 document.addEventListener('contextmenu',e=>e.preventDefault());document.addEventListener('selectstart',e=>e.preventDefault());
-
 function animate(){
   requestAnimationFrame(animate);
-  const dt=Math.min(clock.getDelta(),.04);
-  elapsed+=dt;
-  if(importedMixer)importedMixer.update(dt);
-
+  const dt=Math.min(clock.getDelta(),.04);elapsed+=dt;if(importedMixer)importedMixer.update(dt);
   const f=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0);
   const side=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0);
-  const running=!!(keys.run||keys.shift||runLatch);
-  const speed=running?RUN_SPEED:WALK_SPEED;
-  const moving=!attacking&&!!(f||side);
-
-  stepPlayer(player,course,{f,side,speed,running,jump:jumpQueued,canMove:!attacking},dt);
-  jumpQueued=false;
-
-  resolveWallCollisions(player);
-  resolveGround(player);
-
-  if (!pageRead && distanceToPage(player.x, player.y, player.z) < 2.4) {
-    showStoryPage();
-  }
-
+  const running=!!(keys.run||keys.shift||runLatch);const speed=running?RUN_SPEED:WALK_SPEED;const moving=!attacking&&!!(f||side);
+  stepPlayer(player,course,{f,side,speed,running,jump:jumpQueued,canMove:!attacking},dt);jumpQueued=false;
+  resolveWallCollisions(player);resolveGround(player);
+  if (!pageRead && distanceToPage(player.x, player.y, player.z) < 2.4) showStoryPage();
   actor.position.set(player.x,player.y,player.z);actor.rotation.y=player.facing;
   if(moving){const gait=elapsed*9;legs[0].rotation.x=Math.sin(gait)*.48;legs[1].rotation.x=-Math.sin(gait)*.48;arms[0].rotation.x=-Math.sin(gait)*.18;arms[1].rotation.x=Math.sin(gait)*.18}else{legs.forEach(l=>l.rotation.x*=.85);arms.forEach(a=>a.rotation.x*=.85)}
-  if(locomotionMixer){
-   if(!attacking){
-    let next;
-    if(!player.grounded)next=(player.jumping&&player.airTime<.3?(jumpStartAction||jumpLoopAction):(jumpLoopAction||jumpStartAction))||idleAction;
-    else next=moving?(running?(runAction||walkAction):(walkAction||idleAction)):(armed&&swordIdleAction?swordIdleAction:(idleAction||walkAction));
-    selectLocomotion(next);
-   }
-   locomotionMixer.update(dt);
-  }
+  if(locomotionMixer){if(!attacking){let next;if(!player.grounded)next=(player.jumping&&player.airTime<.3?(jumpStartAction||jumpLoopAction):(jumpLoopAction||jumpStartAction))||idleAction;else next=moving?(running?(runAction||walkAction):(walkAction||idleAction)):(armed&&swordIdleAction?swordIdleAction:(idleAction||walkAction));selectLocomotion(next);}locomotionMixer.update(dt);}
   importedActor.position.copy(actor.position);importedActor.rotation.y=actor.rotation.y;
   locomotionActor.position.copy(actor.position);locomotionActor.rotation.y=actor.rotation.y;
   const camY=Math.max(player.y,-.6);
   camera.position.lerp(new THREE.Vector3(actor.position.x+camOffset.x,camOffset.y+camY,actor.position.z+camOffset.z),Math.min(1,dt*3));
   camera.lookAt(actor.position.x,1.05+camY,actor.position.z);
-  updateStat();
-  renderer.render(scene,camera);
+  updateStat();renderer.render(scene,camera);
 }
 function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight)}addEventListener('resize',resize);animate();
 </script></body></html>
