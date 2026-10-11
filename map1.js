@@ -1,7 +1,7 @@
 // map1.js — El Regreso
 // Croquis: eje-x papel = +Z motor (adelante, rampa) · eje-y papel = +X motor (derecha)
-// Altura = Y motor (Z en conversación del croquis).
-// Rectángulo cerrado. Sin huecos entre pasadizo y plaza.
+// Altura = Y motor.
+// Rectángulo cerrado. Pasadizo con pared al establo. Tras reja → pared Torre 1 → giro a plaza.
 
 import * as THREE from 'three';
 import { clearRamps, addRamp, sampleRampY, getSlopeAt, buildRampMesh, RAMPS } from './map-ramps.js';
@@ -10,10 +10,7 @@ export const MAP1_NAME = 'El Regreso';
 export const LEVEL0_Y = 0;
 export const LEVEL1_Y = 8;
 
-// Rectángulo interior (todo el mapa)
 export const MAP = { minX: -20, maxX: 120, minZ: -30, maxZ: 140 };
-
-// Spawn: parte plana nivel 0, mirando +Z (hacia la rampa)
 export const SPAWN = { x: 8, y: LEVEL0_Y, z: -12, facing: 0 };
 
 export const ZONES = {
@@ -140,7 +137,7 @@ export function buildMap1(scene) {
     addPlatform(x - w / 2, x + w / 2, z - d / 2, z + d / 2, y);
   }
 
-  // ========== PAREDES EXTERIORES DEL RECTÁNGULO ==========
+  // —— Paredes exteriores del rectángulo ——
   const { minX, maxX, minZ, maxZ } = MAP;
   const WH = 18, WT = 4;
   box(maxX - minX + WT * 2, WH, WT, mountain, (minX + maxX) / 2, WH / 2 - 1, maxZ + WT / 2, true);
@@ -148,17 +145,11 @@ export function buildMap1(scene) {
   box(WT, WH, maxZ - minZ, mountain, minX - WT / 2, WH / 2 - 1, (minZ + maxZ) / 2, true);
   box(WT, WH, maxZ - minZ, mountain, maxX + WT / 2, WH / 2 - 1, (minZ + maxZ) / 2, true);
 
-  // ========== 1. PARTE PLANA NIVEL 0 (sur / abajo del croquis) ==========
+  // —— 1. Parte plana nivel 0 (sur) ——
   pad(20, 16, LEVEL0_Y, 8, -10, dirt);
 
-  // ========== 2. RAMPA (sube en +Z, casi alineada al eje-x del papel) ==========
-  // Leve diagonal para interés visual, pero sentido principal +Z
-  const rampDef = {
-    sx: 6, sz: 0,
-    ex: 12, ez: 48,
-    y0: LEVEL0_Y, y1: LEVEL1_Y,
-    halfWidth: 5,
-  };
+  // —— 2. Rampa (+Z, eje-x del papel) ——
+  const rampDef = { sx: 6, sz: 0, ex: 12, ez: 48, y0: LEVEL0_Y, y1: LEVEL1_Y, halfWidth: 5 };
   addRamp(rampDef);
   buildRampMesh(THREE, scene, rampDef, stone);
   for (const side of [-1, 1]) {
@@ -170,94 +161,64 @@ export function buildMap1(scene) {
     g.rotation.y = Math.atan2(r.dx, r.dz);
     g.castShadow = true; scene.add(g);
   }
-  // Rocas a los lados de la rampa
   for (const [rx, rz, s] of [[1, 10, 1.2], [1, 22, 1.1], [1, 35, 1.3], [18, 12, 1.15], [19, 28, 1.25], [18, 40, 1.1]]) {
     cyl(0.85 * s, 1.25 * s, 1.5 * s, rockM, rx, LEVEL0_Y + 0.75 * s, rz, true);
   }
 
-  // ========== 3. PARTE PLANA NIVEL 1 (fin de rampa) ==========
+  // —— 3. Parte plana nivel 1 ——
   pad(24, 14, LEVEL1_Y, 12, 55, stone);
 
-  // ========== 4. PASADIZO + REJA (hacia +X / eje-y papel) ==========
-  // Suelo continuo del pasadizo
+  // —— 4. Pasadizo + reja (+X) ——
   pad(55, 14, LEVEL1_Y, 42, 62, stone);
-  // Muro NORTE del pasadizo (hacia torres / borde)
+  // Muro norte del pasadizo
   box(55, 5.5, 1.0, dark, 42, LEVEL1_Y + 2.5, 69, true);
-  // Muro SUR del pasadizo = pared que DIVIDE pasadizo del establo/plaza
-  // Abre solo el paso hacia la plaza más adelante; bloquea hacia el establo
-  box(22, 5.5, 1.0, dark, 28, LEVEL1_Y + 2.5, 55, true); // tramo oeste del muro sur
-  box(18, 5.5, 1.0, dark, 58, LEVEL1_Y + 2.5, 55, true); // tramo este (antes de torre1)
-  // Reja (caída) en medio del pasadizo
+  // Muro sur: divide pasadizo / establo — HUECO hacia plaza en x 38..52
+  box(16, 5.5, 1.0, dark, 26, LEVEL1_Y + 2.5, 55, true); // oeste
+  box(16, 5.5, 1.0, dark, 60, LEVEL1_Y + 2.5, 55, true); // este (antes torre1)
+  // Conexión suelo pasadizo → plaza (sin hueco de piso)
+  pad(16, 14, LEVEL1_Y, 45, 50, stone);
+
   const gateLeft = box(3.5, 4.6, 0.4, iron, 32, LEVEL1_Y + 2.2, 62, false);
   const gateRight = box(3.5, 4.6, 0.4, iron, 40, LEVEL1_Y + 2.2, 62, false);
   const gate = gateLeft;
   gate.name = 'mainGate';
   gate.userData = { mate: gateRight, closed: false };
 
-  // ========== 5. TORRE 1 — tras pasar la reja chocas con su pared ==========
-  // Bloque que cierra el final del pasadizo (pared de Torre 1)
+  // —— 5. Torre 1 (cierra el pasadizo) ——
   box(14, 12, 14, dark, 72, LEVEL1_Y + 5.5, 62, true);
   addPlatform(65, 79, 55, 69, LEVEL1_Y + 11);
-  // Entrada a la plaza: hueco hacia el SUR (-Z) desde el pasadizo, antes de Torre 1
-  // (el tramo entre x~45..60 ya tiene suelo; el muro sur tiene hueco x 38..50)
-  // Hueco muro sur: entre x 38 y 50 no hay muro → gira a la plaza
 
-  // ========== 6. PLAZA (centro, acceso desde pasadizo) ==========
+  // —— 6. Plaza ——
   pad(60, 42, LEVEL1_Y, 38, 38, dirt);
-  // Suelo de conexión pasadizo → plaza (sin hueco)
-  pad(14, 12, LEVEL1_Y, 44, 52, stone);
-  // Fuente
   box(5.5, 0.45, 5.5, stone, 35, LEVEL1_Y + 0.2, 35, true);
   box(3.2, 0.75, 3.2, dark, 35, LEVEL1_Y + 0.55, 35, true);
 
-  // ========== 7. ESTABLO (2 ambientes, puerta a la plaza) ==========
-  // Norte de la plaza / bajo el pasadizo, separado por el muro
+  // —— 7. Establo (2 ambientes, puerta a plaza) ——
   pad(26, 22, LEVEL1_Y, 30, 88, wood);
-  // Muros exteriores
   box(26, 5, 0.9, dark, 30, LEVEL1_Y + 2.3, 98.5, true); // norte
-  box(26, 5, 0.9, dark, 30, LEVEL1_Y + 2.3, 77.5, true); // sur (hacia plaza) — con hueco puerta
-  // Abrimos puerta en el muro sur del establo: solo extremos sólidos
-  // (reconstruimos sur como dos tramos)
-  // Quitar el muro sur completo y poner dos tramos:
-  // (ya pusimos muro sur completo arriba — lo sustituimos visualmente dejando hueco)
-  // Para colisión: no usamos el muro sur completo. Rehacemos:
-  // (simplificación: muro este/oeste + norte + tabique; sur con hueco)
+  // Sur con HUECO de puerta (x 27..33)
+  box(8, 5, 0.9, dark, 22, LEVEL1_Y + 2.3, 77.5, true);
+  box(8, 5, 0.9, dark, 38, LEVEL1_Y + 2.3, 77.5, true);
   box(0.9, 5, 22, dark, 17.5, LEVEL1_Y + 2.3, 88, true); // oeste
-  box(0.9, 5, 8, dark, 42.5, LEVEL1_Y + 2.3, 94, true); // este norte
-  box(0.9, 5, 8, dark, 42.5, LEVEL1_Y + 2.3, 82, true); // este sur
-  // Tabique 2 ambientes
-  box(0.6, 4.5, 12, dark, 30, LEVEL1_Y + 2.1, 88, true);
-  // Techo
+  box(0.9, 5, 8, dark, 42.5, LEVEL1_Y + 2.3, 94, true);
+  box(0.9, 5, 8, dark, 42.5, LEVEL1_Y + 2.3, 82, true);
+  box(0.6, 4.5, 12, dark, 30, LEVEL1_Y + 2.1, 88, true); // tabique
   box(27, 0.4, 23, dark, 30, LEVEL1_Y + 5.0, 88);
-  // Puerta a plaza: hueco en muro sur (ya no hay colisión en el centro del sur)
-  // Marco visual de puerta
-  box(0.4, 3.2, 0.35, wood, 26, LEVEL1_Y + 1.5, 77.6);
-  box(0.4, 3.2, 0.35, wood, 34, LEVEL1_Y + 1.5, 77.6);
+  box(0.35, 3.2, 0.35, wood, 26.5, LEVEL1_Y + 1.5, 77.6);
+  box(0.35, 3.2, 0.35, wood, 33.5, LEVEL1_Y + 1.5, 77.6);
   FOOD_POS.set(28, LEVEL1_Y + 0.45, 90);
   const foodMesh = box(0.5, 0.25, 0.4, mat(0xc4a060), FOOD_POS.x, FOOD_POS.y, FOOD_POS.z);
 
-  // Nota: el muro sur del establo (z=77.5) con box de 26 de ancho BLOQUEA la puerta.
-  // Corregimos: no debe ser sólido en el centro. Añadimos override quitando y partiendo:
-  // (la colisión del box sur ya se añadió — para este push partimos en dos tramos sólidos)
-  // Workaround: empujar al jugador solo con extremos. Reemplazo: añadir hueco quitando
-  // la entrada del muro sur del array es difícil tras el hecho; en su lugar
-  // NO creamos el muro sur completo sólido — lo hice arriba. Corrijo orden:
-  // Ya se creó box sur sólido 26 de ancho. Para este archivo reescribo establo sin ese muro completo.
-
-  // ========== 8. TORRE 2 + PUERTA JEFE + PUENTE (franja norte) ==========
-  // Torre 2 más a la derecha (+X)
+  // —— 8. Torre 2 + portón jefe + puente (norte-este) ——
+  pad(50, 28, LEVEL1_Y, 85, 110, stone);
   box(14, 12, 14, dark, 98, LEVEL1_Y + 5.5, 115, true);
   addPlatform(91, 105, 108, 122, LEVEL1_Y + 11);
-  // Portón jefe entre torre1 y torre2
   const portcullis = box(12, 8, 0.7, iron, 85, LEVEL1_Y + 3.5, 100, true);
   portcullis.name = 'portcullis';
-  // Suelo franja norte
-  pad(50, 28, LEVEL1_Y, 85, 110, stone);
-  // Puente roto (2º piso, visual + plataforma parcial)
   box(3.5, 0.35, 10, wood, 98, LEVEL1_Y + 11.6, 105);
   addPlatform(96, 100, 100, 110, LEVEL1_Y + 11.5);
 
-  // ========== 9. MÓDULO 2 NIVELES (placeholder, derecha) ==========
+  // —— 9. Módulo 2 niveles (placeholder) ——
   pad(32, 40, LEVEL1_Y, 95, 40, tile);
   box(32, 6, 0.9, dark, 95, LEVEL1_Y + 2.8, 59.5, true);
   box(32, 6, 0.9, dark, 95, LEVEL1_Y + 2.8, 20.5, true);
