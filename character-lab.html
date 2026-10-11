@@ -16,8 +16,8 @@ button{pointer-events:auto;border:1px solid #c4a574;border-radius:9px;background
 </style>
 </head>
 <body>
-<div id="top"><strong>LABORATORIO VISUAL · PERSONAJE</strong><button id="back">VOLVER AL JUEGO</button></div>
-<div id="status">Arrastra para girar · usa los botones para revisar frente, nuca y perfiles</div>
+<div id="top"><strong>LABORATORIO VISUAL · PERSONAJE · PRUEBA 1</strong><button id="back">VOLVER AL JUEGO</button></div>
+<div id="status">PRUEBA 1 · Corrección de orientación del plano facial · versión de diagnóstico</div>
 <div id="controls">
 <button data-angle="0">FRENTE</button><button data-angle="1.57079632679">PERFIL D.</button><button data-angle="3.14159265359">NUCA</button><button data-angle="-1.57079632679">PERFIL I.</button><button id="reset">REINICIAR</button>
 </div>
@@ -26,7 +26,7 @@ button{pointer-events:auto;border:1px solid #c4a574;border-radius:9px;background
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
-import { addHeadFaceTexture } from './character-details.js';
+import { addHeadFaceTexture, CHARACTER_DETAILS_VERSION } from './character-details.js?v=prueba-1';
 const err=document.getElementById('err');
 addEventListener('error',e=>{err.style.display='block';err.textContent='Error: '+(e.message||'');});
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x171a20);
@@ -45,7 +45,7 @@ loader.load('./assets/characters/ual/UAL1_Standard.glb',g=>{
  model.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
  const attached=addHeadFaceTexture(model,scale);
  modelRoot=new THREE.Group();modelRoot.add(model);scene.add(modelRoot);
- document.getElementById('status').textContent=attached?'Detalle facial cargado · gira el modelo para comprobar orientación y encaje':'No se encontró el hueso Head; se muestra el modelo original';
+ document.getElementById('status').textContent='PRUEBA 1 · módulo '+CHARACTER_DETAILS_VERSION+' · '+(attached?'detalle aplicado; comprueba FRENTE y NUCA':'no se encontró Head; modelo original');
 },undefined,e=>{err.style.display='block';err.textContent='No se pudo cargar el modelo 3D. Comprueba la conexión y vuelve a abrir esta vista.\n'+(e?.message||'');});
 function setAngle(a){targetY=a;if(modelRoot)modelRoot.rotation.y=a;}
 document.querySelectorAll('[data-angle]').forEach(b=>b.addEventListener('click',()=>setAngle(Number(b.dataset.angle))));
