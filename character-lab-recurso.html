@@ -36,7 +36,7 @@ const floor=new THREE.Mesh(new THREE.CircleGeometry(2.3,64),new THREE.MeshStanda
 let root=null,dragging=false,lastX=0,lastY=0,angle=0,mixer=null,activeAction=null;const clock=new THREE.Clock();let animationClips=[];
 const animButtons={idle:document.getElementById('idleBtn'),walk:document.getElementById('walkBtn'),run:document.getElementById('runBtn')};const clipSelect=document.getElementById('clipSelect');
 const loader=new GLTFLoader();
-const externalAsset='https://raw.githubusercontent.com/Seyamalam/blood-league-kickoff/main/public/assets/vendor/quaternius/night-striker.glb';
+const externalAsset='./assets/characters/animations/locomotion-collection-jordan-3d-person-animated.glb';
 function mountModel(g,label){
  if(root){scene.remove(root);root=null;}mixer=null;activeAction=null;animationClips=g.animations||[];
  const model=g.scene;model.updateMatrixWorld(true);
@@ -57,7 +57,7 @@ function loadLocalFallback(reason){
  },undefined,e=>{showError('No se pudo cargar el modelo externo ni el modelo local de respaldo.\nExterno: '+reason+'\nLocal: '+(e?.message||'error de carga'));document.getElementById('status').textContent='PRUEBA 6 · no se pudo cargar ningún modelo';});
 }
 loader.load(externalAsset,g=>{
- try{mountModel(g,'RECURSO EXTERNO CC0 · rostro original, sin piezas superpuestas');}
+ try{mountModel(g,'MODELO LOCAL ANIMADO · archivo del repositorio');}
  catch(e){loadLocalFallback(e.message);}
 },undefined,e=>loadLocalFallback(e?.message||'falló la descarga del recurso externo'));
 function normalizeName(s){return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();}
@@ -67,12 +67,20 @@ function setupAnimations(model,clips){
  mixer=clips.length?new THREE.AnimationMixer(model):null;
  const groups={
   idle:clips.find(x=>/\b(idle|stand|standing|wait|rest|breath|neutral|quieto|parado)\b/i.test(normalizeName(x.name))),
-  walk:clips.find(x=>/\b(walk|walking|walkcycle|caminar|paseo)\b/i.test(normalizeName(x.name))),
+  walk:clips.find(x=>/\b(walk|walking|walkcycle|caminar|paseo|locomotion)\b/i.test(normalizeName(x.name))),
   run:clips.find(x=>/\b(run|running|sprint|jog|correr|trot)\b/i.test(normalizeName(x.name)))
  };
+ // Si los clips tienen nombres genéricos, habilita pruebas numeradas en vez de dejar todos los botones inutilizables.
+ const used=new Set(Object.values(groups).filter(Boolean));
+ for(const key of Object.keys(groups)){
+  if(!groups[key]){
+   const fallback=clips.find(x=>!used.has(x));
+   if(fallback){groups[key]=fallback;used.add(fallback);}
+  }
+ }
  for(const key of Object.keys(groups)){
   const clip=groups[key],btn=animButtons[key];
-  if(clip){btn.disabled=false;btn.textContent=key==='idle'?'QUIETO':key==='walk'?'CAMINAR':'CORRER';btn.onclick=()=>playClip(clip);}
+  if(clip){btn.disabled=false;btn.textContent=(key==='idle'?'QUIETO':key==='walk'?'CAMINAR':'CORRER')+( /\b(idle|stand|standing|wait|rest|breath|neutral|quieto|parado|walk|walking|walkcycle|caminar|paseo|locomotion|run|running|sprint|jog|correr|trot)\b/i.test(normalizeName(clip.name))?'':' · '+(animationClips.indexOf(clip)+1));btn.onclick=()=>playClip(clip);}
  }
  if(clips.length){
   clipSelect.style.display='inline-block';
