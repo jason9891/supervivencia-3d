@@ -15,8 +15,8 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 #atk{position:fixed;z-index:20;right:max(116px,calc(env(safe-area-inset-right) + 104px));bottom:calc(env(safe-area-inset-bottom) + 40px);width:72px;height:72px;border:2px solid #d8a8a0;border-radius:50%;background:#5a1f1a;color:#fff4df;font:bold 13px system-ui;box-shadow:0 5px 18px #000b;touch-action:none}
 #arm{position:fixed;z-index:20;right:max(116px,calc(env(safe-area-inset-right) + 104px));bottom:calc(env(safe-area-inset-bottom) + 126px);width:68px;height:54px;border:1px solid #c4c9c0;border-radius:14px;background:#27352fe8;color:#fff;font:bold 13px system-ui;touch-action:none}
 #arm.on{background:#6b5a22;border-color:#f3d7a0}
-#pad{position:fixed;z-index:20;left:16px;bottom:24px;display:grid;grid-template-columns:48px 48px 48px;grid-template-rows:48px 48px;gap:5px}
-#pad button{border:1px solid #aab4b4aa;border-radius:12px;background:#20272be8;color:#fff;font:22px system-ui;touch-action:none}
+#joyBase{position:fixed;z-index:20;left:max(16px,env(safe-area-inset-left));bottom:calc(env(safe-area-inset-bottom) + 20px);width:128px;height:128px;border-radius:50%;background:radial-gradient(circle at 50% 50%,#2a3238cc,#1a1e22e8);border:2px solid #aab4b488;box-shadow:0 4px 18px #000a;touch-action:none}
+#joyKnob{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:#c4a574ee;border:2px solid #f3d7a0;box-shadow:0 2px 10px #0008;pointer-events:none;transition:none}
 #stat{position:fixed;z-index:20;top:calc(env(safe-area-inset-top) + 34px);left:0;right:0;text-align:center;color:#f3d7a0;font:bold 13px system-ui;letter-spacing:.08em;text-shadow:0 2px 4px #000;pointer-events:none}
 #combatLab{position:fixed;z-index:25;top:calc(env(safe-area-inset-top) + 8px);right:168px;padding:9px 11px;border:1px solid #c4a574;border-radius:9px;background:#211d17ee;color:#f3d7a0;font:bold 11px system-ui;letter-spacing:.04em;touch-action:manipulation}
 #mapView{position:fixed;z-index:25;top:calc(env(safe-area-inset-top) + 8px);left:12px;padding:9px 11px;border:1px solid #c4a574;border-radius:9px;background:#211d17ee;color:#f3d7a0;font:bold 11px system-ui;letter-spacing:.04em;touch-action:manipulation}
@@ -36,12 +36,9 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 <button type="button" id="mapView">VISTA · MAPA</button>
 <button type="button" id="characterLab" onclick="location.href='./character-lab.html'">VISUAL · PERSONAJE</button>
 <button type="button" id="combatLab" onclick="location.href='./combat-lab.html'">COMBATE · PRUEBAS</button>
-<div id="hint">EL REGRESO · PUZZLE TLDRAW</div>
-<div id="pad">
-<button data-k="w" style="grid-column:2;grid-row:1">▲</button>
-<button data-k="a" style="grid-column:1;grid-row:2">◀</button>
-<button data-k="s" style="grid-column:2;grid-row:2">▼</button>
-<button data-k="d" style="grid-column:3;grid-row:2">▶</button>
+<div id="hint">EL REGRESO · JOYSTICK</div>
+<div id="joyBase" aria-label="Joystick">
+  <div id="joyKnob"></div>
 </div>
 <button id="atk">ATACAR</button><button id="arm">ARMA</button><button id="run">CORRER</button><button id="jump">⬆<br>SALTAR</button>
 <div id="error"></div>
@@ -54,7 +51,7 @@ import { createPlayer, stepPlayer, WALK_SPEED, RUN_SPEED } from './course.js';
 import {
   buildMap1, getCurrentZone, STORY_PAGE,
   distanceToPage, distanceToKey, distanceToLever, distanceToFood,
-  resolveWallCollisions, resolveGround, closePassageGate, tryUnlockTowerDoor, MAP_CENTER
+  resolveWallCollisions, resolveGround, closePassageGate, tryUnlockTowerDoor, MAP_CENTER, WALLS
 } from './map1.js';
 
 const errorBox = document.getElementById('error');
@@ -188,45 +185,65 @@ document.getElementById('atk').addEventListener('pointerdown', e => { e.preventD
 document.getElementById('arm').addEventListener('pointerdown', e => { e.preventDefault(); toggleArm(); });
 
 const keys = {};
-const DIRS = ['w', 'a', 's', 'd', 'arrowup', 'arrowleft', 'arrowdown', 'arrowright'];
-const tapAt = {}; let runLatch = false;
-function press(k, repeat) {
-  if (DIRS.includes(k) && !keys[k] && !repeat) {
-    const now = performance.now();
-    if (now - (tapAt[k] ?? -1e9) < 320) runLatch = true;
-    tapAt[k] = now;
-  }
-  keys[k] = true;
+const joy = { x: 0, y: 0, active: false };
+const joyBase = document.getElementById('joyBase');
+const joyKnob = document.getElementById('joyKnob');
+const JOY_R = 36;
+function setJoy(nx, ny) {
+  const len = Math.hypot(nx, ny);
+  const c = len > 1 ? 1 / len : 1;
+  joy.x = nx * c;
+  joy.y = ny * c;
+  joyKnob.style.transform = `translate(${joy.x * JOY_R}px, ${-joy.y * JOY_R}px)`;
 }
-function release(k) { keys[k] = false; if (!DIRS.some(d => keys[d])) runLatch = false; }
-document.querySelectorAll('[data-k]').forEach(b => {
-  const k = b.dataset.k;
-  b.addEventListener('pointerdown', e => { e.preventDefault(); press(k, false); b.setPointerCapture(e.pointerId); });
-  const off = () => release(k);
-  b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('lostpointercapture', off);
+function resetJoy() {
+  joy.x = 0; joy.y = 0; joy.active = false;
+  joyKnob.style.transform = 'translate(0,0)';
+}
+function joyFromEvent(e) {
+  const r = joyBase.getBoundingClientRect();
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  const dx = (e.clientX - cx) / (r.width / 2);
+  const dy = -(e.clientY - cy) / (r.height / 2);
+  setJoy(dx, dy);
+}
+joyBase.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  joy.active = true;
+  joyBase.setPointerCapture(e.pointerId);
+  joyFromEvent(e);
 });
+joyBase.addEventListener('pointermove', e => {
+  if (!joy.active) return;
+  joyFromEvent(e);
+});
+const endJoy = () => resetJoy();
+joyBase.addEventListener('pointerup', endJoy);
+joyBase.addEventListener('pointercancel', endJoy);
+joyBase.addEventListener('lostpointercapture', endJoy);
+
 const runButton = document.getElementById('run');
 runButton.addEventListener('pointerdown', e => { e.preventDefault(); keys.run = true; runButton.setPointerCapture(e.pointerId); });
 const stopRun = () => { keys.run = false; };
 runButton.addEventListener('pointerup', stopRun); runButton.addEventListener('pointercancel', stopRun); runButton.addEventListener('lostpointercapture', stopRun);
+
 addEventListener('keydown', e => {
-  const k = e.key.toLowerCase(); press(k, e.repeat);
+  const k = e.key.toLowerCase();
+  keys[k] = true;
   if (k === ' ') { e.preventDefault(); jumpQueued = true; }
   if (k === 'j') attack();
   if (k === 'e' && !e.repeat) toggleArm();
   if (k === 'm' && !e.repeat) document.getElementById('mapView')?.dispatchEvent(new PointerEvent('pointerdown'));
 });
-addEventListener('keyup', e => release(e.key.toLowerCase()));
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 let jumpQueued = false;
 document.getElementById('jump').addEventListener('pointerdown', e => { e.preventDefault(); jumpQueued = true; });
 
 const clock = new THREE.Clock();
-// Cámara 3ª persona: cerca y detrás según hacia dónde mira el personaje
 const CAM_DIST = 4.2;
 const CAM_HEIGHT = 2.4;
 const CAM_LOOK_Y = 1.35;
 let mapOverview = false;
-// Vista cenital del rectángulo completo (90x72)
 const overview = { x: MAP_CENTER.x, z: MAP_CENTER.z, h: 95, yaw: 0 };
 const mapBtn = document.getElementById('mapView');
 if (mapBtn) mapBtn.addEventListener('pointerdown', e => {
@@ -237,9 +254,9 @@ if (mapBtn) mapBtn.addEventListener('pointerdown', e => {
     overview.x = MAP_CENTER.x;
     overview.z = MAP_CENTER.z;
     overview.h = 95;
-    document.getElementById('hint').textContent = 'VISTA MAPA · pad/flechas mueven · CORRER acerca · SALTAR aleja · otra vez VISTA para volver';
+    document.getElementById('hint').textContent = 'VISTA MAPA · joystick mueve · CORRER acerca · SALTAR aleja';
   } else {
-    document.getElementById('hint').textContent = 'EL REGRESO · PUZZLE TLDRAW';
+    document.getElementById('hint').textContent = 'EL REGRESO · JOYSTICK';
   }
 });
 camera.position.set(player.x, CAM_HEIGHT, player.z - CAM_DIST);
@@ -248,12 +265,27 @@ document.addEventListener('contextmenu', e => e.preventDefault());
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.04);
-  const f = (keys.w || keys.arrowup ? 1 : 0) - (keys.s || keys.arrowdown ? 1 : 0);
-  const side = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
-  const running = !!(keys.run || keys.shift || runLatch);
+
+  // Joystick tank (estilo Blade): vertical = avanzar donde mira; horizontal = girar
+  let f = 0, side = 0;
+  let lockFacing = null;
+  if (!mapOverview) {
+    if (joy.active && (Math.abs(joy.x) > 0.12 || Math.abs(joy.y) > 0.12)) {
+      if (Math.abs(joy.x) > 0.15) player.facing += joy.x * 2.6 * dt;
+      lockFacing = player.facing;
+      const fwd = joy.y;
+      side = Math.sin(player.facing) * fwd;
+      f = Math.cos(player.facing) * fwd;
+    } else {
+      f = (keys.w || keys.arrowup ? 1 : 0) - (keys.s || keys.arrowdown ? 1 : 0);
+      side = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
+    }
+  }
+  const running = !!(keys.run || keys.shift);
   const speed = running ? RUN_SPEED : WALK_SPEED;
 
   stepPlayer(player, course, { f: mapOverview ? 0 : f, side: mapOverview ? 0 : side, speed, running, jump: mapOverview ? false : jumpQueued, canMove: !attacking && !mapOverview }, dt);
+  if (lockFacing !== null) player.facing = lockFacing;
   if (!mapOverview) jumpQueued = false;
   resolveWallCollisions(player);
   resolveGround(player);
@@ -297,8 +329,8 @@ function animate() {
   }
 
   if (mapOverview) {
-    const ox = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
-    const oz = (keys.w || keys.arrowup ? 1 : 0) - (keys.s || keys.arrowdown ? 1 : 0);
+    const ox = joy.active ? joy.x : ((keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0));
+    const oz = joy.active ? joy.y : ((keys.w || keys.arrowup ? 1 : 0) - (keys.s || keys.arrowdown ? 1 : 0));
     overview.x += ox * 40 * dt;
     overview.z += oz * 40 * dt;
     if (keys.run || keys.shift) overview.h = Math.max(25, overview.h - 35 * dt);
@@ -309,11 +341,22 @@ function animate() {
     camera.lookAt(overview.x, 0.5, overview.z);
   } else {
     const py = Math.max(player.y, 0);
-    // Detrás del personaje según facing (0 = +Z)
-    const bx = -Math.sin(player.facing) * CAM_DIST;
-    const bz = -Math.cos(player.facing) * CAM_DIST;
-    const targetCam = new THREE.Vector3(player.x + bx, py + CAM_HEIGHT, player.z + bz);
-    camera.position.lerp(targetCam, Math.min(1, dt * 5));
+    let dist = CAM_DIST;
+    const bx0 = -Math.sin(player.facing);
+    const bz0 = -Math.cos(player.facing);
+    // Colisión de cámara vs paredes (estilo Blade): acercar si hay muro detrás
+    for (const w of WALLS) {
+      for (let t = 0.35; t <= dist; t += 0.45) {
+        const sx = player.x + bx0 * t;
+        const sz = player.z + bz0 * t;
+        if (sx >= w.minX - 0.15 && sx <= w.maxX + 0.15 && sz >= w.minZ - 0.15 && sz <= w.maxZ + 0.15) {
+          dist = Math.max(1.2, t - 0.35);
+          break;
+        }
+      }
+    }
+    const targetCam = new THREE.Vector3(player.x + bx0 * dist, py + CAM_HEIGHT, player.z + bz0 * dist);
+    camera.position.lerp(targetCam, Math.min(1, dt * 6));
     camera.lookAt(player.x, py + CAM_LOOK_Y, player.z);
   }
   updateStat();
