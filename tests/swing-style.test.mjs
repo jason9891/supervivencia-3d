@@ -22,6 +22,9 @@ const a0 = seq[0].a, st0 = styles[0];
 const rate = S.playbackRate(S.STRIKE_AT['sword attack'], a0, st0);
 check('el impacto del clip cae en el momento del golpe del juego', Math.abs(0.4 / rate - a0.hit / st0.speed) < 1e-9);
 check('el clip de 1.5 s se acelera (el golpe dura ~0.55 s)', rate > 1.3);
+const w = S.clipWindow(S.STRIKE_AT['sword heavy combo'], a0, st0);
+check('un clip largo de 4 s no se acelera al máximo: empieza antes del impacto', w.start > 2 && w.rate < 3 && Math.abs((S.STRIKE_AT['sword heavy combo'] - w.start) / w.rate - a0.hit / st0.speed) < 1e-9);
+check('un clip corto empieza desde el principio', S.clipWindow(0.25, a0, st0).start === 0);
 
 // Poses
 const p0 = S.swingPose(st0, 0), pHit = S.swingPose(st0, a0.hit), pEnd = S.swingPose(st0, a0.dur);
@@ -32,7 +35,7 @@ check('antes del impacto carga hacia el lado contrario', S.swingPose(st0, a0.hit
 // Selección de clip
 const has = n => ['sword attack'].includes(n);
 check('con solo UAL1 todos los golpes usan Sword_Attack', ['forward', 'side', 'neutral'].every(t => S.pickClip(t, 1, false, has) === 'sword attack') && S.pickClip('side', 3, true, has) === 'sword attack');
-const has2 = n => ['sword attack', 'sword dash', 'sword regular a', 'sword regular a combo', 'melee hook', 'ninjump slash'].includes(n);
-check('con UAL2 cada golpe usa un clip distinto', new Set([S.pickClip('side', 1, false, has2), S.pickClip('side', 2, false, has2), S.pickClip('side', 3, false, has2), S.pickClip('forward', 1, false, has2), S.pickClip('side', 3, true, has2)]).size === 5);
-check('si falta un clip de UAL2 usa Sword_Attack', S.pickClip('neutral', 1, false, has2) === 'sword attack');
+const has2 = n => ['sword attack', 'sword dash', 'sword regular a', 'sword regular b', 'sword regular c', 'sword regular combo'].includes(n);
+check('con UAL2 cada golpe usa un clip distinto', new Set([S.pickClip('side', 1, false, has2), S.pickClip('side', 2, false, has2), S.pickClip('forward', 1, false, has2), S.pickClip('side', 3, true, has2), S.pickClip('neutral', 1, false, has2)]).size === 5);
+check('si falta un clip de UAL2 usa Sword_Attack', S.pickClip('forward', 1, false, n => n === 'sword attack') === 'sword attack');
 console.log(fails ? 'HAY FALLAS' : 'TODAS LAS PRUEBAS PASARON'); process.exit(fails ? 1 : 0);

@@ -7,16 +7,20 @@
 // en que el juego aplica el daño.
 
 // Clips por orden de preferencia (nombres normalizados). El primero que exista se usa.
-// 'sword attack' viene en UAL1 (incluido). Los demás vienen en UAL2 Standard (CC0, opcional).
+// 'sword attack' viene en UAL1; el resto en UAL2 Standard (assets/characters/ual/UAL2_Standard.glb).
 export const CLIPS = {
   forward: ['sword dash', 'sword attack'],
-  side:    [['sword regular a', 'sword attack'], ['sword regular a combo', 'sword attack'], ['melee hook', 'sword attack']],
-  neutral: ['sword regular a combob', 'sword attack'],
-  finisher: ['ninjump slash', 'melee hook', 'sword attack'],
+  side:    [['sword regular a', 'sword attack'], ['sword regular b', 'sword attack'], ['sword regular c', 'sword attack']],
+  neutral: ['sword regular c', 'sword attack'],
+  finisher: ['sword regular combo', 'sword attack'],
 };
 
-// Segundo del clip donde cae el golpe, si no se puede medir en el propio clip.
-export const STRIKE_AT = { 'sword attack': 0.4 };
+// Segundo del clip donde cae el golpe (pico de velocidad del brazo derecho, medido en cada clip).
+export const STRIKE_AT = {
+  'sword attack': 0.4, 'sword regular a': 0.25, 'sword regular b': 0.25, 'sword regular c': 0.65,
+  'sword dash': 0.32, 'sword regular combo': 0.25, 'sword heavy combo': 2.55, 'melee hook': 0.25,
+};
+export const LEAD = 0.35; // segundos de preparación del clip que se conservan antes del impacto
 
 export function clipCandidates(type, chainLen, isCombo) {
   if (isCombo) return CLIPS.finisher;
@@ -48,6 +52,14 @@ export function swingStyle(a, chainLen = 1) {
 // Velocidad de reproducción para que el impacto del clip caiga en `a.hit` (segundos de juego).
 export function playbackRate(strikeTime, a, style) {
   return Math.max(0.5, Math.min(3, (strikeTime / Math.max(0.05, a.hit)) * style.speed));
+}
+
+// Ventana del clip: en clips largos (combos de 3-4 s) se empieza poco antes del impacto en vez de acelerar todo.
+//   start = segundo del clip donde se empieza; rate = velocidad para que el impacto caiga en a.hit.
+export function clipWindow(strikeTime, a, style) {
+  const start = Math.max(0, strikeTime - LEAD);
+  const rate = Math.max(0.5, Math.min(3, ((strikeTime - start) / Math.max(0.05, a.hit)) * style.speed));
+  return { start, rate };
 }
 
 // Postura del cuerpo en el instante `t` (s desde que empezó el golpe).

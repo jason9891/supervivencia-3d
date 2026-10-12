@@ -70,8 +70,8 @@ ring.rotation.x = -Math.PI / 2; ring.position.y = 0.01; scene.add(ring);
 
 const course = { segments: [{ a: 100, b: -100 }], gaps: 0, freeMap: true };
 const player = createPlayer(course);
-player.x = 0; player.z = 4; player.y = 0; player.facing = Math.PI;
-player.checkpoint = { x: 0, z: 4 };
+player.x = 0; player.z = -4; player.y = 0; player.facing = 0; // freeMap: adelante = +Z
+player.checkpoint = { x: 0, z: -4 };
 
 const hint = document.getElementById('hint');
 const actor = new THREE.Group(); scene.add(actor);
@@ -124,6 +124,7 @@ function strikeTime(name) {
   if (strikeCache.has(name)) return strikeCache.get(name);
   const clip = clipPool.get(name);
   let best = SW.STRIKE_AT[name] ?? (clip ? clip.duration * 0.4 : 0.4);
+  if (name in SW.STRIKE_AT) { strikeCache.set(name, best); return best; }
   try {
     const peaks = new Map();
     for (const tr of clip.tracks) {
@@ -151,9 +152,10 @@ function playAttackAnim(a) {
   if (name) {
     action = actionCache.get(name);
     if (!action) { action = mixer.clipAction(clipPool.get(name)); action.setLoop(THREE.LoopOnce, 1); action.clampWhenFinished = true; actionCache.set(name, action); }
-    action.setEffectiveTimeScale(SW.playbackRate(strikeTime(name), a, style));
+    const win = SW.clipWindow(strikeTime(name), a, style);
+    action.setEffectiveTimeScale(win.rate);
     if (activeA && activeA !== action) activeA.fadeOut(0.08);
-    action.reset().fadeIn(0.06).play(); activeA = action;
+    action.reset(); action.time = win.start; action.fadeIn(0.06).play(); activeA = action;
   }
   swing = { style, t: 0, adv: 0, action };
   attacking = true;
@@ -208,7 +210,7 @@ addEventListener('keyup', e => release(e.key.toLowerCase()));
 document.addEventListener('contextmenu', e => e.preventDefault());
 
 const clock = new THREE.Clock();
-const camOffset = new THREE.Vector3(0, 3.1, 6.2);
+const camOffset = new THREE.Vector3(0, 3.1, -6.2);
 camera.position.set(player.x + camOffset.x, camOffset.y, player.z + camOffset.z);
 const tmpV = new THREE.Vector3();
 
