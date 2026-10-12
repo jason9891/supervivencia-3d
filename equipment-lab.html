@@ -110,22 +110,22 @@ try{
    const sphere=(p,size,material,pos,detail=1)=>{const m=mesh(p,new THREE.IcosahedronGeometry(1,detail),material,pos);m.scale.set(...size);return m;};
    const cyl=(p,r1,r2,h,material,pos=[0,0,0],rot=[0,0,0],segments=10)=>mesh(p,new THREE.CylinderGeometry(r1,r2,h,segments),material,pos,rot);
    // Casco: cúpula, visera y reborde.
-   attachGear('helmet',[/head/],[0,.09,0],g=>{sphere(g,[.115,.125,.105],darkSteel,[0,.015,0],2);box(g,[.19,.035,.12],steel,[0,-.025,.005]);box(g,[.13,.025,.115],darkSteel,[0,-.065,.015]);box(g,[.10,.012,.008],cloth,[0,-.025,.067]);box(g,[.018,.035,.014],gold,[0,.075,.09]);});
+   attachGear('helmet',[/head/],[0,.09,0],g=>{sphere(g,[.115,.125,.105],darkSteel,[0,.015,0],2);gearBox(g,[.19,.035,.12],steel,[0,-.025,.005]);gearBox(g,[.13,.025,.115],darkSteel,[0,-.065,.015]);gearBox(g,[.10,.012,.008],cloth,[0,-.025,.067]);gearBox(g,[.018,.035,.014],gold,[0,.075,.09]);});
    // Peto y ribetes.
-   attachGear('chest',[/chest|spine1|spine2|upperbody|torso/],[0,.035,0],g=>{sphere(g,[.18,.22,.105],darkSteel,[0,0,0],1);box(g,[.235,.055,.025],steel,[0,.105,.075]);box(g,[.23,.035,.025],gold,[0,-.105,.075]);box(g,[.026,.20,.018],steel,[0,0,.102]);box(g,[.13,.025,.02],leather,[0,-.04,.11]);});
+   attachGear('chest',[/chest|spine1|spine2|upperbody|torso/],[0,.035,0],g=>{sphere(g,[.18,.22,.105],darkSteel,[0,0,0],1);gearBox(g,[.235,.055,.025],steel,[0,.105,.075]);gearBox(g,[.23,.035,.025],gold,[0,-.105,.075]);gearBox(g,[.026,.20,.018],steel,[0,0,.102]);gearBox(g,[.13,.025,.02],leather,[0,-.04,.11]);});
    // Hombreras articuladas.
    const shoulderMade=attachGear('shoulders',[/leftshoulder|shoulder_l|leftarm|upperarm_l/],[0,0,0],g=>{sphere(g,[.105,.075,.105],steel,[0,0,0],1);sphere(g,[.078,.052,.08],darkSteel,[0,.035,.005],1);sphere(g,[.018,.018,.018],gold,[0,.07,.015],1);});
    const shoulderRight=attachGear('shoulderR',[/rightshoulder|shoulder_r|rightarm|upperarm_r/],[0,0,0],g=>{sphere(g,[.105,.075,.105],steel,[0,0,0],1);sphere(g,[.078,.052,.08],darkSteel,[0,.035,.005],1);sphere(g,[.018,.018,.018],gold,[0,.07,.015],1);});
    // Brazales: placa sobre antebrazo y bandas de cuero.
-   const armL=attachGear('armL',[/leftforearm|lowerarm_l|forearm_l|lefthand/],[0,0,0],g=>{box(g,[.085,.19,.085],darkSteel,[0,0,0]);box(g,[.09,.035,.09],steel,[0,.07,0]);box(g,[.09,.025,.09],gold,[0,-.07,0]);});
-   const armR=attachGear('armR',[/rightforearm|lowerarm_r|forearm_r|righthand/],[0,0,0],g=>{box(g,[.085,.19,.085],darkSteel,[0,0,0]);box(g,[.09,.035,.09],steel,[0,.07,0]);box(g,[.09,.025,.09],gold,[0,-.07,0]);});
+   const armL=attachGear('armL',[/leftforearm|lowerarm_l|forearm_l|lefthand/],[0,0,0],g=>{gearBox(g,[.085,.19,.085],darkSteel,[0,0,0]);gearBox(g,[.09,.035,.09],steel,[0,.07,0]);gearBox(g,[.09,.025,.09],gold,[0,-.07,0]);});
+   const armR=attachGear('armR',[/rightforearm|lowerarm_r|forearm_r|righthand/],[0,0,0],g=>{gearBox(g,[.085,.19,.085],darkSteel,[0,0,0]);gearBox(g,[.09,.035,.09],steel,[0,.07,0]);gearBox(g,[.09,.025,.09],gold,[0,-.07,0]);});
    // Grebas y botas.
-   const legL=attachGear('legL',[/leftleg|leftcalf|lowerleg_l|leftlowerleg/],[0,0,0],g=>{box(g,[.095,.23,.105],darkSteel,[0,0,0]);box(g,[.105,.035,.115],steel,[0,.075,.005]);box(g,[.105,.025,.115],gold,[0,-.08,.005]);});
-   const legR=attachGear('legR',[/rightleg|rightcalf|lowerleg_r|rightlowerleg/],[0,0,0],g=>{box(g,[.095,.23,.105],darkSteel,[0,0,0]);box(g,[.105,.035,.115],steel,[0,.075,.005]);box(g,[.105,.025,.115],gold,[0,-.08,.005]);});
-   const bootL=attachGear('bootL',[/leftfoot|foot_l|leftankle/],[0,-.025,.035],g=>{box(g,[.12,.09,.19],leather,[0,0,.025]);box(g,[.125,.025,.19],darkSteel,[0,-.035,.025]);});
-   const bootR=attachGear('bootR',[/rightfoot|foot_r|rightankle/],[0,-.025,.035],g=>{box(g,[.12,.09,.19],leather,[0,0,.025]);box(g,[.125,.025,.19],darkSteel,[0,-.035,.025]);});
+   const legL=attachGear('legL',[/leftleg|leftcalf|lowerleg_l|leftlowerleg/],[0,0,0],g=>{gearBox(g,[.095,.23,.105],darkSteel,[0,0,0]);gearBox(g,[.105,.035,.115],steel,[0,.075,.005]);gearBox(g,[.105,.025,.115],gold,[0,-.08,.005]);});
+   const legR=attachGear('legR',[/rightleg|rightcalf|lowerleg_r|rightlowerleg/],[0,0,0],g=>{gearBox(g,[.095,.23,.105],darkSteel,[0,0,0]);gearBox(g,[.105,.035,.115],steel,[0,.075,.005]);gearBox(g,[.105,.025,.115],gold,[0,-.08,.005]);});
+   const bootL=attachGear('bootL',[/leftfoot|foot_l|leftankle/],[0,-.025,.035],g=>{gearBox(g,[.12,.09,.19],leather,[0,0,.025]);gearBox(g,[.125,.025,.19],darkSteel,[0,-.035,.025]);});
+   const bootR=attachGear('bootR',[/rightfoot|foot_r|rightankle/],[0,-.025,.035],g=>{gearBox(g,[.12,.09,.19],leather,[0,0,.025]);gearBox(g,[.125,.025,.19],darkSteel,[0,-.035,.025]);});
    // Espada: hoja, guarda, empuñadura y pomo sujetos a la mano derecha.
-   attachGear('sword',[/righthand|hand_r|right_hand/],[.015,0,.025],g=>{box(g,[.035,.36,.014],steel,[0,.235,0]);const tip=mesh(g,new THREE.ConeGeometry(.025,.09,4),steel,[0,.46,0]);tip.rotation.z=Math.PI;box(g,[.13,.025,.035],gold,[0,.045,0]);box(g,[.035,.12,.035],leather,[0,-.025,0]);sphere(g,[.045,.04,.045],gold,[0,-.095,0],1);});
+   attachGear('sword',[/righthand|hand_r|right_hand/],[.015,0,.025],g=>{gearBox(g,[.035,.36,.014],steel,[0,.235,0]);const tip=mesh(g,new THREE.ConeGeometry(.025,.09,4),steel,[0,.46,0]);tip.rotation.z=Math.PI;gearBox(g,[.13,.025,.035],gold,[0,.045,0]);gearBox(g,[.035,.12,.035],leather,[0,-.025,0]);sphere(g,[.045,.04,.045],gold,[0,-.095,0],1);});
    // Escudo: cara de acero con borde y umbo central, sujeto a mano izquierda.
    attachGear('shield',[/lefthand|hand_l|left_hand/],[0,0,.025],g=>{const outline=new THREE.Shape();outline.moveTo(-.13,.19);outline.quadraticCurveTo(0,.23,.13,.19);outline.lineTo(.115,-.06);outline.quadraticCurveTo(.08,-.17,0,-.22);outline.quadraticCurveTo(-.08,-.17,-.115,-.06);outline.closePath();const geo=new THREE.ExtrudeGeometry(outline,{depth:.025,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:.008,bevelThickness:.008});mesh(g,geo,steel,[0,0,0]);const inner=new THREE.Shape();inner.moveTo(-.105,.16);inner.quadraticCurveTo(0,.19,.105,.16);inner.lineTo(.09,-.055);inner.quadraticCurveTo(.06,-.14,0,-.18);inner.quadraticCurveTo(-.06,-.14,-.09,-.055);inner.closePath();mesh(g,new THREE.ShapeGeometry(inner),darkSteel,[0,0,.035]);sphere(g,[.035,.035,.02],gold,[0,0,.05],1);});
    // Alias de checkbox -> uno o varios grupos físicos.
