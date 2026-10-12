@@ -46,6 +46,8 @@ import { createPlayer, stepPlayer, WALK_SPEED, RUN_SPEED } from './course.js';
 import { createCombatAddon } from './combat-addon.js';
 import * as SW from './swing-style.js';
 import * as I from './inventario.js';
+import { loadHero, fitModel } from './hero.js';
+import { createEquipment } from './equipment.js';
 
 // Laboratorio: arena plana, sin mapa. Mismo personaje y mismos controles que el juego.
 const errorBox = document.getElementById('error');
@@ -95,14 +97,14 @@ function select(next) {
   if (activeA) activeA.fadeOut(0.15);
   next.reset().fadeIn(0.15).play(); activeA = next;
 }
-function setup(gltf) {
-  const model = gltf.scene; model.updateMatrixWorld(true);
-  const b = new THREE.Box3().setFromObject(model), size = b.getSize(new THREE.Vector3()), c = b.getCenter(new THREE.Vector3());
-  if (size.y > 0) { const f = 1.82 / size.y; model.scale.setScalar(f); model.position.set(-c.x * f, -b.min.y * f, -c.z * f); }
-  model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+let heroInfo = null, equipVisual = null, equipKey = '', equipStore = {}, modelUnit = 1;
+function setup(info) {
+  heroInfo = info;
+  const model = info.model;
+  modelUnit = 1 / fitModel(THREE, model);   // 1.82 m, de pie sobre y = 0
   actor.add(model);
   mixer = new THREE.AnimationMixer(model);
-  const clips = gltf.animations || [];
+  const clips = info.clips;
   const idle = findClip(clips, ['idle loop', 'idle standing', 'idle']);
   const walk = findClip(clips, ['walk loop', 'walk formal loop', 'walk']);
   const run = findClip(clips, ['sprint loop', 'jog fwd loop', 'run']);
@@ -110,21 +112,21 @@ function setup(gltf) {
   if (walk) walkA = mixer.clipAction(walk);
   if (run) runA = mixer.clipAction(run);
   for (const c of clips) clipPool.set(normName(c.name), c);
-  loadOptionalClips();
+  equipVisual = createEquipment(THREE, info.profile);
+  hint.textContent = 'LABORATORIO DE COMBATE · ' + (info.source === 'hero' ? 'HUMANO' : 'MANIQUÍ') + ' · ' + clipPool.size + ' ANIMACIONES';
   const ini = idleA || walkA; if (ini) { ini.play(); activeA = ini; }
 }
-// Solo se lee el personaje; no se modifica su modelo ni su aspecto.
-new GLTFLoader().load('./assets/characters/ual/UAL1_Standard.glb', setup, undefined, () => {
-  errorBox.style.display = 'block'; errorBox.textContent = 'No se pudo cargar el personaje. Revisa la conexión y recarga.';
+// El humano (CC0) con las animaciones de UAL; si no carga, el maniquí amarillo. Solo se lee: no se modifica el modelo.
+loadHero(THREE, GLTFLoader).then(setup).catch(e => {
+  errorBox.style.display = 'block'; errorBox.textContent = 'No se pudo cargar el personaje: ' + ((e && e.message) || e) + '. Revisa la conexión y recarga.';
 });
 
-// Clips extra (opcional): si pones UAL2_Standard.glb en assets/characters/ual/, cada golpe usa un clip distinto.
-// Comparten esqueleto con UAL1, así que sus animaciones se aplican al mismo personaje.
-function loadOptionalClips() {
-  new GLTFLoader().load('./assets/characters/ual/UAL2_Standard.glb', g => {
-    for (const c of g.animations || []) clipPool.set(normName(c.name), c);
-    hint.textContent = 'LABORATORIO DE COMBATE · ' + clipPool.size + ' ANIMACIONES';
-  }, undefined, () => {});
+// El equipo se dibuja sobre los huesos del personaje y se actualiza cuando cambias algo en el inventario.
+function syncEquipment() {
+  if (!equipVisual || !combat) return;
+  const e = combat.inventory.equip, key = [e.weapon, e.casco, e.pechera, e.grebas, e.escudo].join('|');
+  if (key === equipKey) return;
+  equipKey = key; equipVisual.apply(heroInfo.model, e, equipStore, modelUnit);
 }
 
 // Animaciones puntuales: beber, recibir golpe, bloquear un impacto, morir. Bloquean el movimiento mientras duran.
@@ -377,6 +379,7 @@ function animate() {
   }
   combat.update(dt);
   updateInteract();
+  syncEquipment();
 
   const camY = Math.max(player.y, -0.5);
   camera.position.lerp(tmpV.set(actor.position.x + camOffset.x, camOffset.y + camY, actor.position.z + camOffset.z), Math.min(1, dt * 3));

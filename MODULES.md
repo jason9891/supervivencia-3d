@@ -13,6 +13,8 @@
 | `session.js` | en rama | `respaldo-combate-patio` |
 | `combat-addon.js` | sí | `combate-en-mapa` + inventario |
 | `inventario.js` | sí | `inventario-funcional` |
+| `hero.js` | sí | humano CC0 + animaciones UAL + medidas del cuerpo |
+| `equipment-lab.html` | sí | taller de equipo (usa `hero.js` y `equipment.js`) |
 | `swing-style.js` | sí | postura y clip de cada golpe |
 | `combat-lab.html` | sí | página de pruebas de combate (botón en `index.html`) |
 

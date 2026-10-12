@@ -8,7 +8,11 @@ const TIER = {
   placas: { color: 0x6e747c, metal: 0.75, rough: 0.35 },
 };
 
-export function createEquipment(THREE) {
+// `profile`: medidas del cuerpo (ver PROFILES en hero.js). Sin él se usa el humano.
+import { PROFILES } from './hero.js';
+
+export function createEquipment(THREE, profile = PROFILES.hero) {
+  const P = profile;
   const cache = {};
   const mat = (key, color, metal = 0, rough = 0.7) =>
     cache[key] ?? (cache[key] = new THREE.MeshStandardMaterial({ color, metalness: metal, roughness: rough }));
@@ -52,56 +56,69 @@ export function createEquipment(THREE) {
     torre: () => group(box(0.05, 0.64, 0.42, steel(), -0.1, 0.16, 0), box(0.06, 0.5, 0.05, gold(), -0.13, 0.16, 0)),
   };
 
+  // Casco: una cúpula que envuelve la cabeza con un margen pequeño. Los cascos abiertos dejan la cara libre.
+  const H = P.head, hcy = (H.y0 + H.y1) / 2 + 0.012, hcz = (H.z0 + H.z1) / 2;
+  const hrx = H.hx + 0.022, hry = (H.y1 - H.y0) / 2 + 0.028, hrz = (H.z1 - H.z0) / 2 + 0.026;
+  const dome = (m, cap, grow = 0) => {
+    const d = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14, 0, Math.PI * 2, 0, Math.PI * cap), m);
+    d.scale.set(hrx + grow, hry + grow, hrz + grow); d.position.set(0, hcy, hcz); return d;
+  };
   const HELM = {
-    cuero: () => {
-      const d = ball(0.125, tier('cuero'), 0, 0.12, 0.005, 1, 1, 1.08);
-      d.geometry = new THREE.SphereGeometry(0.125, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.58);
-      return group(d);
-    },
-    malla: () => {
-      const d = ball(0.13, tier('malla'), 0, 0.12, 0.005, 1, 1, 1.08);
-      d.geometry = new THREE.SphereGeometry(0.13, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.6);
-      return group(d, box(0.02, 0.1, 0.02, tier('malla'), 0, 0.1, 0.125));
-    },
-    placas: () => {
-      const d = ball(0.14, tier('placas'), 0, 0.12, 0.005, 1, 1.05, 1.1);
-      d.geometry = new THREE.SphereGeometry(0.14, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.7);
-      return group(d, box(0.2, 0.05, 0.03, dark(), 0, 0.1, 0.14), box(0.02, 0.06, 0.22, tier('placas'), 0, 0.27, 0));
-    },
+    cuero: () => group(dome(tier('cuero'), 0.47)),
+    malla: () => group(dome(tier('malla'), 0.53),
+      box(0.02, 0.1, 0.02, tier('malla'), 0, hcy + hry * 0.2, hcz + hrz * 0.97)),   // nasal
+    placas: () => group(dome(tier('placas'), 0.68, 0.004),
+      box(hrx * 1.5, 0.045, 0.03, dark(), 0, hcy - 0.01, hcz + hrz * 0.9),          // visera
+      box(0.02, 0.06, hrz * 1.7, tier('placas'), 0, hcy + hry * 0.95, hcz)),         // cresta
   };
 
+  // Peto: placa que cubre el torso con un margen (spine_02; el torso llega hasta los hombros).
+  const T = P.torso, tw = (T.hx + 0.025) * 2, tcy = (T.y0 + T.y1) / 2, tdp = T.z1 - T.z0 + 0.04, tcz = (T.z0 + T.z1) / 2, th = T.y1 - T.y0 - 0.02;
   const CHEST = {
-    cuero: () => group(box(0.4, 0.32, 0.24, tier('cuero'), 0, 0.1, 0.01)),
-    malla: () => group(box(0.43, 0.36, 0.26, tier('malla'), 0, 0.1, 0.01), box(0.44, 0.04, 0.27, leather(), 0, -0.04, 0.01)),
-    placas: () => group(
-      box(0.46, 0.4, 0.28, tier('placas'), 0, 0.1, 0.01),
-      ball(0.09, tier('placas'), 0.27, 0.22, 0, 1, 0.8, 1), ball(0.09, tier('placas'), -0.27, 0.22, 0, 1, 0.8, 1)),
+    cuero: () => group(box(tw - 0.02, th, tdp - 0.02, tier('cuero'), 0, tcy, tcz)),
+    malla: () => group(box(tw, th, tdp, tier('malla'), 0, tcy, tcz), box(tw + 0.01, 0.04, tdp + 0.01, leather(), 0, T.y0 + 0.03, tcz)),
+    placas: () => group(box(tw + 0.01, th, tdp + 0.01, tier('placas'), 0, tcy, tcz),
+      box(tw + 0.02, 0.03, tdp + 0.02, dark(), 0, T.y0 + 0.04, tcz),
+      box(0.03, th * 0.8, 0.012, gold(), 0, tcy, T.z1 + 0.03)),
   };
+  // Hombreras (solo placas): van en el hueso del brazo para seguir sus movimientos.
+  const PAULDRON = { placas: () => group(ball(0.092, tier('placas'), 0, 0.03, 0, 1, 0.8, 1)) };
 
+  // Grebas: cilindros centrados en el muslo y la pantorrilla del cuerpo (el hueso va hacia la rodilla/tobillo en +Y local).
+  const TH = P.thigh, CA = P.calf;
   const THIGH = {
-    malla: () => group(cyl(0.078, 0.3, tier('malla'), 0, 0.2, 0)),
-    placas: () => group(cyl(0.085, 0.3, tier('placas'), 0, 0.2, 0), ball(0.075, tier('placas'), 0, 0.4, 0.03)),
+    malla: () => group(cyl(TH.r + 0.008, 0.31, tier('malla'), TH.cx, 0.2, TH.cz)),
+    placas: () => group(cyl(TH.r + 0.014, 0.3, tier('placas'), TH.cx, 0.2, TH.cz), ball(TH.r * 0.8, tier('placas'), TH.cx, 0.4, TH.cz + 0.04)),
   };
   const CALF = {
-    cuero: () => group(cyl(0.058, 0.34, tier('cuero'), 0, 0.22, 0)),
-    malla: () => group(cyl(0.062, 0.34, tier('malla'), 0, 0.22, 0)),
-    placas: () => group(cyl(0.068, 0.34, tier('placas'), 0, 0.22, 0)),
+    cuero: () => group(cyl(CA.r + 0.006, 0.34, tier('cuero'), CA.cx, 0.23, CA.cz)),
+    malla: () => group(cyl(CA.r + 0.012, 0.34, tier('malla'), CA.cx, 0.23, CA.cz)),
+    placas: () => group(cyl(CA.r + 0.02, 0.34, tier('placas'), CA.cx, 0.23, CA.cz)),
   };
 
-  function apply(model, eq, store) {
+  // La mano sujeta el arma por el centro de la palma; el eje de la hoja sigue la línea de los nudillos (ligeramente inclinada).
+  const inHand = obj => { const w = new THREE.Group(); obj.position.set(0, 0, 0); w.add(obj); w.position.set(...P.hand.palm); w.rotation.x = P.hand.gripTilt; return w; };
+  const onForearm = obj => { obj.position.x += P.forearm.outside + 0.052; return obj; }; // el escudo queda por fuera del antebrazo
+
+  // `unit` = 1 / escala del modelo: mantiene las piezas en metros reales aunque el modelo esté escalado.
+  function apply(model, eq, store, unit = 1) {
     for (const n of store.nodes || []) n.parent.remove(n.obj);
     store.nodes = [];
     const put = (boneName, obj) => {
       const b = model.getObjectByName(boneName);
       if (!b || !obj) return;
       obj.traverse?.(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+      if (unit !== 1) obj.scale.multiplyScalar(unit);
       b.add(obj);
       store.nodes.push({ parent: b, obj });
     };
-    put('hand_r', WEAPON[eq.weapon]?.());
-    put('lowerarm_l', SHIELD[eq.escudo]?.());
-    put('Head', HELM[eq.casco]?.());
+    const weapon = WEAPON[eq.weapon]?.();
+    put('hand_r', weapon && inHand(weapon));
+    const shield = SHIELD[eq.escudo]?.();
+    put('lowerarm_l', shield && onForearm(shield));
+    put(model.getObjectByName('Head') ? 'Head' : 'head', HELM[eq.casco]?.());
     put('spine_02', CHEST[eq.pechera]?.());
+    if (eq.pechera === 'placas') for (const side of ['l', 'r']) put('upperarm_' + side, PAULDRON.placas());
     for (const side of ['l', 'r']) {
       put('thigh_' + side, THIGH[eq.grebas]?.());
       put('calf_' + side, CALF[eq.grebas]?.());
