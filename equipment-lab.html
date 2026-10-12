@@ -106,7 +106,7 @@ try{
    const mat=(color,metalness=0.55,roughness=0.42)=>new THREE.MeshStandardMaterial({color,metalness,roughness});
    const steel=mat(0x777f86,.82,.28),darkSteel=mat(0x303a43,.72,.34),leather=mat(0x513421,.12,.72),gold=mat(0xa47a3e,.72,.3),cloth=mat(0x282e33,.05,.88);
    const mesh=(parent,geo,material,pos=[0,0,0],rot=[0,0,0])=>{const m=new THREE.Mesh(geo,material);m.position.set(...pos);m.rotation.set(...rot);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;};
-   const box=(p,size,material,pos,rot)=>mesh(p,new THREE.BoxGeometry(...size),material,pos,rot);
+   const gearBox=(p,size,material,pos,rot)=>mesh(p,new THREE.BoxGeometry(...size),material,pos,rot);
    const sphere=(p,size,material,pos,detail=1)=>{const m=mesh(p,new THREE.IcosahedronGeometry(1,detail),material,pos);m.scale.set(...size);return m;};
    const cyl=(p,r1,r2,h,material,pos=[0,0,0],rot=[0,0,0],segments=10)=>mesh(p,new THREE.CylinderGeometry(r1,r2,h,segments),material,pos,rot);
    // Casco: cúpula, visera y reborde.
