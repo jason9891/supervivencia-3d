@@ -203,8 +203,14 @@ export function buildMap1(scene) {
   addPlatform(80.5, 90, 63, 72, LEVEL1_Y + 10.5);
   const portcullis = box(5.5, 8, 0.7, iron, 77.5, LEVEL1_Y + 3.6, 63.5, true);
   portcullis.name = 'portcullis';
-  box(5, 0.3, 4, wood, 77.5, LEVEL1_Y + 10.6, 66);
-  addPlatform(75, 80, 64, 68, LEVEL1_Y + 10.5);
+  // Puente ROTO entre torres (hueco para probar salto). Restos a cada lado.
+  box(1.6, 0.28, 3.2, wood, 75.9, LEVEL1_Y + 10.55, 66.5);
+  addPlatform(75.1, 76.7, 64.8, 68.2, LEVEL1_Y + 10.5);
+  box(1.6, 0.28, 3.2, wood, 79.1, LEVEL1_Y + 10.55, 66.5);
+  addPlatform(78.3, 79.9, 64.8, 68.2, LEVEL1_Y + 10.5);
+  // Tablones caídos (solo visual, sin plataforma)
+  box(1.2, 0.15, 0.35, wood, 77.5, LEVEL1_Y + 10.2, 65.2);
+  box(0.9, 0.15, 0.3, wood, 77.2, LEVEL1_Y + 9.6, 67.8);
 
   const mod = buildModule2(scene, { addWall, addPlatform, box });
   if (mod.pagePos) PAGE_POS.copy(mod.pagePos);
