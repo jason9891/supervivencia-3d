@@ -59,8 +59,8 @@ addEventListener('error', e => { errorBox.style.display = 'block'; errorBox.text
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x12161c);
-scene.fog = new THREE.Fog(0x12161c, 40, 140);
-const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 0.1, 280);
+scene.fog = new THREE.Fog(0x12161c, 40, 160);
+const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 0.1, 320);
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
@@ -73,26 +73,26 @@ document.body.appendChild(renderer.domElement);
 
 scene.add(new THREE.HemisphereLight(0x8aa0b8, 0x2a2218, 1.0));
 const keyLight = new THREE.DirectionalLight(0xffe8c8, 2.0);
-keyLight.position.set(-10, 28, 10);
+keyLight.position.set(20, 32, 10);
 keyLight.castShadow = true;
 keyLight.shadow.mapSize.set(1024, 1024);
 keyLight.shadow.camera.near = 2;
-keyLight.shadow.camera.far = 160;
-keyLight.shadow.camera.left = -80;
-keyLight.shadow.camera.right = 80;
-keyLight.shadow.camera.top = 80;
-keyLight.shadow.camera.bottom = -80;
+keyLight.shadow.camera.far = 180;
+keyLight.shadow.camera.left = -90;
+keyLight.shadow.camera.right = 90;
+keyLight.shadow.camera.top = 90;
+keyLight.shadow.camera.bottom = -90;
 keyLight.shadow.bias = -0.001;
 scene.add(keyLight);
-scene.add(new THREE.DirectionalLight(0x9a4535, 1.1).translateX(6).translateY(8).translateZ(-8));
+scene.add(new THREE.DirectionalLight(0x9a4535, 1.1).translateX(10).translateY(10).translateZ(-6));
 
 const mapData = buildMap1(scene);
 let pageRead = false, hasKey = false, leverPulled = false, gateClosed = false, foodTaken = false;
 
 const course = { segments: [{ a: 100, b: -100 }], gaps: 0, freeMap: true };
 const player = createPlayer(course);
-player.x = 8; player.z = -12; player.y = 0;
-player.checkpoint = { x: 8, z: -12 };
+player.x = 10; player.z = -10; player.y = 0;
+player.checkpoint = { x: 10, z: -10 };
 player.facing = 0;
 
 const statBox = document.getElementById('stat');
@@ -234,7 +234,7 @@ function animate() {
   resolveWallCollisions(player);
   resolveGround(player);
 
-  if (!gateClosed && player.x > 30 && player.x < 42 && player.z > 56 && player.z < 68) {
+  if (!gateClosed && player.x > 40 && player.x < 52 && player.z > 112 && player.z < 124) {
     closePassageGate(mapData);
     gateClosed = true;
     document.getElementById('hint').textContent = 'La reja cae... algo anda mal';
