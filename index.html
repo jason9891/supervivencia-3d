@@ -4,7 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#101114">
-<title>Supervivencia 3D — Guerrero</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<title>Supervivencia 3D — Joystick v2</title>
 <style>
 *{box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 button{-webkit-appearance:none;appearance:none;cursor:pointer;padding:0;touch-action:none}
@@ -36,7 +38,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 <button type="button" id="mapView">VISTA · MAPA</button>
 <button type="button" id="characterLab" onclick="location.href='./character-lab.html'">VISUAL · PERSONAJE</button>
 <button type="button" id="combatLab" onclick="location.href='./combat-lab.html'">COMBATE · PRUEBAS</button>
-<div id="hint">EL REGRESO · JOYSTICK</div>
+<div id="hint">JOYSTICK v2 · EL REGRESO</div>
 <div id="joyBase" aria-label="Joystick">
   <div id="joyKnob"></div>
 </div>
@@ -168,7 +170,7 @@ function setupLocomotion(gltf, label) {
   if (ini) { ini.play(); activeAction = ini; }
   actor.visible = false;
   locomotionActor.visible = true;
-  document.getElementById('hint').textContent = label + ' · EL REGRESO';
+  document.getElementById('hint').textContent = label + ' · JOYSTICK v2';
 }
 gltfLoader.load('./assets/characters/ual/UAL1_Standard.glb', g => setupLocomotion(g, 'GUERRERO UAL'), undefined, () => {
   gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-person-animated.glb', g => setupLocomotion(g, 'RESPALDO'), undefined, () => {});
@@ -256,7 +258,7 @@ if (mapBtn) mapBtn.addEventListener('pointerdown', e => {
     overview.h = 95;
     document.getElementById('hint').textContent = 'VISTA MAPA · joystick mueve · CORRER acerca · SALTAR aleja';
   } else {
-    document.getElementById('hint').textContent = 'EL REGRESO · JOYSTICK';
+    document.getElementById('hint').textContent = 'JOYSTICK v2 · EL REGRESO';
   }
 });
 camera.position.set(player.x, CAM_HEIGHT, player.z - CAM_DIST);
@@ -266,7 +268,6 @@ function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.04);
 
-  // Joystick tank (estilo Blade): vertical = avanzar donde mira; horizontal = girar
   let f = 0, side = 0;
   let lockFacing = null;
   if (!mapOverview) {
@@ -344,7 +345,6 @@ function animate() {
     let dist = CAM_DIST;
     const bx0 = -Math.sin(player.facing);
     const bz0 = -Math.cos(player.facing);
-    // Colisión de cámara vs paredes (estilo Blade): acercar si hay muro detrás
     for (const w of WALLS) {
       for (let t = 0.35; t <= dist; t += 0.45) {
         const sx = player.x + bx0 * t;
