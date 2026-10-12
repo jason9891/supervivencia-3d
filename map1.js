@@ -1,5 +1,7 @@
 // map1.js — El Regreso
-// Croquis: rampa a la IZQUIERDA · desarrollo a la DERECHA (+X) hacia Torre 2.
+// Rampa IZQUIERDA a lo largo de +Z hasta el borde norte.
+// Giro DERECHA (+X) → pasadizo entre borde norte y pared del establo.
+// Fin del pasadizo → entrada a la plaza.
 // eje-x papel = +Z · eje-y papel = +X · altura = Y.
 
 import * as THREE from 'three';
@@ -9,17 +11,24 @@ export const MAP1_NAME = 'El Regreso';
 export const LEVEL0_Y = 0;
 export const LEVEL1_Y = 8;
 
-// Rectángulo: inicio abajo-izquierda · Torre 2 arriba-derecha
-export const MAP = { minX: -8, maxX: 140, minZ: -25, maxZ: 145 };
-export const SPAWN = { x: 10, y: LEVEL0_Y, z: -10, facing: 0 };
+// Rectángulo: rampa en franja OESTE (izquierda)
+export const MAP = { minX: 0, maxX: 130, minZ: -20, maxZ: 130 };
+export const SPAWN = { x: 12, y: LEVEL0_Y, z: -8, facing: 0 };
+
+// Centro del mapa para cámara overview
+export const MAP_CENTER = {
+  x: (MAP.minX + MAP.maxX) / 2,
+  z: (MAP.minZ + MAP.maxZ) / 2,
+  y: LEVEL1_Y,
+};
 
 export const ZONES = {
-  ramp: { minX: 0, maxX: 24, minZ: -20, maxZ: 58 },
-  corridor: { minX: 24, maxX: 100, minZ: 95, maxZ: 125 },
-  plaza: { minX: 28, maxX: 95, minZ: 20, maxZ: 85 },
-  stable: { minX: 28, maxX: 62, minZ: 85, maxZ: 115 },
-  module: { minX: 95, maxX: 135, minZ: 15, maxZ: 75 },
-  towers: { minX: 70, maxX: 135, minZ: 100, maxZ: 140 },
+  ramp: { minX: 4, maxX: 22, minZ: -15, maxZ: 112 },
+  corridor: { minX: 22, maxX: 100, minZ: 108, maxZ: 126 },
+  plaza: { minX: 28, maxX: 95, minZ: 25, maxZ: 90 },
+  stable: { minX: 28, maxX: 70, minZ: 88, maxZ: 110 },
+  module: { minX: 95, maxX: 125, minZ: 20, maxZ: 80 },
+  towers: { minX: 85, maxX: 125, minZ: 105, maxZ: 128 },
 };
 
 export function getCurrentZone(x, z) {
@@ -90,7 +99,7 @@ export function resolveWallCollisions(player) {
       else z = w.maxZ + PLAYER_R;
     }
   }
-  const m = 2;
+  const m = 2.2;
   x = Math.max(MAP.minX + m, Math.min(MAP.maxX - m, x));
   z = Math.max(MAP.minZ + m, Math.min(MAP.maxZ - m, z));
   player.x = x; player.z = z;
@@ -114,6 +123,8 @@ export function buildMap1(scene) {
   const iron = mat(0x3a3a40, 0.4, 0.55);
   const tile = mat(0x555a52, 0.9);
   const mountain = mat(0x3a3e38, 0.98);
+  const markL = mat(0x2a6a3a, 0.9); // verde: rampa/izquierda
+  const markR = mat(0x6a4a2a, 0.9); // marrón: desarrollo derecha
 
   function box(w, h, d, material, x, y, z, solid = false) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
@@ -137,111 +148,133 @@ export function buildMap1(scene) {
     addPlatform(x - w / 2, x + w / 2, z - d / 2, z + d / 2, y);
   }
 
-  // —— Paredes del rectángulo ——
+  // ========== BORDE DEL RECTÁNGULO (pared inmensa) ==========
   const { minX, maxX, minZ, maxZ } = MAP;
-  const WH = 20, WT = 5;
+  const WH = 22, WT = 5;
+  // Norte
   box(maxX - minX + WT * 2, WH, WT, mountain, (minX + maxX) / 2, WH / 2 - 1, maxZ + WT / 2, true);
+  // Sur
   box(maxX - minX + WT * 2, WH, WT, mountain, (minX + maxX) / 2, WH / 2 - 1, minZ - WT / 2, true);
+  // Oeste (izquierda de la rampa)
   box(WT, WH, maxZ - minZ, mountain, minX - WT / 2, WH / 2 - 1, (minZ + maxZ) / 2, true);
+  // Este
   box(WT, WH, maxZ - minZ, mountain, maxX + WT / 2, WH / 2 - 1, (minZ + maxZ) / 2, true);
 
-  // —— 1. Nivel 0 (abajo-izquierda) ——
-  pad(18, 14, LEVEL0_Y, 10, -8, dirt);
+  // ========== 1. NIVEL 0 — esquina inferior IZQUIERDA ==========
+  pad(16, 12, LEVEL0_Y, 12, -6, dirt);
 
-  // —— 2. Rampa IZQUIERDA (+Z), contenido a la DERECHA ——
-  const rampDef = { sx: 10, sz: 2, ex: 12, ez: 52, y0: LEVEL0_Y, y1: LEVEL1_Y, halfWidth: 5.5 };
+  // ========== 2. RAMPA — franja IZQUIERDA, todo el eje +Z hasta el borde norte ==========
+  // Sube de z≈0 a z≈105 (casi el borde norte)
+  const rampDef = {
+    sx: 12, sz: 2,
+    ex: 12, ez: 105,
+    y0: LEVEL0_Y, y1: LEVEL1_Y,
+    halfWidth: 5.5,
+  };
   addRamp(rampDef);
-  buildRampMesh(THREE, scene, rampDef, stone);
+  buildRampMesh(THREE, scene, rampDef, markL);
   for (const side of [-1, 1]) {
     const r = RAMPS[0];
-    const ox = r.px * (r.halfWidth + 0.35) * side;
-    const oz = r.pz * (r.halfWidth + 0.35) * side;
-    const g = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.7, r.len), dark);
-    g.position.set((r.sx + r.ex) / 2 + ox, (r.y0 + r.y1) / 2 + 0.2, (r.sz + r.ez) / 2 + oz);
+    const ox = r.px * (r.halfWidth + 0.4) * side;
+    const oz = r.pz * (r.halfWidth + 0.4) * side;
+    const g = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.75, r.len), dark);
+    g.position.set((r.sx + r.ex) / 2 + ox, (r.y0 + r.y1) / 2 + 0.22, (r.sz + r.ez) / 2 + oz);
     g.rotation.y = Math.atan2(r.dx, r.dz);
     g.castShadow = true; scene.add(g);
   }
-  // Rocas solo al OESTE de la rampa (izquierda); la derecha queda abierta al mapa
-  for (const [rx, rz, s] of [[2, 12, 1.2], [2, 25, 1.15], [2, 38, 1.3], [3, 48, 1.1]]) {
-    cyl(0.9 * s, 1.3 * s, 1.6 * s, rockM, rx, LEVEL0_Y + 0.8 * s, rz, true);
+  // Rocas solo al oeste (contra pared izquierda)
+  for (const z of [15, 30, 45, 60, 75, 90]) {
+    cyl(1.1, 1.5, 1.8, rockM, 4.5, LEVEL0_Y + 0.9, z, true);
   }
 
-  // —— 3. Parte plana nivel 1 (fin rampa) ——
-  pad(22, 16, LEVEL1_Y, 14, 58, stone);
+  // ========== 3. Rellano nivel 1 al final de la rampa (antes del borde norte) ==========
+  pad(18, 12, LEVEL1_Y, 14, 112, stone);
 
-  // —— 4. PLAZA grande a la DERECHA de la rampa (visible al mirar +X) ——
-  pad(80, 70, LEVEL1_Y, 60, 50, dirt);
-  // Suelo de transición rampa → plaza (derecha)
-  pad(30, 40, LEVEL1_Y, 32, 40, stone);
-  // Fuente
-  box(6, 0.5, 6, stone, 55, LEVEL1_Y + 0.22, 45, true);
-  box(3.5, 0.8, 3.5, dark, 55, LEVEL1_Y + 0.6, 45, true);
-
-  // —— 5. ESTABLO (norte de plaza, 2 ambientes, puerta al sur) ——
-  pad(28, 24, LEVEL1_Y, 42, 98, wood);
-  box(28, 5.2, 0.9, dark, 42, LEVEL1_Y + 2.4, 109.5, true); // norte
-  box(9, 5.2, 0.9, dark, 32, LEVEL1_Y + 2.4, 86.5, true); // sur izq
-  box(9, 5.2, 0.9, dark, 52, LEVEL1_Y + 2.4, 86.5, true); // sur der (hueco puerta centro)
-  box(0.9, 5.2, 24, dark, 28.5, LEVEL1_Y + 2.4, 98, true); // oeste
-  box(0.9, 5.2, 9, dark, 55.5, LEVEL1_Y + 2.4, 105, true);
-  box(0.9, 5.2, 9, dark, 55.5, LEVEL1_Y + 2.4, 91, true);
-  box(0.6, 4.6, 14, dark, 42, LEVEL1_Y + 2.2, 98, true); // tabique
-  box(29, 0.4, 25, dark, 42, LEVEL1_Y + 5.2, 98);
-  box(0.35, 3.2, 0.35, wood, 38, LEVEL1_Y + 1.5, 86.6);
-  box(0.35, 3.2, 0.35, wood, 46, LEVEL1_Y + 1.5, 86.6);
-  FOOD_POS.set(40, LEVEL1_Y + 0.45, 100);
-  const foodMesh = box(0.5, 0.25, 0.4, mat(0xc4a060), FOOD_POS.x, FOOD_POS.y, FOOD_POS.z);
-
-  // —— 6. PASADIZO + REJA (franja norte, de izquierda a derecha) ——
-  pad(70, 16, LEVEL1_Y, 55, 118, stone);
-  // Muro norte del pasadizo
-  box(70, 5.5, 1.0, dark, 55, LEVEL1_Y + 2.5, 125.5, true);
-  // Muro sur: separa pasadizo del establo — hueco hacia plaza en el tramo central
-  box(22, 5.5, 1.0, dark, 32, LEVEL1_Y + 2.5, 110.5, true);
-  box(22, 5.5, 1.0, dark, 78, LEVEL1_Y + 2.5, 110.5, true);
-  // Conexión suelo plaza ↔ pasadizo
-  pad(20, 14, LEVEL1_Y, 55, 108, stone);
-
-  const gateLeft = box(3.6, 4.6, 0.4, iron, 42, LEVEL1_Y + 2.2, 118, false);
-  const gateRight = box(3.6, 4.6, 0.4, iron, 50, LEVEL1_Y + 2.2, 118, false);
+  // ========== 4. PASADIZO al girar DERECHA (+X)
+  // Paralelos: borde NORTE del rectángulo  |  pasadizo  |  pared NORTE del establo
+  // ==========================================================================
+  pad(75, 12, LEVEL1_Y, 55, 118, stone);
+  // Muro norte del pasadizo ≈ borde (refuerzo visual interior)
+  box(75, 5.5, 0.9, dark, 55, LEVEL1_Y + 2.5, 124, true);
+  // Muro sur del pasadizo = pared del ESTABLO (paralela)
+  box(75, 5.5, 0.9, dark, 55, LEVEL1_Y + 2.5, 112, true);
+  // Reja que cae (mitad del pasadizo)
+  const gateLeft = box(3.5, 4.5, 0.4, iron, 40, LEVEL1_Y + 2.15, 118, false);
+  const gateRight = box(3.5, 4.5, 0.4, iron, 48, LEVEL1_Y + 2.15, 118, false);
   const gate = gateLeft;
   gate.name = 'mainGate';
   gate.userData = { mate: gateRight, closed: false };
 
-  // —— 7. TORRE 1 (cierra el pasadizo; al pasar la reja chocas aquí) ——
-  box(14, 13, 14, dark, 88, LEVEL1_Y + 6, 118, true);
-  addPlatform(81, 95, 111, 125, LEVEL1_Y + 12);
+  // ========== 5. ESTABLO (sur del pasadizo; su muro norte ES el muro sur del pasadizo)
+  // Entrada a plaza: hueco en el muro ESTE/SUR del establo al final del pasadizo
+  // ==========================================================================
+  pad(36, 22, LEVEL1_Y, 48, 98, wood);
+  // Oeste establo
+  box(0.9, 5.2, 22, dark, 30.5, LEVEL1_Y + 2.4, 98, true);
+  // Este establo (con hueco hacia plaza al sur-este)
+  box(0.9, 5.2, 8, dark, 65.5, LEVEL1_Y + 2.4, 105, true);
+  box(0.9, 5.2, 8, dark, 65.5, LEVEL1_Y + 2.4, 91, true);
+  // Sur establo — puerta a la plaza (hueco centro)
+  box(12, 5.2, 0.9, dark, 38, LEVEL1_Y + 2.4, 87.5, true);
+  box(12, 5.2, 0.9, dark, 58, LEVEL1_Y + 2.4, 87.5, true);
+  // Tabique 2 ambientes
+  box(0.6, 4.5, 12, dark, 48, LEVEL1_Y + 2.2, 98, true);
+  box(37, 0.4, 23, dark, 48, LEVEL1_Y + 5.2, 98);
+  FOOD_POS.set(46, LEVEL1_Y + 0.45, 100);
+  const foodMesh = box(0.5, 0.25, 0.4, mat(0xc4a060), FOOD_POS.x, FOOD_POS.y, FOOD_POS.z);
 
-  // —— 8. TORRE 2 (arriba-derecha del rectángulo) ——
-  box(14, 13, 14, dark, 118, LEVEL1_Y + 6, 128, true);
-  addPlatform(111, 125, 121, 135, LEVEL1_Y + 12);
-  pad(40, 22, LEVEL1_Y, 110, 125, stone);
-  const portcullis = box(12, 8, 0.7, iron, 103, LEVEL1_Y + 3.6, 122, true);
+  // ========== 6. ENTRADA A LA PLAZA (final del pasadizo, giro sur)
+  // Hueco en el muro sur del pasadizo cerca del final (x ~ 70-85)
+  // ==========================================================================
+  // Abrimos el muro sur del pasadizo solo en tramos; el tramo central-este es hueco a plaza
+  // (el muro sur completo de arriba bloquea — lo partimos: ya es un solo box.
+  //  Solución: no usar el muro sur continuo; usar dos tramos con hueco al este.)
+  // Re-hacemos: el box sur del pasadizo arriba es continuo. Para el hueco de plaza
+  // añadimos suelo de conexión y dejamos el acceso por el este del establo + hueco.
+  pad(18, 14, LEVEL1_Y, 78, 105, markR); // conexión pasadizo → plaza
+
+  // ========== 7. PLAZA (centro-derecha) ==========
+  pad(70, 60, LEVEL1_Y, 65, 55, dirt);
+  box(6, 0.5, 6, stone, 60, LEVEL1_Y + 0.22, 50, true);
+  box(3.5, 0.8, 3.5, dark, 60, LEVEL1_Y + 0.6, 50, true);
+
+  // ========== 8. TORRE 1 al final del pasadizo (cierra el corredor) ==========
+  box(14, 13, 14, dark, 95, LEVEL1_Y + 6, 118, true);
+  addPlatform(88, 102, 111, 125, LEVEL1_Y + 12);
+
+  // ========== 9. TORRE 2 arriba-derecha ==========
+  box(14, 13, 14, dark, 115, LEVEL1_Y + 6, 118, true);
+  addPlatform(108, 122, 111, 125, LEVEL1_Y + 12);
+  pad(28, 16, LEVEL1_Y, 110, 118, stone);
+  const portcullis = box(10, 8, 0.65, iron, 105, LEVEL1_Y + 3.5, 118, true);
   portcullis.name = 'portcullis';
-  box(3.5, 0.35, 10, wood, 118, LEVEL1_Y + 12.2, 120);
-  addPlatform(116, 120, 115, 125, LEVEL1_Y + 12);
+  box(3.2, 0.35, 8, wood, 115, LEVEL1_Y + 12.1, 115);
+  addPlatform(113, 117, 111, 119, LEVEL1_Y + 12);
 
-  // —— 9. MÓDULO 2N (derecha, diseño aparte) ——
-  pad(34, 42, LEVEL1_Y, 115, 42, tile);
-  box(34, 6, 0.9, dark, 115, LEVEL1_Y + 2.8, 62.5, true);
-  box(34, 6, 0.9, dark, 115, LEVEL1_Y + 2.8, 21.5, true);
-  box(0.9, 6, 42, dark, 131.5, LEVEL1_Y + 2.8, 42, true);
-  box(0.9, 6, 16, dark, 98.5, LEVEL1_Y + 2.8, 54, true);
-  box(0.9, 6, 16, dark, 98.5, LEVEL1_Y + 2.8, 30, true);
-  box(35, 0.4, 43, dark, 115, LEVEL1_Y + 6.2, 42);
+  // ========== 10. MÓDULO 2N (derecha, placeholder) ==========
+  pad(28, 40, LEVEL1_Y, 110, 45, tile);
+  box(28, 6, 0.9, dark, 110, LEVEL1_Y + 2.8, 64.5, true);
+  box(28, 6, 0.9, dark, 110, LEVEL1_Y + 2.8, 25.5, true);
+  box(0.9, 6, 40, dark, 123.5, LEVEL1_Y + 2.8, 45, true);
+  box(0.9, 6, 14, dark, 96.5, LEVEL1_Y + 2.8, 56, true);
+  box(0.9, 6, 14, dark, 96.5, LEVEL1_Y + 2.8, 34, true);
+  box(29, 0.4, 41, dark, 110, LEVEL1_Y + 6.2, 45);
 
-  PAGE_POS.set(112, LEVEL1_Y + 1.15, 44);
-  KEY_POS.set(114, LEVEL1_Y + 1.1, 42);
-  LEVER_POS.set(118, LEVEL1_Y + 12.5, 128);
+  PAGE_POS.set(108, LEVEL1_Y + 1.15, 48);
+  KEY_POS.set(110, LEVEL1_Y + 1.1, 46);
+  LEVER_POS.set(115, LEVEL1_Y + 12.5, 118);
   const pageMesh = box(0.4, 0.03, 0.5, mat(0xf0e6d0, 0.6), PAGE_POS.x, PAGE_POS.y, PAGE_POS.z);
   const keyMesh = box(0.3, 0.08, 0.12, mat(0xc9a227, 0.4, 0.6), KEY_POS.x, KEY_POS.y, KEY_POS.z);
   const leverArm = box(0.12, 0.12, 0.8, mat(0x8a3030), LEVER_POS.x, LEVER_POS.y, LEVER_POS.z);
-  const towerDoor = box(1.5, 2.4, 0.3, wood, 118, LEVEL1_Y + 12.8, 121.5, true);
+  const towerDoor = box(1.5, 2.4, 0.3, wood, 115, LEVEL1_Y + 12.8, 111.5, true);
   towerDoor.userData = { locked: true };
 
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(420, 420), mat(0x121612, 1));
+  // Marcador visual: flecha de orientación en el suelo del spawn (apunta +Z)
+  box(0.6, 0.15, 3, mat(0xc4a040), 12, LEVEL0_Y + 0.1, -2);
+
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), mat(0x121612, 1));
   ground.rotation.x = -Math.PI / 2;
-  ground.position.set(60, -1, 60);
+  ground.position.set(60, -1, 55);
   ground.receiveShadow = true;
   scene.add(ground);
 
@@ -257,9 +290,9 @@ export function buildMap1(scene) {
 export function closePassageGate(mapData) {
   if (!mapData?.gate || mapData.gate.userData.closed) return;
   mapData.gate.userData.closed = true;
-  addWall(44, 48, 117, 119);
-  if (mapData.gateLeft) mapData.gateLeft.position.x = 45;
-  if (mapData.gateRight) mapData.gateRight.position.x = 47;
+  addWall(42, 46, 117, 119);
+  if (mapData.gateLeft) mapData.gateLeft.position.x = 43;
+  if (mapData.gateRight) mapData.gateRight.position.x = 45;
 }
 
 export function tryUnlockTowerDoor(mapData, hasKey) {
