@@ -113,6 +113,7 @@ function setup(info) {
   if (run) runA = mixer.clipAction(run);
   for (const c of clips) clipPool.set(normName(c.name), c);
   equipVisual = createEquipment(THREE, info.profile);
+  equipVisual.loadModels(GLTFLoader).then(() => { equipKey = ''; }); // al cargar los GLB se redibuja el equipo
   hint.textContent = 'LABORATORIO DE COMBATE · ' + (info.source === 'hero' ? 'HUMANO' : 'MANIQUÍ') + ' · ' + clipPool.size + ' ANIMACIONES';
   const ini = idleA || walkA; if (ini) { ini.play(); activeA = ini; }
 }

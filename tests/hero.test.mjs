@@ -1,5 +1,6 @@
 import * as H from '../hero.js';
 import { createEquipment } from '../equipment.js';
+import * as EQ from '../equipment.js';
 import * as C from '../combat.js';
 let fails = 0; const check = (n, ok) => { console.log((ok ? 'OK   ' : 'FALLA ') + n); if (!ok) fails++; };
 
@@ -58,4 +59,27 @@ for (const tier of Object.keys(C.ARMOR.casco).filter(t => t !== 'ninguno')) {
 const m3 = new Obj(); const b3 = {}; m3.getObjectByName = n => b3[n] || (b3[n] = new Obj());
 createEquipment(THREE, H.PROFILES.hero).apply(m3, { weapon: 'espada' }, {}, 1 / 1.1);
 check('con unit=1/1.1 las piezas se reducen para quedar en metros reales', Math.abs(b3.hand_r.children[0].children[0].scale.x - 1 / 1.1) < 1e-9 || Math.abs(b3.hand_r.children[0].scale.x - 1 / 1.1) < 1e-9);
+
+// --- Modelos GLB de armas y escudos (Quaternius, CC0) ---
+import fs from 'node:fs';
+const readGlb = f => { const b = fs.readFileSync(f); const jl = b.readUInt32LE(12); return { magic: b.toString('latin1', 0, 4), json: JSON.parse(b.toString('utf8', 20, 20 + jl)) }; };
+for (const [id, nm] of Object.entries(EQ.WEAPON_MODEL)) {
+  const g = readGlb(`assets/weapons/${nm}.glb`), x = g.json.nodes[0].extras;
+  check(`${id} (${nm}.glb): GLB válido, largo 0.5–1.1 m, hoja hacia +Z con el agarre en el origen`, g.magic === 'glTF' && x.size[2] > 0.5 && x.size[2] < 1.1 && x.min[2] < -0.1 && x.max[2] > 0.3);
+}
+for (const [id, nm] of Object.entries(EQ.SHIELD_MODEL)) {
+  const g = readGlb(`assets/weapons/${nm}.glb`), x = g.json.nodes[0].extras;
+  check(`${id} (${nm}.glb): escudo de 0.35–0.8 m, fino en X (cara hacia -X)`, g.magic === 'glTF' && x.size[1] > 0.35 && x.size[1] < 0.8 && x.size[0] < 0.2 && Math.abs(x.max[0] - ({ Shield_Round: .07, Shield_Heater: .06, Shield_Heater_2: .04 })[nm]) < 0.011);
+}
+class FakeLoader { async loadAsync(url) { if (url.includes('Axe')) throw new Error('404'); const sc = new Obj(); sc.add(new Mesh({ type: 'glb' }, {})); sc.clone = () => { const c = new Obj(); c.add(new Mesh({ type: 'glb' }, {})); return c; }; return { scene: sc }; } }
+const mq = new Obj(), bq = {}; mq.getObjectByName = n => bq[n] || (bq[n] = new Obj());
+const eqm = createEquipment(THREE, H.PROFILES.hero);
+check('loadModels cuenta los GLB cargados y tolera los que fallan (5 de 6)', await eqm.loadModels(FakeLoader) === 5);
+const stq = {}; eqm.apply(mq, { weapon: 'espada', escudo: 'torre' }, stq);
+let glbs = 0; mq.traverse?.(() => {}); [bq.hand_r, bq.lowerarm_l].forEach(b => b.traverse(o => { if (o.geometry?.type === 'glb') glbs++; }));
+check('espada y escudo torre usan el modelo GLB', glbs === 2);
+check('el escudo con modelo queda por fuera del antebrazo (x negativo) y a media altura', bq.lowerarm_l.children[0].position.x < -0.05 && Math.abs(bq.lowerarm_l.children[0].position.y - 0.14) < 1e-9);
+eqm.apply(mq, { weapon: 'hacha' }, stq);
+let sim = 0; bq.hand_r.traverse(o => { if (o.geometry?.type === 'cyl') sim++; });
+check('si el modelo del hacha no cargó, se usa la forma simple', sim >= 1);
 console.log(fails ? 'HAY FALLAS' : 'TODAS LAS PRUEBAS PASARON'); process.exit(fails ? 1 : 0);

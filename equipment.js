@@ -11,9 +11,27 @@ const TIER = {
 // `profile`: medidas del cuerpo (ver PROFILES en hero.js). Sin él se usa el humano.
 import { PROFILES } from './hero.js';
 
+// Modelos de armas y escudos (Quaternius "Medieval Weapons", CC0) convertidos a GLB en metros: el agarre está en el origen,
+// la hoja sale por +Z y la cara del escudo mira a -X (ver assets/weapons/CREDITS.md). Si no cargan se usan las formas simples.
+export const MODEL_DIR = './assets/weapons/';
+export const WEAPON_MODEL = { espada: 'Sword', hacha: 'Axe', maza: 'Hammer_Small' };
+export const SHIELD_MODEL = { rodela: 'Shield_Round', escudo: 'Shield_Heater', torre: 'Shield_Heater_2' };
+const SHIELD_BACK_X = { Shield_Round: 0.07, Shield_Heater: 0.06, Shield_Heater_2: 0.04 }; // lado del asa (x máximo) de cada escudo
+
 export function createEquipment(THREE, profile = PROFILES.hero) {
   const P = profile;
   const cache = {};
+  const models = {};
+  // Carga los GLB (en paralelo). Devuelve cuántos cargaron; los que fallen se sustituyen por la forma simple.
+  async function loadModels(GLTFLoader, dir = MODEL_DIR) {
+    const loader = new GLTFLoader(); let n = 0;
+    const names = [...new Set([...Object.values(WEAPON_MODEL), ...Object.values(SHIELD_MODEL)])];
+    await Promise.all(names.map(async nm => {
+      try { models[nm] = (await loader.loadAsync(dir + nm + '.glb')).scene; n++; } catch (e) { /* queda la forma simple */ }
+    }));
+    return n;
+  }
+  const modelPiece = nm => { const m = nm && models[nm]; return m ? group(m.clone(true)) : null; };
   const mat = (key, color, metal = 0, rough = 0.7) =>
     cache[key] ?? (cache[key] = new THREE.MeshStandardMaterial({ color, metalness: metal, roughness: rough }));
   const steel = () => mat('steel', 0xb4bcc4, 0.8, 0.35);
@@ -37,7 +55,7 @@ export function createEquipment(THREE, profile = PROFILES.hero) {
   };
   const group = (...kids) => { const g = new THREE.Group(); kids.forEach(k => g.add(k)); return g; };
 
-  const WEAPON = {
+  const WEAPON_SIMPLE = {
     espada: () => group(
       box(0.035, 0.035, 0.2, leather()), box(0.26, 0.03, 0.04, steel(), 0, 0, 0.11),
       box(0.07, 0.014, 0.8, steel(), 0, 0, 0.51), ball(0.035, gold(), 0, 0, -0.11)),
@@ -50,7 +68,7 @@ export function createEquipment(THREE, profile = PROFILES.hero) {
       box(0.04, 0.26, 0.05, steel(), 0, 0, 0.78)),
   };
 
-  const SHIELD = {
+  const SHIELD_SIMPLE = {
     rodela: () => group(cyl(0.2, 0.04, wood(), -0.1, 0.14, 0, 0, Math.PI / 2), ball(0.05, gold(), -0.125, 0.14, 0)),
     escudo: () => group(cyl(0.28, 0.045, steel(), -0.1, 0.14, 0, 0, Math.PI / 2), ball(0.06, gold(), -0.13, 0.14, 0)),
     torre: () => group(box(0.05, 0.64, 0.42, steel(), -0.1, 0.16, 0), box(0.06, 0.5, 0.05, gold(), -0.13, 0.16, 0)),
@@ -112,10 +130,12 @@ export function createEquipment(THREE, profile = PROFILES.hero) {
       b.add(obj);
       store.nodes.push({ parent: b, obj });
     };
-    const weapon = WEAPON[eq.weapon]?.();
+    const weapon = modelPiece(WEAPON_MODEL[eq.weapon]) || WEAPON_SIMPLE[eq.weapon]?.();
     put('hand_r', weapon && inHand(weapon));
-    const shield = SHIELD[eq.escudo]?.();
-    put('lowerarm_l', shield && onForearm(shield));
+    const sm = modelPiece(SHIELD_MODEL[eq.escudo]);
+    if (sm) sm.position.set(P.forearm.outside - 0.012 - SHIELD_BACK_X[SHIELD_MODEL[eq.escudo]], 0.14, 0); // asa pegada al antebrazo, cara hacia fuera
+    const shield = sm || SHIELD_SIMPLE[eq.escudo]?.();
+    put('lowerarm_l', shield && (sm ? shield : onForearm(shield)));
     put(model.getObjectByName('Head') ? 'Head' : 'head', HELM[eq.casco]?.());
     put('spine_02', CHEST[eq.pechera]?.());
     if (eq.pechera === 'placas') for (const side of ['l', 'r']) put('upperarm_' + side, PAULDRON.placas());
@@ -125,7 +145,7 @@ export function createEquipment(THREE, profile = PROFILES.hero) {
     }
   }
 
-  return { apply };
+  return { apply, loadModels };
 }
 
 export function tintModel(model, color) {
