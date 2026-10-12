@@ -16,12 +16,13 @@ canvas{display:block;width:100%;height:100%}
 #joyKnob{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:#c4a574ee;border:2px solid #f3d7a0;pointer-events:none}
 #run{position:fixed;z-index:20;right:max(28px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom)+90px);width:68px;height:54px;border:1px solid #c4c9c0;border-radius:14px;background:#27352fe8;color:#fff;font:bold 13px system-ui}
 #jump{position:fixed;z-index:20;right:max(20px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom)+20px);width:84px;height:84px;border:2px solid #f3d7a0;border-radius:50%;background:#762b23;color:#fff4df;font:bold 15px system-ui}
+#run.on{background:#6b5a22;border-color:#f3d7a0}
 #stat{position:fixed;z-index:20;top:calc(env(safe-area-inset-top)+36px);left:0;right:0;text-align:center;color:#f3d7a0;font:bold 12px system-ui;pointer-events:none}
 </style>
 </head>
 <body>
 <a id="back" href="./index.html">← MAPA</a>
-<div id="hint">MÓDULO 2 · LAB — gradas subibles · giro suave</div>
+<div id="hint">MÓDULO 2 · LAB — puente roto · correr toggle</div>
 <div id="stat"></div>
 <div id="joyBase"><div id="joyKnob"></div></div>
 <button id="run">CORRER</button>
@@ -128,8 +129,15 @@ joyBase.addEventListener('pointermove', e => {
 joyBase.addEventListener('pointerup', resetJoy);
 joyBase.addEventListener('pointercancel', resetJoy);
 
-document.getElementById('run').addEventListener('pointerdown', e => { e.preventDefault(); keys.run = true; });
-document.getElementById('run').addEventListener('pointerup', () => { keys.run = false; });
+let runToggle = false;
+const runBtn = document.getElementById('run');
+runBtn.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  runToggle = !runToggle;
+  keys.run = runToggle;
+  runBtn.classList.toggle('on', runToggle);
+  runBtn.textContent = runToggle ? 'CORRIENDO' : 'CORRER';
+});
 let jumpQueued = false;
 document.getElementById('jump').addEventListener('pointerdown', e => { e.preventDefault(); jumpQueued = true; });
 addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; if (e.key === ' ') jumpQueued = true; });
@@ -144,7 +152,6 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.04);
   let f = 0, side = 0, lockFacing = null;
   if (joy.active && (Math.abs(joy.x) > 0.12 || Math.abs(joy.y) > 0.12)) {
-    // Invertido (perspectiva pantalla) + giro más lento
     if (Math.abs(joy.x) > 0.18) player.facing -= joy.x * 1.15 * dt;
     lockFacing = player.facing;
     side = Math.sin(player.facing) * joy.y;
@@ -153,7 +160,7 @@ function animate() {
     f = (keys.w ? 1 : 0) - (keys.s ? 1 : 0);
     side = (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
   }
-  const running = !!keys.run;
+  const running = !!(runToggle || keys.shift);
   stepPlayer(player, course, { f, side, speed: running ? RUN_SPEED : WALK_SPEED, running, jump: jumpQueued, canMove: true }, dt);
   if (lockFacing !== null) player.facing = lockFacing;
   jumpQueued = false;
