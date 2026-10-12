@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"><title>LAB · Armadura y armas medievales</title>
+<style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#171a20;color:#f1e6d2;font:14px system-ui}canvas{display:block;width:100%;height:100%;touch-action:none}#top{position:fixed;z-index:4;top:env(safe-area-inset-top);left:0;right:0;padding:12px;display:flex;justify-content:space-between;align-items:center;pointer-events:none}#top strong{font-size:11px;text-shadow:0 2px 5px #000}button{pointer-events:auto;border:1px solid #c4a574;border-radius:9px;background:#211d17;color:#f3d7a0;padding:10px;font-weight:700;font-size:11px}#controls{position:fixed;z-index:4;bottom:calc(env(safe-area-inset-bottom) + 12px);left:0;right:0;display:flex;justify-content:center;flex-wrap:wrap;gap:7px;padding:0 8px}#status{position:fixed;z-index:4;top:calc(env(safe-area-inset-top) + 50px);left:12px;right:12px;text-align:center;text-shadow:0 2px 5px #000;font-size:12px;pointer-events:none}#error{display:none;position:fixed;z-index:8;top:25%;left:10px;right:10px;background:#401b1b;padding:12px;white-space:pre-wrap;max-height:45%;overflow:auto}#movePad{position:fixed;z-index:5;left:12px;bottom:calc(env(safe-area-inset-bottom) + 112px);display:grid;grid-template-columns:repeat(3,48px);grid-template-rows:repeat(2,46px);gap:5px;touch-action:none}#movePad button{padding:0;font-size:19px;background:#183027e8;border-color:#9ac2a4;user-select:none;-webkit-user-select:none;touch-action:none}#movePad [data-move="forward"]{grid-column:2;grid-row:1}#movePad [data-move="left"]{grid-column:1;grid-row:2}#movePad [data-move="back"]{grid-column:2;grid-row:2}#movePad [data-move="right"]{grid-column:3;grid-row:2}#worldLabel{position:fixed;z-index:4;left:12px;top:calc(env(safe-area-inset-top) + 76px);font-size:10px;color:#d6e8d5;text-shadow:0 1px 4px #000;pointer-events:none}#gearPanel{position:fixed;z-index:6;right:10px;top:calc(env(safe-area-inset-top) + 48px);width:min(190px,47vw);padding:10px;border:1px solid #9b8053;border-radius:12px;background:#171713ed;color:#f2e2c2;display:flex;flex-direction:column;gap:7px;font-size:12px;max-height:54vh;overflow:auto}#gearPanel strong{font-size:11px;letter-spacing:.04em}#gearPanel label{display:flex;align-items:center;gap:7px}#gearPanel input{accent-color:#b68d50;width:17px;height:17px}#gearPanel small{font-size:10px;line-height:1.35;color:#c8d6c5}#gearPanel button{padding:7px 5px}#controls{gap:4px}#controls button{padding:8px 7px;font-size:10px}</style></head><body>
+<div id="top"><strong>LABORATORIO · EQUIPO MEDIEVAL</strong><button id="back">VOLVER</button></div><div id="status">LAB EQUIPO · Preparando mundo plano…</div><div id="worldLabel">MUNDO PLANO · PRUEBA PIEZAS DE EQUIPO SIN CAMBIAR EL JUEGO</div><div id="movePad" aria-label="Controles de movimiento"><button data-move="forward" aria-label="Avanzar">▲</button><button data-move="left" aria-label="Izquierda">◀</button><button data-move="back" aria-label="Retroceder">▼</button><button data-move="right" aria-label="Derecha">▶</button></div><div id="error"></div>
+<div id="gearPanel"><strong>EQUIPO INTERCAMBIABLE</strong><label><input type="checkbox" data-gear="helmet" checked> Casco</label><label><input type="checkbox" data-gear="chest" checked> Peto</label><label><input type="checkbox" data-gear="shoulders" checked> Hombreras</label><label><input type="checkbox" data-gear="arms" checked> Brazales</label><label><input type="checkbox" data-gear="legs" checked> Grebas</label><label><input type="checkbox" data-gear="boots" checked> Botas</label><label><input type="checkbox" data-gear="sword" checked> Espada</label><label><input type="checkbox" data-gear="shield" checked> Escudo</label><button id="gearReset">RESTABLECER EQUIPO</button><small id="gearStatus">Esperando el esqueleto CC0…</small></div><div id="controls"><button data-a="0">FRENTE</button><button data-a="1.5708">PERFIL D.</button><button data-a="3.14159">NUCA</button><button data-a="-1.5708">PERFIL I.</button><button id="reset">REINICIAR</button><button id="yellow">VER AMARILLO</button><button id="cc0">PROBAR CC0</button><button id="inherit">HEREDAR MOVIMIENTOS</button><select id="clipPick" aria-label="Seleccionar movimiento" disabled style="max-width:42vw"><option>Sin movimientos</option></select><button id="anim" disabled>REPRODUCIR</button><button id="stopAnim" disabled>DETENER</button></div>
+<script>
+(function(){var s=document.getElementById('status'),e=document.getElementById('error');document.getElementById('back').onclick=function(){location.href='./character-lab-recurso.html';};window.addEventListener('error',function(x){e.style.display='block';e.textContent=x.message||'Error JavaScript';s.textContent='PRUEBA 7.15 · Error de inicio';});window.setTimeout(function(){if(s.textContent==='PRUEBA 7.15 · Preparando bibliotecas 3D…'){s.textContent='PRUEBA 7.15 · El módulo no inició';e.style.display='block';e.textContent='El navegador no pudo iniciar el módulo. VOLVER sigue disponible.';}},9000);})();
+</script>
+<script type="importmap">{"imports":{"three":"https://esm.sh/three@0.170.0"}}</script>
+<script type="module">
+const status=document.getElementById('status'),errorBox=document.getElementById('error');
+function fail(message){status.textContent='PRUEBA 7.15 · Error de carga';errorBox.style.display='block';errorBox.textContent=String(message);}
+async function importFirst(urls){let last;for(const url of urls){try{return await import(url);}catch(e){last=e;}}throw new Error('No se pudo resolver una biblioteca desde los CDN probados. '+(last&&last.message||''));}
+try{
+ status.textContent='PRUEBA 7.15 · Cargando motor 3D…';
+ const THREE=await importFirst(['https://esm.sh/three@0.170.0','https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js']);
+ status.textContent='PRUEBA 7.15 · Cargando lector GLB…';
+ const loaderMod=await importFirst(['https://esm.sh/three@0.170.0/examples/jsm/loaders/GLTFLoader.js','https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js']);
+ const GLTFLoader=loaderMod.GLTFLoader;
+ const skeletonMod=await importFirst(['https://esm.sh/three@0.170.0/examples/jsm/utils/SkeletonUtils.js?external=three','https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/utils/SkeletonUtils.js']);
+ const retargetClip=skeletonMod.retargetClip;
+ const scene=new THREE.Scene();scene.background=new THREE.Color(0x171a20);scene.add(new THREE.HemisphereLight(0xd4e2ff,0x382a20,2.1));
+ const light=new THREE.DirectionalLight(0xffe2bd,3);light.position.set(-4,8,6);scene.add(light);
+ const camera=new THREE.PerspectiveCamera(35,innerWidth/innerHeight,.01,1000);camera.position.set(0,1,4.9);
+ const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;document.body.appendChild(renderer.domElement);
+ const floor=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.MeshStandardMaterial({color:0x426448,roughness:1}));floor.rotation.x=-Math.PI/2;floor.position.y=-.025;scene.add(floor);const worldGrid=new THREE.GridHelper(200,100,0x91b78b,0x638567);worldGrid.position.y=-.012;scene.add(worldGrid);
+ const loader=new GLTFLoader();let current=null,mixer=null,actions=[],angle=0,drag=false,lastX=0,lastY=0,serial=0;const moving=new Set();let walkingAction=null;
+ const yellowUrl='./assets/characters/ual/UAL1_Standard.glb',cc0Url='https://raw.githubusercontent.com/Seyamalam/blood-league-kickoff/main/public/assets/vendor/quaternius/night-striker.glb';
+ let yellowGLTF=null,cc0GLTF=null,retargetedClips=[];
+ let currentClipIndex=0;
+ function show(g,label){if(current)scene.remove(current);if(mixer)mixer.stopAllAction();mixer=null;actions=[];const model=g.scene;model.updateMatrixWorld(true);const b=new THREE.Box3().setFromObject(model),s=b.getSize(new THREE.Vector3()),center=b.getCenter(new THREE.Vector3());if(!s.y)throw new Error('El GLB no tiene una malla visible.');const k=1.82/s.y;model.scale.setScalar(k);model.position.set(-center.x*k,-b.min.y*k,-center.z*k);model.traverse(o=>{if(o.isMesh&&o.material)o.material.side=THREE.DoubleSide;});current=new THREE.Group();current.add(model);scene.add(current);current.rotation.y=angle;camera.position.set(0,1,4.9);camera.lookAt(0,.95,0);const clips=g.animations||[];if(clips.length){mixer=new THREE.AnimationMixer(model);actions=clips.map(c=>mixer.clipAction(c));fillClipPicker(clips);document.getElementById('anim').disabled=false;document.getElementById('anim').textContent='REPRODUCIR';document.getElementById('stopAnim').disabled=false;}else{document.getElementById('anim').disabled=true;document.getElementById('anim').textContent='SIN ANIMACIONES';document.getElementById('clipPick').disabled=true;document.getElementById('stopAnim').disabled=true;}status.textContent='PRUEBA 7.15 · '+label+' · '+clips.length+' animaciones propias';}
+ function fillClipPicker(clips){const pick=document.getElementById('clipPick');pick.innerHTML='';clips.forEach((clip,i)=>{const opt=document.createElement('option');opt.value=String(i);opt.textContent=(clip.name||('Movimiento '+(i+1)))+' · '+clip.duration.toFixed(2)+' s';pick.appendChild(opt);});pick.disabled=!clips.length;const preferred=clips.findIndex(clip=>/walk|run|jog|locomotion|move|cycle|idle|stride|step/i.test(clip.name)&&!/at pose|bind|rest|t.?pose/i.test(clip.name));currentClipIndex=preferred>=0?preferred:Math.max(0,clips.findIndex(clip=>!/at pose|bind|rest|t.pose/i.test(clip.name)));if(currentClipIndex<0)currentClipIndex=0;pick.value=String(currentClipIndex);}
+ function playSelected(){if(!actions.length)return;actions.forEach(a=>a.stop());currentClipIndex=Number(document.getElementById('clipPick').value)||0;const a=actions[currentClipIndex];if(!a)return;a.reset();a.setLoop(THREE.LoopRepeat,Infinity);a.clampWhenFinished=false;a.play();mixer.update(0.001);if(current){current.updateMatrixWorld(true);const bb=new THREE.Box3().setFromObject(current),ss=bb.getSize(new THREE.Vector3()),cc=bb.getCenter(new THREE.Vector3());if(!Number.isFinite(bb.min.y)||ss.y<0.25||ss.y>4||!Number.isFinite(cc.z)){a.stop();mixer.update(0);status.textContent='PRUEBA 7.15 · Movimiento detenido por seguridad';errorBox.style.display='block';errorBox.textContent='La animación produjo límites anormales en el modelo; se detuvo para evitar que desaparezca. Prueba otro movimiento. Si todos fallan, el esqueleto necesita retarget de pose, no copia directa de pistas.';return;}camera.position.set(cc.x,cc.y+0.25,cc.z+Math.max(2.8,ss.y*2.5));camera.lookAt(cc);}status.textContent='PRUEBA 7.15 · Reproduciendo '+a.getClip().name+' ('+a.getClip().duration.toFixed(2)+' s)';}
+ function loadBoth(){
+ status.textContent='PRUEBA 7.15 · Cargando ambos modelos para adaptar los esqueletos…';errorBox.style.display='none';
+ const finish=()=>{
+  try{
+   if(!cc0GLTF||!yellowGLTF)throw new Error('No se recibieron ambos modelos.');
+   if(current)scene.remove(current);if(mixer)mixer.stopAllAction();mixer=null;actions=[];
+   const targetRoot=cc0GLTF.scene, donorRoot=yellowGLTF.scene;
+   // Find the actual skinned meshes: retargetClip cannot receive scene roots.
+   let targetSkin=null,sourceSkin=null;
+   targetRoot.traverse(o=>{if(o.isSkinnedMesh&&o.skeleton&&(!targetSkin||(o.geometry?.attributes?.position?.count||0)>(targetSkin.geometry?.attributes?.position?.count||0)))targetSkin=o;});
+   donorRoot.traverse(o=>{if(o.isSkinnedMesh&&o.skeleton&&(!sourceSkin||(o.geometry?.attributes?.position?.count||0)>(sourceSkin.geometry?.attributes?.position?.count||0)))sourceSkin=o;});
+   if(!targetSkin)throw new Error('El hombre CC0 no contiene una malla SkinnedMesh con esqueleto.');
+   if(!sourceSkin)throw new Error('El personaje amarillo no contiene una malla SkinnedMesh con esqueleto.');
+   // Fit only the CC0 model, preserving its own rig and appearance.
+   const box=new THREE.Box3().setFromObject(targetRoot),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3());
+   const rawMax=Math.max(size.x,size.y,size.z);if(!rawMax)throw new Error('El hombre CC0 no tiene dimensiones visibles.');
+   // Detect a model authored sideways: for a standing character, Y should be its longest dimension.
+   const sideways=size.y<Math.max(size.x,size.z)*0.82;
+   const scale=1.82/(sideways?rawMax:size.y);targetRoot.scale.setScalar(scale);
+   targetRoot.traverse(o=>{if(o.isMesh&&o.material)o.material.side=THREE.DoubleSide;});
+   current=new THREE.Group();const oriented=new THREE.Group();oriented.name='CharacterUprightCorrection';oriented.add(targetRoot);current.add(oriented);scene.add(current);
+   if(sideways){
+    // Rotate the axis that contains the character's height onto world +Y.
+    // Longest X axis -> rotate around Z; longest Z axis -> rotate around X.
+    if(size.x>=size.z){oriented.rotation.z=Math.PI/2;}
+    else{oriented.rotation.x=-Math.PI/2;}
+   }
+   current.rotation.y=angle;
+   // Center the character on X/Z, then use a conservative vertical lift.
+   // Bounds from a bind-pose model can be misleading for multi-part skinned meshes.
+   current.updateMatrixWorld(true);
+   const uprightBox=new THREE.Box3().setFromObject(current);
+   current.position.x-=uprightBox.getCenter(new THREE.Vector3()).x;
+   current.position.z-=uprightBox.getCenter(new THREE.Vector3()).z;
+   current.position.y+=Math.max(0,-uprightBox.min.y)+0.12;
+   current.updateMatrixWorld(true);
+   camera.position.set(0,1,4.9);camera.lookAt(0,1.0,0);
+   status.textContent='PRUEBA 7.15 · '+(sideways?'Corrigiendo orientación horizontal':'Orientación vertical detectada')+' · ajuste de postura aplicado';
+   targetRoot.updateMatrixWorld(true);donorRoot.updateMatrixWorld(true);
+   const targetBones=targetSkin.skeleton.bones,sourceBones=sourceSkin.skeleton.bones;
+   const norm=n=>String(n||'').toLowerCase().replace(/mixamorig|armature|quaternius|character|rig|skeleton/g,'').replace(/[^a-z0-9]/g,'');
+   const canon=n=>{let x=norm(n);const aliases=[
+    [/^(hips|hip|pelvis|rootjoint|root)$/,'hips'],[/^(spine|spine0|spine1|lowerback)$/,'spine'],[/^(spine2|chest|upperchest)$/,'chest'],[/^(neck|neck1)$/,'neck'],[/^(head|headend)$/,'head'],
+    [/^(leftshoulder|shoulderl|lshoulder)$/,'leftshoulder'],[/^(rightshoulder|shoulderr|rshoulder)$/,'rightshoulder'],
+    [/^(leftarm|upperarml|lupperarm|leftupperarm)$/,'leftupperarm'],[/^(rightarm|upperarmr|rupperarm|rightupperarm)$/,'rightupperarm'],
+    [/^(leftforearm|lowerarml|lforearm|leftlowerarm)$/,'leftforearm'],[/^(rightforearm|lowerarmr|rforearm|rightlowerarm)$/,'rightforearm'],
+    [/^(lefthand|handl|lhand)$/,'lefthand'],[/^(righthand|handr|rhand)$/,'righthand'],
+    [/^(leftupleg|upperlegl|leftupperleg|thighl|lthigh)$/,'leftupleg'],[/^(rightupleg|upperlegr|rightupperleg|thighr|rthigh)$/,'rightupleg'],
+    [/^(leftleg|lowerlegl|leftcalf|calfl|lcalf)$/,'leftleg'],[/^(rightleg|lowerlegr|rightcalf|calfr|rcalf)$/,'rightleg'],
+    [/^(leftfoot|footl|lfoot)$/,'leftfoot'],[/^(rightfoot|footr|rfoot)$/,'rightfoot'],
+    [/^(lefttoebase|lefttoe|toel|ltoe)$/,'lefttoe'],[/^(righttoebase|righttoe|toer|rtoe)$/,'righttoe']
+   ];for(const [re,val] of aliases)if(re.test(x))return val;return x;};
+   const sourceByCanon=new Map();for(const b of sourceBones){const key=canon(b.name);if(!sourceByCanon.has(key))sourceByCanon.set(key,b.name);}
+   const names={};let mapped=0;for(const b of targetBones){const key=canon(b.name),src=sourceByCanon.get(key);if(src){names[b.name]=src;mapped++;}}
+   if(mapped<8)throw new Error('Solo se pudieron emparejar '+mapped+' huesos. CC0: '+targetBones.slice(0,12).map(b=>b.name).join(', ')+'; amarillo: '+sourceBones.slice(0,12).map(b=>b.name).join(', '));
+   const sourceHip=sourceBones.find(b=>/hips|hip|pelvis/i.test(b.name))||sourceBones[0];
+   retargetedClips=[];const srcClips=yellowGLTF.animations||[];
+   // Both assets use the same named 65-bone Quaternius rig; retargeting math was discarding all tracks. Remap tracks directly by bone name.
+   const targetBoneNames=new Set(targetBones.map(b=>b.name));
+   const sourceBoneByName=new Map(sourceBones.map(b=>[b.name,b]));const targetBoneByName=new Map(targetBones.map(b=>[b.name,b]));
+   for(const clip of srcClips){try{const tracks=[];for(const original of clip.tracks){const track=original.clone();let parsed;try{parsed=THREE.PropertyBinding.parseTrackName(track.name);}catch(e){}if(parsed&&parsed.nodeName){const srcName=parsed.nodeName;const targetName=names[srcName]||srcName;const property=parsed.propertyName||'';if(property==='position'||property==='scale')continue;if(/^(root|armature)$/i.test(srcName))continue;if(targetBoneNames.has(targetName)){if(property==='quaternion'){const sb=sourceBoneByName.get(srcName),tb=targetBoneByName.get(targetName);if(sb&&tb&&track.values.length%4===0){const invSource=sb.quaternion.clone().invert(),targetRest=tb.quaternion.clone();for(let k=0;k<track.values.length;k+=4){const animated=new THREE.Quaternion(track.values[k],track.values[k+1],track.values[k+2],track.values[k+3]);animated.premultiply(invSource);animated.premultiply(targetRest);animated.normalize();track.values[k]=animated.x;track.values[k+1]=animated.y;track.values[k+2]=animated.z;track.values[k+3]=animated.w;}}}track.name=track.name.replace(srcName,targetName);tracks.push(track);}else if(srcName===targetRoot.name||srcName===''){tracks.push(track);}}else tracks.push(track);}if(tracks.length){const adapted=new THREE.AnimationClip(clip.name||('Movimiento '+(retargetedClips.length+1)),clip.duration,tracks);retargetedClips.push(adapted);}}catch(e){console.warn('Adaptación por pose base fallida:',clip.name,e);}}
+   if(!retargetedClips.length){status.textContent='PRUEBA 7.15 · Esqueletos detectados; falta ajustar compatibilidad.';errorBox.style.display='block';errorBox.textContent='Malla objetivo: '+targetSkin.name+'; donante: '+sourceSkin.name+'; huesos emparejados: '+mapped+'/'+targetBones.length+'; animaciones origen: '+srcClips.length+'. No se generaron pistas compatibles. Primeras pistas origen: '+((srcClips[0]&&srcClips[0].tracks.slice(0,12).map(t=>t.name).join(', '))||'ninguna')+'. Nombres CC0: '+targetBones.slice(0,18).map(b=>b.name).join(', ')+'. Nombres amarillo: '+sourceBones.slice(0,18).map(b=>b.name).join(', ')+'.';document.getElementById('anim').disabled=true;return;}
+ 
+   // Equipo medieval modular: cada pieza vive bajo un hueso del modelo CC0.
+   const gearGroups={}; let modelScale=scale;
+   const gearStatus=document.getElementById('gearStatus');
+   const findBone=(patterns)=>targetBones.find(b=>patterns.some(re=>re.test(String(b.name).toLowerCase())));
+   const attachGear=(slot,patterns,offset,build)=>{
+     const bone=findBone(patterns);
+     if(!bone)return false;
+     const root=new THREE.Group();root.name='Equipment_'+slot;root.position.set(offset[0]/modelScale,offset[1]/modelScale,offset[2]/modelScale);root.scale.setScalar(1/modelScale);bone.add(root);root.userData.slot=slot;build(root);gearGroups[slot]=root;return true;
+   };
+   const mat=(color,metalness=0.55,roughness=0.42)=>new THREE.MeshStandardMaterial({color,metalness,roughness});
+   const steel=mat(0x777f86,.82,.28),darkSteel=mat(0x303a43,.72,.34),leather=mat(0x513421,.12,.72),gold=mat(0xa47a3e,.72,.3),cloth=mat(0x282e33,.05,.88);
+   const mesh=(parent,geo,material,pos=[0,0,0],rot=[0,0,0])=>{const m=new THREE.Mesh(geo,material);m.position.set(...pos);m.rotation.set(...rot);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;};
+   const box=(p,size,material,pos,rot)=>mesh(p,new THREE.BoxGeometry(...size),material,pos,rot);
+   const sphere=(p,size,material,pos,detail=1)=>{const m=mesh(p,new THREE.IcosahedronGeometry(1,detail),material,pos);m.scale.set(...size);return m;};
+   const cyl=(p,r1,r2,h,material,pos=[0,0,0],rot=[0,0,0],segments=10)=>mesh(p,new THREE.CylinderGeometry(r1,r2,h,segments),material,pos,rot);
+   // Casco: cúpula, visera y reborde.
+   attachGear('helmet',[/head/],[0,.09,0],g=>{sphere(g,[.115,.125,.105],darkSteel,[0,.015,0],2);box(g,[.19,.035,.12],steel,[0,-.025,.005]);box(g,[.13,.025,.115],darkSteel,[0,-.065,.015]);box(g,[.10,.012,.008],cloth,[0,-.025,.067]);box(g,[.018,.035,.014],gold,[0,.075,.09]);});
+   // Peto y ribetes.
+   attachGear('chest',[/chest|spine1|spine2|upperbody|torso/],[0,.035,0],g=>{sphere(g,[.18,.22,.105],darkSteel,[0,0,0],1);box(g,[.235,.055,.025],steel,[0,.105,.075]);box(g,[.23,.035,.025],gold,[0,-.105,.075]);box(g,[.026,.20,.018],steel,[0,0,.102]);box(g,[.13,.025,.02],leather,[0,-.04,.11]);});
+   // Hombreras articuladas.
+   const shoulderMade=attachGear('shoulders',[/leftshoulder|shoulder_l|leftarm|upperarm_l/],[0,0,0],g=>{sphere(g,[.105,.075,.105],steel,[0,0,0],1);sphere(g,[.078,.052,.08],darkSteel,[0,.035,.005],1);sphere(g,[.018,.018,.018],gold,[0,.07,.015],1);});
+   const shoulderRight=attachGear('shoulderR',[/rightshoulder|shoulder_r|rightarm|upperarm_r/],[0,0,0],g=>{sphere(g,[.105,.075,.105],steel,[0,0,0],1);sphere(g,[.078,.052,.08],darkSteel,[0,.035,.005],1);sphere(g,[.018,.018,.018],gold,[0,.07,.015],1);});
+   // Brazales: placa sobre antebrazo y bandas de cuero.
+   const armL=attachGear('armL',[/leftforearm|lowerarm_l|forearm_l|lefthand/],[0,0,0],g=>{box(g,[.085,.19,.085],darkSteel,[0,0,0]);box(g,[.09,.035,.09],steel,[0,.07,0]);box(g,[.09,.025,.09],gold,[0,-.07,0]);});
+   const armR=attachGear('armR',[/rightforearm|lowerarm_r|forearm_r|righthand/],[0,0,0],g=>{box(g,[.085,.19,.085],darkSteel,[0,0,0]);box(g,[.09,.035,.09],steel,[0,.07,0]);box(g,[.09,.025,.09],gold,[0,-.07,0]);});
+   // Grebas y botas.
+   const legL=attachGear('legL',[/leftleg|leftcalf|lowerleg_l|leftlowerleg/],[0,0,0],g=>{box(g,[.095,.23,.105],darkSteel,[0,0,0]);box(g,[.105,.035,.115],steel,[0,.075,.005]);box(g,[.105,.025,.115],gold,[0,-.08,.005]);});
+   const legR=attachGear('legR',[/rightleg|rightcalf|lowerleg_r|rightlowerleg/],[0,0,0],g=>{box(g,[.095,.23,.105],darkSteel,[0,0,0]);box(g,[.105,.035,.115],steel,[0,.075,.005]);box(g,[.105,.025,.115],gold,[0,-.08,.005]);});
+   const bootL=attachGear('bootL',[/leftfoot|foot_l|leftankle/],[0,-.025,.035],g=>{box(g,[.12,.09,.19],leather,[0,0,.025]);box(g,[.125,.025,.19],darkSteel,[0,-.035,.025]);});
+   const bootR=attachGear('bootR',[/rightfoot|foot_r|rightankle/],[0,-.025,.035],g=>{box(g,[.12,.09,.19],leather,[0,0,.025]);box(g,[.125,.025,.19],darkSteel,[0,-.035,.025]);});
+   // Espada: hoja, guarda, empuñadura y pomo sujetos a la mano derecha.
+   attachGear('sword',[/righthand|hand_r|right_hand/],[.015,0,.025],g=>{box(g,[.035,.36,.014],steel,[0,.235,0]);const tip=mesh(g,new THREE.ConeGeometry(.025,.09,4),steel,[0,.46,0]);tip.rotation.z=Math.PI;box(g,[.13,.025,.035],gold,[0,.045,0]);box(g,[.035,.12,.035],leather,[0,-.025,0]);sphere(g,[.045,.04,.045],gold,[0,-.095,0],1);});
+   // Escudo: cara de acero con borde y umbo central, sujeto a mano izquierda.
+   attachGear('shield',[/lefthand|hand_l|left_hand/],[0,0,.025],g=>{const outline=new THREE.Shape();outline.moveTo(-.13,.19);outline.quadraticCurveTo(0,.23,.13,.19);outline.lineTo(.115,-.06);outline.quadraticCurveTo(.08,-.17,0,-.22);outline.quadraticCurveTo(-.08,-.17,-.115,-.06);outline.closePath();const geo=new THREE.ExtrudeGeometry(outline,{depth:.025,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:.008,bevelThickness:.008});mesh(g,geo,steel,[0,0,0]);const inner=new THREE.Shape();inner.moveTo(-.105,.16);inner.quadraticCurveTo(0,.19,.105,.16);inner.lineTo(.09,-.055);inner.quadraticCurveTo(.06,-.14,0,-.18);inner.quadraticCurveTo(-.06,-.14,-.09,-.055);inner.closePath();mesh(g,new THREE.ShapeGeometry(inner),darkSteel,[0,0,.035]);sphere(g,[.035,.035,.02],gold,[0,0,.05],1);});
+   // Alias de checkbox -> uno o varios grupos físicos.
+   const gearAliases={helmet:['helmet'],chest:['chest'],shoulders:['shoulders','shoulderR'],arms:['armL','armR'],legs:['legL','legR'],boots:['bootL','bootR'],sword:['sword'],shield:['shield']};
+   document.querySelectorAll('[data-gear]').forEach(input=>input.addEventListener('change',()=>{for(const key of gearAliases[input.dataset.gear]||[]){if(gearGroups[key])gearGroups[key].visible=input.checked;}}));
+   document.getElementById('gearReset').onclick=()=>document.querySelectorAll('[data-gear]').forEach(input=>{input.checked=true;for(const key of gearAliases[input.dataset.gear]||[]){if(gearGroups[key])gearGroups[key].visible=true;}});
+   const missing=['helmet','chest','shoulders','shoulderR','armL','armR','legL','legR','bootL','bootR','sword','shield'].filter(k=>!gearGroups[k]);
+   gearStatus.textContent='Piezas montadas: '+Object.keys(gearGroups).length+'/12. '+(missing.length?'Sin hueso compatible: '+missing.join(', '):'Todos los puntos de anclaje detectados.');
+
+   mixer=new THREE.AnimationMixer(targetRoot);actions=retargetedClips.map(clip=>mixer.clipAction(clip));fillClipPicker(retargetedClips);document.getElementById('anim').disabled=false;document.getElementById('anim').textContent='REPRODUCIR';document.getElementById('stopAnim').disabled=false;
+    // PRUEBA 7.15: volver a la posición neutra visible confirmada y no iniciar animación.
+    floor.visible=true;worldGrid.visible=true;actions.forEach(a=>a.stop());targetRoot.updateMatrixWorld(true);current.updateMatrixWorld(true);
+    let neutralBounds=new THREE.Box3().setFromObject(current);const neutralSize=neutralBounds.getSize(new THREE.Vector3());
+    if(Number.isFinite(neutralBounds.min.y)&&neutralSize.y>0){current.position.y+=0.08-neutralBounds.min.y;current.updateMatrixWorld(true);neutralBounds=new THREE.Box3().setFromObject(current);}
+    const neutralCenter=neutralBounds.getCenter(new THREE.Vector3());camera.position.set(neutralCenter.x,neutralCenter.y+0.25,neutralCenter.z+Math.max(2.8,neutralSize.y*2.5));camera.lookAt(neutralCenter);
+    status.textContent='PRUEBA 7.15 · Mundo plano activo · personaje preparado';
+    errorBox.style.display='block';errorBox.textContent='Mundo plano activo. Animaciones heredadas preparadas: '+actions.length+'/'+srcClips.length+'. Mantén pulsada una flecha para mover el personaje; se reproducirá el movimiento seleccionado mientras se desplaza.';
+  }catch(e){fail('Falló la transferencia: '+(e.message||e));}
+ };
+ const needYellow=!yellowGLTF,needCC0=!cc0GLTF;let pending=(needYellow?1:0)+(needCC0?1:0);
+ if(!pending){finish();return;}
+ const settled=()=>{pending--;if(pending===0)finish();};
+ if(needYellow)loader.load(yellowUrl,g=>{yellowGLTF=g;settled();},undefined,e=>{fail('No se pudo cargar el personaje amarillo donante.');});
+ if(needCC0)loader.load(cc0Url,g=>{cc0GLTF=g;settled();},undefined,e=>{fail('No se pudo cargar el hombre CC0.');});
+ }
+ function load(url,label){const id=++serial;status.textContent='PRUEBA 7.15 · Cargando '+label+'…';errorBox.style.display='none';loader.load(url,g=>{if(id!==serial)return;try{show(g,label);}catch(e){fail(e.message);}},undefined,e=>{if(id!==serial)return;fail('No se pudo cargar '+label+'. Revisa el acceso al archivo GLB.');});}
+ document.getElementById('yellow').onclick=()=>load(yellowUrl,'PERSONAJE AMARILLO');document.getElementById('cc0').onclick=()=>load(cc0Url,'HOMBRE CC0');document.getElementById('inherit').onclick=loadBoth;
+ document.getElementById('anim').onclick=playSelected;document.getElementById('clipPick').onchange=playSelected;document.getElementById('stopAnim').onclick=()=>{actions.forEach(a=>a.stop());walkingAction=null;status.textContent='PRUEBA 7.15 · Animación detenida';};
+ const movementButtons=[...document.querySelectorAll('#movePad [data-move]')];function stopWalking(){moving.clear();if(walkingAction){walkingAction.stop();walkingAction=null;}}
+ movementButtons.forEach(b=>{b.addEventListener('pointerdown',e=>{e.preventDefault();moving.add(b.dataset.move);try{b.setPointerCapture(e.pointerId);}catch(_){}if(actions.length){const idx=Number(document.getElementById('clipPick').value)||0;const a=actions[idx];if(a){actions.forEach(x=>{if(x!==a)x.stop();});a.reset();a.setLoop(THREE.LoopRepeat,Infinity);a.play();walkingAction=a;}}status.textContent='PRUEBA 7.15 · Movimiento activo';});b.addEventListener('pointerup',()=>{moving.delete(b.dataset.move);if(!moving.size){if(walkingAction){walkingAction.stop();walkingAction=null;}status.textContent='PRUEBA 7.15 · En reposo';}});b.addEventListener('pointercancel',()=>{moving.delete(b.dataset.move);if(!moving.size)stopWalking();});});
+ window.addEventListener('keydown',e=>{const m={ArrowUp:'forward',w:'forward',W:'forward',ArrowDown:'back',s:'back',S:'back',ArrowLeft:'left',a:'left',A:'left',ArrowRight:'right',d:'right',D:'right'};if(m[e.key]){e.preventDefault();moving.add(m[e.key]);}});window.addEventListener('keyup',e=>{const m={ArrowUp:'forward',w:'forward',W:'forward',ArrowDown:'back',s:'back',S:'back',ArrowLeft:'left',a:'left',A:'left',ArrowRight:'right',d:'right',D:'right'};if(m[e.key])moving.delete(m[e.key]);});
+ document.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{angle=Number(b.dataset.a);if(current)current.rotation.y=angle;});document.getElementById('reset').onclick=()=>{angle=0;stopWalking();if(current){current.rotation.y=0;current.position.x=0;current.position.z=0;}camera.position.set(0,1,4.9);camera.lookAt(0,.95,0);};
+ renderer.domElement.addEventListener('pointerdown',e=>{drag=true;lastX=e.clientX;lastY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId);});renderer.domElement.addEventListener('pointermove',e=>{if(!drag)return;angle+=(e.clientX-lastX)*.012;if(current)current.rotation.y=angle;camera.position.y=Math.max(.45,Math.min(2.5,camera.position.y-(e.clientY-lastY)*.008));camera.lookAt(0,.95,0);lastX=e.clientX;lastY=e.clientY;});renderer.domElement.addEventListener('pointerup',()=>drag=false);renderer.domElement.addEventListener('pointercancel',()=>drag=false);
+ addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+ function frame(){requestAnimationFrame(frame);if(mixer)mixer.update(.016);if(current&&moving.size){let dx=0,dz=0;if(moving.has('left'))dx-=1;if(moving.has('right'))dx+=1;if(moving.has('forward'))dz+=1;if(moving.has('back'))dz-=1;const len=Math.hypot(dx,dz)||1;dx/=len;dz/=len;current.position.x+=dx*.045;current.position.z+=dz*.045;if(dx||dz){current.rotation.y=Math.atan2(dx,dz);angle=current.rotation.y;}camera.position.x=current.position.x;camera.position.z=current.position.z+4.9;camera.lookAt(current.position.x,current.position.y+.95,current.position.z);}renderer.render(scene,camera);}frame();loadBoth();
+}catch(e){fail('Falló la inicialización del visor: '+(e&&e.message||e)+'. Se probaron esm.sh y jsDelivr.');}
+</script></body></html>
