@@ -19,6 +19,8 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 #pad button{border:1px solid #aab4b4aa;border-radius:12px;background:#20272be8;color:#fff;font:22px system-ui;touch-action:none}
 #stat{position:fixed;z-index:20;top:calc(env(safe-area-inset-top) + 34px);left:0;right:0;text-align:center;color:#f3d7a0;font:bold 13px system-ui;letter-spacing:.08em;text-shadow:0 2px 4px #000;pointer-events:none}
 #combatLab{position:fixed;z-index:25;top:calc(env(safe-area-inset-top) + 8px);right:168px;padding:9px 11px;border:1px solid #c4a574;border-radius:9px;background:#211d17ee;color:#f3d7a0;font:bold 11px system-ui;letter-spacing:.04em;touch-action:manipulation}
+#mapView{position:fixed;z-index:25;top:calc(env(safe-area-inset-top) + 8px);left:12px;padding:9px 11px;border:1px solid #c4a574;border-radius:9px;background:#211d17ee;color:#f3d7a0;font:bold 11px system-ui;letter-spacing:.04em;touch-action:manipulation}
+#mapView.on{background:#3a4a2a;border-color:#8fbf6a}
 #characterLab{position:fixed;z-index:25;top:calc(env(safe-area-inset-top) + 8px);right:12px;padding:9px 11px;border:1px solid #c4a574;border-radius:9px;background:#211d17ee;color:#f3d7a0;font:bold 11px system-ui;letter-spacing:.04em;touch-action:manipulation}
 #hint{position:fixed;z-index:20;top:env(safe-area-inset-top);left:0;right:0;text-align:center;padding:12px;color:#e8dfce;font:12px system-ui;letter-spacing:.08em;text-shadow:0 2px 4px #000;pointer-events:none}
 #error{position:fixed;z-index:30;top:20%;left:8%;right:8%;padding:14px;background:#401b1b;color:#fff;font:14px system-ui;display:none;white-space:pre-wrap}
@@ -31,6 +33,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 </head>
 <body>
 <div id="stat"></div>
+<button type="button" id="mapView">VISTA · MAPA</button>
 <button type="button" id="characterLab" onclick="location.href='./character-lab.html'">VISUAL · PERSONAJE</button>
 <button type="button" id="combatLab" onclick="location.href='./combat-lab.html'">COMBATE · PRUEBAS</button>
 <div id="hint">EL REGRESO · CROQUIS EJES</div>
@@ -51,7 +54,7 @@ import { createPlayer, stepPlayer, WALK_SPEED, RUN_SPEED } from './course.js';
 import {
   buildMap1, getCurrentZone, STORY_PAGE,
   distanceToPage, distanceToKey, distanceToLever, distanceToFood,
-  resolveWallCollisions, resolveGround, closePassageGate, tryUnlockTowerDoor
+  resolveWallCollisions, resolveGround, closePassageGate, tryUnlockTowerDoor, MAP_CENTER
 } from './map1.js';
 
 const errorBox = document.getElementById('error');
@@ -59,8 +62,8 @@ addEventListener('error', e => { errorBox.style.display = 'block'; errorBox.text
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x12161c);
-scene.fog = new THREE.Fog(0x12161c, 40, 160);
-const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 0.1, 320);
+scene.fog = new THREE.Fog(0x12161c, 50, 180);
+const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 0.1, 360);
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
@@ -91,8 +94,8 @@ let pageRead = false, hasKey = false, leverPulled = false, gateClosed = false, f
 
 const course = { segments: [{ a: 100, b: -100 }], gaps: 0, freeMap: true };
 const player = createPlayer(course);
-player.x = 10; player.z = -10; player.y = 0;
-player.checkpoint = { x: 10, z: -10 };
+player.x = 12; player.z = -8; player.y = 0;
+player.checkpoint = { x: 12, z: -8 };
 player.facing = 0;
 
 const statBox = document.getElementById('stat');
@@ -211,6 +214,7 @@ addEventListener('keydown', e => {
   if (k === ' ') { e.preventDefault(); jumpQueued = true; }
   if (k === 'j') attack();
   if (k === 'e' && !e.repeat) toggleArm();
+  if (k === 'm' && !e.repeat) document.getElementById('mapView')?.dispatchEvent(new PointerEvent('pointerdown'));
 });
 addEventListener('keyup', e => release(e.key.toLowerCase()));
 let jumpQueued = false;
@@ -218,6 +222,17 @@ document.getElementById('jump').addEventListener('pointerdown', e => { e.prevent
 
 const clock = new THREE.Clock();
 const camOffset = new THREE.Vector3(0, 3.6, -8.5);
+let mapOverview = false;
+const overview = { x: MAP_CENTER.x, z: MAP_CENTER.z, h: 95 };
+const mapBtn = document.getElementById('mapView');
+if (mapBtn) mapBtn.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  mapOverview = !mapOverview;
+  mapBtn.classList.toggle('on', mapOverview);
+  document.getElementById('hint').textContent = mapOverview
+    ? 'VISTA MAPA · flechas para desplazar · toca VISTA·MAPA para volver'
+    : 'EL REGRESO';
+});
 camera.position.set(player.x + camOffset.x, camOffset.y, player.z + camOffset.z);
 document.addEventListener('contextmenu', e => e.preventDefault());
 
@@ -229,12 +244,12 @@ function animate() {
   const running = !!(keys.run || keys.shift || runLatch);
   const speed = running ? RUN_SPEED : WALK_SPEED;
 
-  stepPlayer(player, course, { f, side, speed, running, jump: jumpQueued, canMove: !attacking }, dt);
+  stepPlayer(player, course, { f: mapOverview ? 0 : f, side: mapOverview ? 0 : side, speed, running, jump: mapOverview ? false : jumpQueued, canMove: !attacking && !mapOverview }, dt);
   jumpQueued = false;
   resolveWallCollisions(player);
   resolveGround(player);
 
-  if (!gateClosed && player.x > 40 && player.x < 52 && player.z > 112 && player.z < 124) {
+  if (!gateClosed && player.x > 38 && player.x < 50 && player.z > 112 && player.z < 124) {
     closePassageGate(mapData);
     gateClosed = true;
     document.getElementById('hint').textContent = 'La reja cae... algo anda mal';
@@ -272,9 +287,18 @@ function animate() {
     locomotionMixer.update(dt);
   }
 
-  const camY = Math.max(player.y, -0.5);
-  camera.position.lerp(new THREE.Vector3(actor.position.x + camOffset.x, camOffset.y + camY, actor.position.z + camOffset.z), Math.min(1, dt * 3));
-  camera.lookAt(actor.position.x, 1.05 + camY, actor.position.z);
+  if (mapOverview) {
+    const ox = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
+    const oz = (keys.w || keys.arrowup ? 1 : 0) - (keys.s || keys.arrowdown ? 1 : 0);
+    overview.x += ox * 28 * dt;
+    overview.z += oz * 28 * dt;
+    camera.position.lerp(new THREE.Vector3(overview.x, overview.h, overview.z + 0.01), Math.min(1, dt * 2));
+    camera.lookAt(overview.x, 8, overview.z);
+  } else {
+    const camY = Math.max(player.y, -0.5);
+    camera.position.lerp(new THREE.Vector3(actor.position.x + camOffset.x, camOffset.y + camY, actor.position.z + camOffset.z), Math.min(1, dt * 3));
+    camera.lookAt(actor.position.x, 1.05 + camY, actor.position.z);
+  }
   updateStat();
   renderer.render(scene, camera);
 }
