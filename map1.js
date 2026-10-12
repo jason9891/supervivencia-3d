@@ -52,10 +52,10 @@ function addPlatform(minX, maxX, minZ, maxZ, y) { PLATFORMS.push({ minX, maxX, m
 export function getGroundHeight(x, z, fromY = Infinity) {
   let best = -Infinity;
   const ry = sampleRampY(x, z);
-  if (ry !== null && ry <= fromY + 0.55 && ry > best) best = ry;
+  if (ry !== null && ry <= fromY + 0.85 && ry > best) best = ry;
   for (const p of PLATFORMS) {
     if (x >= p.minX && x <= p.maxX && z >= p.minZ && z <= p.maxZ) {
-      if (p.y <= fromY + 0.55 && p.y > best) best = p.y;
+      if (p.y <= fromY + 0.85 && p.y > best) best = p.y;
     }
   }
   return best === -Infinity ? LEVEL0_Y : best;
@@ -63,7 +63,7 @@ export function getGroundHeight(x, z, fromY = Infinity) {
 
 export function resolveGround(player) {
   const gy = getGroundHeight(player.x, player.z, player.y);
-  if (player.y <= gy + 0.5) {
+  if (player.y <= gy + 0.7) {
     if (player.vy <= 0.7) {
       player.y = gy; player.vy = 0;
       player.grounded = true; player.jumping = false;
@@ -140,7 +140,6 @@ export function buildMap1(scene) {
     box(w, WALL_H, d, orangeW, cx, LEVEL1_Y + WALL_H / 2, cz, true);
   }
 
-  // ═══ Perímetro ═══
   const { minX, maxX, minZ, maxZ } = MAP;
   const WH = 14, WT = 2.5;
   box(maxX - minX + WT * 2, WH, WT, mountain, (minX + maxX) / 2, WH / 2 - 1, maxZ + WT / 2, true);
@@ -148,11 +147,9 @@ export function buildMap1(scene) {
   box(WT, WH, maxZ - minZ, mountain, minX - WT / 2, WH / 2 - 1, (minZ + maxZ) / 2, true);
   box(WT, WH, maxZ - minZ, mountain, maxX + WT / 2, WH / 2 - 1, (minZ + maxZ) / 2, true);
 
-  // ═══ Suelo continuo ═══
   pad(90, 72, LEVEL1_Y, 45, 36, dirt);
   pad(90, 10, LEVEL1_Y, 45, 67, stone);
 
-  // ═══ Nivel 0 + rampa ═══
   pad(13.5, 9, LEVEL0_Y, 6.75, 4.5, grass);
   const rampDef = {
     sx: 6.75, sz: 9,
@@ -173,7 +170,6 @@ export function buildMap1(scene) {
   }
   pad(22, 8, LEVEL1_Y, 12, 67, stone);
 
-  // ═══ Paredes naranja croquis (sin muro continuo plaza|módulo: lo abre el módulo) ═══
   wallBox(13.1, 13.9, 0.0, 63.1);
   wallBox(13.5, 36.0, 62.9, 63.6);
   wallBox(36.0, 54.8, 62.9, 63.6);
@@ -181,7 +177,6 @@ export function buildMap1(scene) {
   wallBox(35.4, 36.3, 50.5, 63.0);
   wallBox(53.8, 54.5, 44.9, 62.9);
   wallBox(13.4, 45.6, 44.9, 45.6);
-  // plaza|módulo: SOLO fuera del hueco de puerta del módulo
   wallBox(66.9, 68.0, 11.1, MOD2.doorPlaza.z0);
   wallBox(66.9, 68.0, MOD2.doorPlaza.z1, 53.9);
   wallBox(67.4, 89.6, 53.4, 54.5);
@@ -191,7 +186,6 @@ export function buildMap1(scene) {
   wallBox(80.5, 89.8, 62.9, 63.5);
   wallBox(13.3, 89.9, 0.25, 1.25);
 
-  // ─── Reja pasadizo ───
   const gateLeft = box(2.5, 4.2, 0.4, iron, 32, LEVEL1_Y + 2.0, 67.5, false);
   const gateRight = box(2.5, 4.2, 0.4, iron, 37, LEVEL1_Y + 2.0, 67.5, false);
   const gate = gateLeft;
@@ -203,7 +197,6 @@ export function buildMap1(scene) {
   box(5, 0.4, 5, stone, 40, LEVEL1_Y + 0.18, 28, true);
   box(3, 0.7, 3, dark, 40, LEVEL1_Y + 0.5, 28, true);
 
-  // Torres + portón
   box(7.5, 11, 9, dark, 71.25, LEVEL1_Y + 5.2, 67.5, true);
   addPlatform(67.5, 75, 63, 72, LEVEL1_Y + 10.5);
   box(9.5, 11, 9, dark, 85.25, LEVEL1_Y + 5.2, 67.5, true);
@@ -213,7 +206,6 @@ export function buildMap1(scene) {
   box(5, 0.3, 4, wood, 77.5, LEVEL1_Y + 10.6, 66);
   addPlatform(75, 80, 64, 68, LEVEL1_Y + 10.5);
 
-  // ═══ MÓDULO 2 ═══
   const mod = buildModule2(scene, { addWall, addPlatform, box });
   if (mod.pagePos) PAGE_POS.copy(mod.pagePos);
   if (mod.keyPos) KEY_POS.copy(mod.keyPos);
