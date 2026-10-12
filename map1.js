@@ -9,7 +9,6 @@ export const MAP1_NAME = 'El Regreso';
 export const LEVEL0_Y = 0;
 export const LEVEL1_Y = 6;
 
-// Escala tldraw: frame 720×576 → 90×72 unidades (8px = 1u)
 export const MAP = { minX: 0, maxX: 90, minZ: 0, maxZ: 72 };
 export const SPAWN = { x: 6.5, y: LEVEL0_Y, z: 3, facing: 0 };
 export const MAP_CENTER = { x: 45, z: 36, y: LEVEL1_Y };
@@ -41,7 +40,7 @@ let LEVER_POS = new THREE.Vector3(84, LEVEL1_Y + 11, 67);
 let FOOD_POS = new THREE.Vector3(28, LEVEL1_Y + 0.45, 52);
 
 const PLAYER_R = 0.45;
-const WALL_T = 1.0; // grosor pared compartida
+const WALL_T = 1.0;
 const WALL_H = 4.8;
 
 export const WALLS = [];
@@ -115,10 +114,9 @@ export function buildMap1(scene) {
   const dirt = mat(0x5a5348, 0.95);
   const wood = mat(0x6b4a32, 0.85);
   const iron = mat(0x3a3a40, 0.4, 0.55);
-  const tile = mat(0x555a52, 0.9);
   const mountain = mat(0x3a3e38, 0.98);
   const grass = mat(0x3d5c38, 1);
-  const orangeW = mat(0x8a5a28, 0.85); // paredes compartidas visibles
+  const orangeW = mat(0x8a5a28, 0.85);
 
   function box(w, h, d, material, x, y, z, solid = false) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
@@ -133,12 +131,10 @@ export function buildMap1(scene) {
     box(w, th, d, material, x, y - th / 2, z, false);
     addPlatform(x - w / 2, x + w / 2, z - d / 2, z + d / 2, y);
   }
-  // Pared compartida horizontal (corre en X, delgada en Z)
   function wallH(x0, x1, z, material = orangeW) {
     const cx = (x0 + x1) / 2, w = Math.abs(x1 - x0);
     box(w, WALL_H, WALL_T, material, cx, LEVEL1_Y + WALL_H / 2, z, true);
   }
-  // Pared compartida vertical (corre en Z, delgada en X)
   function wallV(z0, z1, x, material = orangeW) {
     const cz = (z0 + z1) / 2, d = Math.abs(z1 - z0);
     box(WALL_T, WALL_H, d, material, x, LEVEL1_Y + WALL_H / 2, cz, true);
@@ -152,17 +148,17 @@ export function buildMap1(scene) {
   box(WT, WH, maxZ - minZ, mountain, minX - WT / 2, WH / 2 - 1, (minZ + maxZ) / 2, true);
   box(WT, WH, maxZ - minZ, mountain, maxX + WT / 2, WH / 2 - 1, (minZ + maxZ) / 2, true);
 
-  // ─── Suelo continuo nivel 1 (todo el rectángulo excepto franja rampa baja) ───
-  // Plaza + pasadizo + establo + módulo + bases torres
-  pad(76.5, 72, LEVEL1_Y, 51.75, 36, dirt); // x 13.5..90
-  // Suelo piedra del pasadizo (norte)
-  pad(54, 9, LEVEL1_Y, 40.5, 67.5, stone);
+  // ─── Suelo nivel 1: TODO el rectángulo (incluye franja norte de la rampa) ───
+  pad(90, 72, LEVEL1_Y, 45, 36, dirt);
+  // Piedra del pasadizo (franja norte completa, rampa + pasadizo)
+  pad(90, 10, LEVEL1_Y, 45, 67, stone);
 
-  // ─── Nivel 0 + rampa izquierda ───
+  // ─── Nivel 0 + rampa → desemboca EN el pasadizo (mismo suelo) ───
   pad(13.5, 9, LEVEL0_Y, 6.75, 4.5, grass);
+  // Rampa hasta z=66 (dentro del pasadizo / rellano norte)
   const rampDef = {
     sx: 6.75, sz: 9,
-    ex: 6.75, ez: 63,
+    ex: 6.75, ez: 66,
     y0: LEVEL0_Y, y1: LEVEL1_Y,
     halfWidth: 5.5,
   };
@@ -177,69 +173,57 @@ export function buildMap1(scene) {
     g.rotation.y = Math.atan2(r.dx, r.dz);
     g.castShadow = true; scene.add(g);
   }
-  // Rellano norte rampa → pasadizo
-  pad(13.5, 6, LEVEL1_Y, 6.75, 66, stone);
+  // Rellano de unión: une rampa + pasadizo (cruza x=13.5)
+  pad(22, 8, LEVEL1_Y, 12, 67, stone);
 
-  // ─── Paredes compartidas (naranja tldraw) ───
-  // Vertical: rampa | resto  @ x=13.5
-  wallV(0, 72, 13.5);
-  // Vertical: plaza/pasadizo | módulo/torres  @ x=67.5
-  wallV(0, 72, 67.5);
-  // Vertical: T1 | portón/T2  @ x≈75
+  // ─── Paredes compartidas ───
+  // Vertical rampa|resto: SOLO hasta z=62 — hueco norte para entrar al pasadizo
+  wallV(0, 62, 13.5);
+  // Vertical plaza|módulo (con hueco puerta más adelante se puede partir)
+  wallV(0, 62, 67.5);
+  wallV(63, 72, 67.5); // tramo norte (torres)
+  // T1 | portón
   wallV(63, 72, 75);
-  // Vertical: entre T2 zona  @ x≈80.5 (ya cubierto por torre)
 
-  // Horizontal: pasadizo | establo  @ z=63  (con huecos)
-  wallH(13.5, 36, 63);   // sobre establo oeste
-  // hueco entrada plaza ~36-48
-  wallH(48, 67.5, 63);   // sobre plaza este / hacia torres
+  // Horizontal pasadizo|establo @ z=63 — NO tapa el hueco desde rampa (empieza en 13.5+)
+  // Desde x=18 (deja paso desde rellano) sobre establo
+  wallH(18, 36, 63);
+  // hueco plaza ~36-48
+  wallH(48, 67.5, 63);
 
-  // Horizontal: establo | plaza  @ z=43  (puerta establo)
+  // Establo | plaza @ z=43
   wallH(13.5, 24, 43);
-  // hueco puerta ~24-32
   wallH(32, 48, 43);
 
-  // Tabique establo (2 ambientes) vertical @ x≈35.5
+  // Tabique establo
   wallV(43, 63, 35.5);
 
-  // Sur del módulo (opcional visual)
-  wallH(67.5, 90, 0.5);
-
-  // ─── Reja del pasadizo (cae al pasar) ───
+  // ─── Reja en el pasadizo ───
   const gateLeft = box(2.5, 4.2, 0.4, iron, 32, LEVEL1_Y + 2.0, 67.5, false);
   const gateRight = box(2.5, 4.2, 0.4, iron, 37, LEVEL1_Y + 2.0, 67.5, false);
   const gate = gateLeft;
   gate.name = 'mainGate';
   gate.userData = { mate: gateRight, closed: false };
 
-  // ─── Establo (techo + comida) ───
+  // ─── Establo ───
   box(40, 0.35, 20, dark, 33.5, LEVEL1_Y + 5.0, 53);
   const foodMesh = box(0.5, 0.25, 0.4, mat(0xc4a060), FOOD_POS.x, FOOD_POS.y, FOOD_POS.z);
 
-  // ─── Plaza: fuente ───
+  // ─── Fuente plaza ───
   box(5, 0.4, 5, stone, 40, LEVEL1_Y + 0.18, 28, true);
   box(3, 0.7, 3, dark, 40, LEVEL1_Y + 0.5, 28, true);
 
-  // ─── Torres T1 T2 + portón jefe (entre ellas, tipo puente/reja grande) ───
-  // T1
+  // ─── Torres + portón jefe ───
   box(7.5, 11, 9, dark, 71.25, LEVEL1_Y + 5.2, 67.5, true);
   addPlatform(67.5, 75, 63, 72, LEVEL1_Y + 10.5);
-  // T2
   box(9.5, 11, 9, dark, 85.25, LEVEL1_Y + 5.2, 67.5, true);
   addPlatform(80.5, 90, 63, 72, LEVEL1_Y + 10.5);
-  // Portón/puente grande entre T1 y T2 (cae → jefe)
   const portcullis = box(5.5, 8, 0.7, iron, 77.5, LEVEL1_Y + 3.6, 63.5, true);
   portcullis.name = 'portcullis';
-  // Plataforma puente visual 2º piso
   box(5, 0.3, 4, wood, 77.5, LEVEL1_Y + 10.6, 66);
   addPlatform(75, 80, 64, 68, LEVEL1_Y + 10.5);
 
-  // ─── Módulo 2N (este, techo + interior) ───
-  // Hueco puerta oeste ya por wallV partido implícito: abrimos tramo del muro x=67.5
-  // (el wallV continuo bloquea — partimos con hueco de puerta)
-  // Quitamos colisión en hueco puerta módulo: no se puede fácilmente; añadimos
-  // segundo tramo de muro y no ponemos pared en z 25-40.
-  // Para esta prueba el wallV completo en x=67.5 se mantiene; puerta visual:
+  // ─── Módulo 2N ───
   box(0.4, 3.2, 0.4, wood, 67.5, LEVEL1_Y + 1.5, 32);
   box(0.4, 3.2, 0.4, wood, 67.5, LEVEL1_Y + 1.5, 38);
   box(22.5, 0.35, 53, dark, 78.75, LEVEL1_Y + 5.2, 26.5);
