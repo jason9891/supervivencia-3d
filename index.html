@@ -63,7 +63,7 @@ addEventListener('error', e => { errorBox.style.display = 'block'; errorBox.text
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x12161c);
 scene.fog = new THREE.Fog(0x12161c, 30, 160);
-const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 0.1, 280);
+const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 280);
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
@@ -221,7 +221,10 @@ let jumpQueued = false;
 document.getElementById('jump').addEventListener('pointerdown', e => { e.preventDefault(); jumpQueued = true; });
 
 const clock = new THREE.Clock();
-const camOffset = new THREE.Vector3(0, 3.6, -8.5);
+// Cámara 3ª persona: cerca y detrás según hacia dónde mira el personaje
+const CAM_DIST = 4.2;
+const CAM_HEIGHT = 2.4;
+const CAM_LOOK_Y = 1.35;
 let mapOverview = false;
 // Vista cenital del rectángulo completo (90x72)
 const overview = { x: MAP_CENTER.x, z: MAP_CENTER.z, h: 95, yaw: 0 };
@@ -239,7 +242,7 @@ if (mapBtn) mapBtn.addEventListener('pointerdown', e => {
     document.getElementById('hint').textContent = 'EL REGRESO · PUZZLE TLDRAW';
   }
 });
-camera.position.set(player.x + camOffset.x, camOffset.y, player.z + camOffset.z);
+camera.position.set(player.x, CAM_HEIGHT, player.z - CAM_DIST);
 document.addEventListener('contextmenu', e => e.preventDefault());
 
 function animate() {
@@ -305,9 +308,13 @@ function animate() {
     camera.position.lerp(new THREE.Vector3(overview.x, overview.h, overview.z), Math.min(1, dt * 4));
     camera.lookAt(overview.x, 0.5, overview.z);
   } else {
-    const camY = Math.max(player.y, -0.5);
-    camera.position.lerp(new THREE.Vector3(actor.position.x + camOffset.x, camOffset.y + camY, actor.position.z + camOffset.z), Math.min(1, dt * 3));
-    camera.lookAt(actor.position.x, 1.05 + camY, actor.position.z);
+    const py = Math.max(player.y, 0);
+    // Detrás del personaje según facing (0 = +Z)
+    const bx = -Math.sin(player.facing) * CAM_DIST;
+    const bz = -Math.cos(player.facing) * CAM_DIST;
+    const targetCam = new THREE.Vector3(player.x + bx, py + CAM_HEIGHT, player.z + bz);
+    camera.position.lerp(targetCam, Math.min(1, dt * 5));
+    camera.lookAt(player.x, py + CAM_LOOK_Y, player.z);
   }
   updateStat();
   renderer.render(scene, camera);
