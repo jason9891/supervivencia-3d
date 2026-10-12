@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#101114">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>Módulo 2 · Lab</title>
+<style>
+*{box-sizing:border-box;-webkit-user-select:none;user-select:none}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101114;touch-action:none}
+canvas{display:block;width:100%;height:100%}
+#hint{position:fixed;z-index:20;top:env(safe-area-inset-top);left:0;right:0;text-align:center;padding:12px;color:#e8dfce;font:12px system-ui;text-shadow:0 2px 4px #000;pointer-events:none}
+#back{position:fixed;z-index:25;top:calc(env(safe-area-inset-top)+8px);left:12px;padding:9px 11px;border:1px solid #c4a574;border-radius:9px;background:#211d17ee;color:#f3d7a0;font:bold 11px system-ui}
+#joyBase{position:fixed;z-index:20;left:max(16px,env(safe-area-inset-left));bottom:calc(env(safe-area-inset-bottom)+20px);width:128px;height:128px;border-radius:50%;background:radial-gradient(circle at 50% 50%,#2a3238cc,#1a1e22e8);border:2px solid #aab4b488;touch-action:none}
+#joyKnob{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:#c4a574ee;border:2px solid #f3d7a0;pointer-events:none}
+#run{position:fixed;z-index:20;right:max(28px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom)+90px);width:68px;height:54px;border:1px solid #c4c9c0;border-radius:14px;background:#27352fe8;color:#fff;font:bold 13px system-ui}
+#jump{position:fixed;z-index:20;right:max(20px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom)+20px);width:84px;height:84px;border:2px solid #f3d7a0;border-radius:50%;background:#762b23;color:#fff4df;font:bold 15px system-ui}
+#stat{position:fixed;z-index:20;top:calc(env(safe-area-inset-top)+36px);left:0;right:0;text-align:center;color:#f3d7a0;font:bold 12px system-ui;pointer-events:none}
+</style>
+</head>
+<body>
+<a id="back" href="./index.html">← MAPA</a>
+<div id="hint">MÓDULO 2 · LAB — 2 ambientes + gradas + pasarela torres</div>
+<div id="stat"></div>
+<div id="joyBase"><div id="joyKnob"></div></div>
+<button id="run">CORRER</button>
+<button id="jump">⬆<br>SALTAR</button>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { createPlayer, stepPlayer, WALK_SPEED, RUN_SPEED } from './course.js';
+import { buildModule2, LEVEL1_Y, LEVEL2_Y, MOD2, MOD2_SPAWNS } from './modulo2.js';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x12161c);
+scene.fog = new THREE.Fog(0x12161c, 20, 70);
+const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 120);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0x8aa0b8, 0x2a2218, 1.0));
+const sun = new THREE.DirectionalLight(0xffe8c8, 1.8);
+sun.position.set(15, 25, 10);
+sun.castShadow = true;
+scene.add(sun);
+
+const WALLS = [];
+const PLATFORMS = [];
+function addWall(a,b,c,d){ WALLS.push({ minX:a, maxX:b, minZ:c, maxZ:d }); }
+function addPlatform(a,b,c,d,y){ PLATFORMS.push({ minX:a, maxX:b, minZ:c, maxZ:d, y }); }
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(80, 80),
+  new THREE.MeshStandardMaterial({ color: 0x2a2e28, roughness: 1 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.position.set(78, LEVEL1_Y - 0.05, 28);
+ground.receiveShadow = true;
+scene.add(ground);
+addPlatform(40, 120, -20, 80, LEVEL1_Y);
+
+const modData = buildModule2(scene, { addWall, addPlatform });
+
+const course = { segments: [{ a: 100, b: -100 }], gaps: 0, freeMap: true };
+const player = createPlayer(course);
+const sp = MOD2_SPAWNS.entrance;
+player.x = sp.x; player.y = sp.y; player.z = sp.z; player.facing = 0;
+
+const PLAYER_R = 0.45;
+function resolveWalls(p) {
+  let x = p.x, z = p.z;
+  for (const w of WALLS) {
+    const nx = Math.max(w.minX, Math.min(x, w.maxX));
+    const nz = Math.max(w.minZ, Math.min(z, w.maxZ));
+    const dx = x - nx, dz = z - nz;
+    const dsq = dx * dx + dz * dz;
+    if (dsq < PLAYER_R * PLAYER_R && dsq > 1e-8) {
+      const d = Math.sqrt(dsq);
+      const push = (PLAYER_R - d) / d;
+      x += dx * push; z += dz * push;
+    }
+  }
+  p.x = x; p.z = z;
+}
+function resolveGround(p) {
+  let best = LEVEL1_Y;
+  for (const pl of PLATFORMS) {
+    if (p.x >= pl.minX && p.x <= pl.maxX && p.z >= pl.minZ && p.z <= pl.maxZ) {
+      if (pl.y <= p.y + 0.55 && pl.y > best - 0.01) best = pl.y;
+    }
+  }
+  if (p.y <= best + 0.5 && p.vy <= 0.7) {
+    p.y = best; p.vy = 0; p.grounded = true; p.jumping = false;
+  } else if (p.grounded && p.y - best > 0.6) p.grounded = false;
+}
+
+const actor = new THREE.Group();
+const skin = new THREE.MeshStandardMaterial({ color: 0x98694f });
+const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.24, 0.45, 6, 10), skin);
+body.position.y = 1.5; actor.add(body);
+scene.add(actor);
+
+const keys = {};
+const joy = { x: 0, y: 0, active: false };
+const joyBase = document.getElementById('joyBase');
+const joyKnob = document.getElementById('joyKnob');
+function setJoy(nx, ny) {
+  const len = Math.hypot(nx, ny) || 1;
+  const c = Math.min(1, 1 / len);
+  joy.x = nx * (len > 1 ? c : 1);
+  joy.y = ny * (len > 1 ? c : 1);
+  if (len > 1) { joy.x *= len * c; joy.y *= len * c; }
+  const L = Math.hypot(nx, ny);
+  const s = L > 1 ? 1 / L : 1;
+  joy.x = nx * s; joy.y = ny * s;
+  joyKnob.style.transform = `translate(${joy.x * 36}px,${-joy.y * 36}px)`;
+}
+function resetJoy() { joy.x = 0; joy.y = 0; joy.active = false; joyKnob.style.transform = 'translate(0,0)'; }
+joyBase.addEventListener('pointerdown', e => {
+  e.preventDefault(); joy.active = true; joyBase.setPointerCapture(e.pointerId);
+  const r = joyBase.getBoundingClientRect();
+  setJoy((e.clientX - r.left - r.width / 2) / (r.width / 2), -(e.clientY - r.top - r.height / 2) / (r.height / 2));
+});
+joyBase.addEventListener('pointermove', e => {
+  if (!joy.active) return;
+  const r = joyBase.getBoundingClientRect();
+  setJoy((e.clientX - r.left - r.width / 2) / (r.width / 2), -(e.clientY - r.top - r.height / 2) / (r.height / 2));
+});
+joyBase.addEventListener('pointerup', resetJoy);
+joyBase.addEventListener('pointercancel', resetJoy);
+
+document.getElementById('run').addEventListener('pointerdown', e => { e.preventDefault(); keys.run = true; });
+document.getElementById('run').addEventListener('pointerup', () => { keys.run = false; });
+let jumpQueued = false;
+document.getElementById('jump').addEventListener('pointerdown', e => { e.preventDefault(); jumpQueued = true; });
+addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; if (e.key === ' ') jumpQueued = true; });
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+const clock = new THREE.Clock();
+const CAM_DIST = 4.2, CAM_HEIGHT = 2.4;
+const stat = document.getElementById('stat');
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.04);
+  let f = 0, side = 0, lockFacing = null;
+  if (joy.active && (Math.abs(joy.x) > 0.12 || Math.abs(joy.y) > 0.12)) {
+    if (Math.abs(joy.x) > 0.15) player.facing += joy.x * 2.6 * dt;
+    lockFacing = player.facing;
+    side = Math.sin(player.facing) * joy.y;
+    f = Math.cos(player.facing) * joy.y;
+  } else {
+    f = (keys.w ? 1 : 0) - (keys.s ? 1 : 0);
+    side = (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
+  }
+  const running = !!keys.run;
+  stepPlayer(player, course, { f, side, speed: running ? RUN_SPEED : WALK_SPEED, running, jump: jumpQueued, canMove: true }, dt);
+  if (lockFacing !== null) player.facing = lockFacing;
+  jumpQueued = false;
+  resolveWalls(player);
+  resolveGround(player);
+
+  actor.position.set(player.x, player.y, player.z);
+  actor.rotation.y = player.facing;
+
+  const floor = player.y >= LEVEL2_Y - 0.5 ? 'PISO 2' : 'PISO 1';
+  const room = player.z < MOD2.partitionZ ? 'AMB A (oficina)' : 'AMB B (salón)';
+  stat.textContent = `${floor} · ${room} · x${player.x.toFixed(1)} z${player.z.toFixed(1)}`;
+
+  const bx = -Math.sin(player.facing) * CAM_DIST;
+  const bz = -Math.cos(player.facing) * CAM_DIST;
+  camera.position.lerp(new THREE.Vector3(player.x + bx, player.y + CAM_HEIGHT, player.z + bz), Math.min(1, dt * 6));
+  camera.lookAt(player.x, player.y + 1.3, player.z);
+  renderer.render(scene, camera);
+}
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+animate();
+</script>
+</body>
+</html>
