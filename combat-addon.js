@@ -159,10 +159,7 @@ export function createCombatAddon({ THREE, scene, camera, player, onSwing, onAct
     if (k === 'i' || k === 'tab') { if (k === 'tab') e.preventDefault(); if (!e.repeat) setPanel(!panelOpen); }
     else if (k === 'escape' && panelOpen) setPanel(false);
     else if (!panelOpen && ['1', '2', '3'].includes(k)) {
-      const kind = ['vida', 'energia', 'furia'][+k - 1];
-      const r = B.usePotion(bench, kind);
-      showToast(r.ok ? 'Bebiste: ' + r.msg : r.msg);
-      if (r.ok) { persist(); emit({ type: 'drink', kind }); }
+      drink(['vida', 'energia', 'furia'][+k - 1]);
     }
   });
 
@@ -246,6 +243,14 @@ export function createCombatAddon({ THREE, scene, camera, player, onSwing, onAct
     return r.started;
   }
 
+  // Beber una poción (teclas 1/2/3 o botón de la página). Devuelve { ok, msg }.
+  function drink(kind) {
+    const r = B.usePotion(bench, kind);
+    showToast(r.ok ? 'Bebiste: ' + r.msg : r.msg);
+    if (r.ok) { persist(); emit({ type: 'drink', kind }); if (panelOpen) renderPanel(); }
+    return r;
+  }
+
   // Guardia: mantener = bloquear (reduce el daño frontal a cambio de energía). Devuelve si quedó activa.
   function setBlock(on) {
     if (panelOpen) on = false;
@@ -293,5 +298,5 @@ export function createCombatAddon({ THREE, scene, camera, player, onSwing, onAct
     if (toastT > 0) { toastT -= dt; if (toastT <= 0) toast.style.opacity = '0'; }
   }
 
-  return { pressAttack, setBlock, update, give, bench, inventory: inv, setPanel, get panelOpen() { return panelOpen; } };
+  return { pressAttack, setBlock, drink, toast: showToast, update, give, bench, inventory: inv, setPanel, get panelOpen() { return panelOpen; } };
 }

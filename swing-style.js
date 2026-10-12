@@ -6,14 +6,24 @@
 // dirección y su lugar en la cadena, y el clip se acelera para que el impacto caiga en el instante
 // en que el juego aplica el daño.
 
-// Clips por orden de preferencia (nombres normalizados). El primero que exista se usa.
-// 'sword attack' viene en UAL1; el resto en UAL2 Standard (assets/characters/ual/UAL2_Standard.glb).
-export const CLIPS = {
-  forward: ['sword dash', 'sword attack'],
-  side:    [['sword regular a', 'sword attack'], ['sword regular b', 'sword attack'], ['sword regular c', 'sword attack']],
-  neutral: ['sword regular c', 'sword attack'],
-  finisher: ['sword regular combo', 'sword attack'],
+// Los golpes se animan por su PASO en la cadena, no por la dirección: 1 → 2 → 3, pausa, y vuelve a 1.
+export const STEPS = 3;
+export const CHAIN_GAP = 0.6;   // s sin atacar tras un golpe para que la cadena se reinicie en el paso 1
+export const STEP3_PAUSE = 0.5; // s de recuperación obligada tras el tercer golpe
+
+// Clip de cada paso (nombres normalizados), en orden de preferencia. 'sword attack' es de UAL1; el resto de UAL2.
+export const STEP_CLIPS = {
+  1: ['sword regular a', 'sword attack'],
+  2: ['sword regular b', 'sword attack'],
+  3: ['sword regular c', 'sword attack'],
 };
+
+// Paso siguiente: continúa si el golpe anterior terminó hace poco; si no, empieza en 1. Tras el 3 vuelve a 1.
+export function advanceStep(state, now) {
+  const fresh = now - state.endedAt > CHAIN_GAP;
+  state.step = fresh || state.step >= STEPS ? 1 : state.step + 1;
+  return state.step;
+}
 
 // Segundo del clip donde cae el golpe (pico de velocidad del brazo derecho, medido en cada clip).
 export const STRIKE_AT = {
@@ -22,30 +32,26 @@ export const STRIKE_AT = {
 };
 export const LEAD = 0.35; // segundos de preparación del clip que se conservan antes del impacto
 
-export function clipCandidates(type, chainLen, isCombo) {
-  if (isCombo) return CLIPS.finisher;
-  const c = CLIPS[type];
-  if (type === 'side') return c[Math.min(Math.max(chainLen, 1), c.length) - 1];
-  return c;
-}
-
-// Elige el primer clip disponible. `has(name)` dice si existe.
-export function pickClip(type, chainLen, isCombo, has) {
-  return clipCandidates(type, chainLen, isCombo).find(has) || null;
+export function pickClip(step, has) {
+  return (STEP_CLIPS[step] || STEP_CLIPS[1]).find(has) || null;
 }
 
 const clamp01 = x => Math.min(1, Math.max(0, x));
 const smooth = x => { x = clamp01(x); return x * x * (3 - 2 * x); };
 
-// Estilo de un golpe. `a` = fi.attack de combat.js; `chainLen` = golpes encadenados hasta ahora.
-export function swingStyle(a, chainLen = 1) {
-  const dir = chainLen % 2 === 0 ? -1 : 1; // los tajos alternan de lado
+// Estilo de un golpe. `a` = fi.attack de combat.js; `step` = 1..3. La dirección (▲, ◀▶, ●) solo lo matiza.
+//   paso 1: tajo de derecha a izquierda · paso 2: contra-tajo de vuelta · paso 3: estocada pesada con avance largo
+export function swingStyle(a, step = 1) {
   const combo = a.combo ? a.combo.name : null;
-  const s = { type: a.type, dur: a.dur, hit: a.hit, lunge: a.data.lunge || 0, yaw: 0, roll: 0, pitch: 0, spin: 0, speed: 1, pop: 1 };
-  if (a.type === 'side')    { s.yaw = 0.7 * dir; s.roll = 0.14 * dir; s.pitch = 0.05; s.speed = 1.1; }
-  if (a.type === 'forward') { s.pitch = 0.22; s.yaw = 0.08 * dir; s.speed = 1.0; }
-  if (a.type === 'neutral') { s.pitch = -0.2; s.roll = 0; s.speed = 0.95; }   // se echa hacia atrás y cae con el golpe alto
-  if (combo) { s.lunge *= 1.3; s.pop = 1.08; s.speed *= 0.92; if (combo === 'Torbellino') { s.spin = Math.PI * 2; s.yaw = 0; } }
+  const base = a.data.lunge || 0;
+  const s = { type: a.type, step, dur: a.dur, hit: a.hit, lunge: base, yaw: 0, roll: 0, pitch: 0, spin: 0, speed: 1, pop: 1 };
+  if (step === 1) { s.yaw = 0.8;  s.roll = 0.16;  s.pitch = 0.05; s.lunge = base * 0.8; s.speed = 1.1; }
+  if (step === 2) { s.yaw = -0.8; s.roll = -0.16; s.pitch = 0.05; s.lunge = base * 0.8; s.speed = 1.15; }
+  if (step === 3) { s.yaw = 0; s.pitch = 0.38; s.lunge = Math.max(base, 0.6) * 1.7; s.speed = 0.9; s.pop = 1.06; }
+  if (a.type === 'forward') s.lunge *= 1.25;
+  if (a.type === 'side') s.yaw *= 1.15;
+  if (a.type === 'neutral') s.pitch -= 0.1;
+  if (combo) { s.lunge *= 1.2; s.pop = Math.max(s.pop, 1.08); if (combo === 'Torbellino') { s.spin = Math.PI * 2; s.yaw = 0; } }
   return s;
 }
 

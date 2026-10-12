@@ -14,6 +14,9 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 #jump{position:fixed;z-index:20;right:max(20px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 28px);width:84px;height:84px;border:2px solid #f3d7a0;border-radius:50%;background:#762b23;color:#fff4df;font:bold 15px system-ui}
 #blk{position:fixed;z-index:20;right:max(116px,calc(env(safe-area-inset-right) + 104px));bottom:calc(env(safe-area-inset-bottom) + 126px);width:68px;height:54px;border:1px solid #c4c9c0;border-radius:14px;background:#27352fe8;color:#fff;font:bold 12px system-ui}
 #blk.on{background:#2c4d6b;border-color:#9fd0f5}
+#drink{position:fixed;z-index:20;right:max(28px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 196px);width:68px;height:54px;border:1px solid #d9c27a;border-radius:14px;background:#4d3b1ee8;color:#fff;font:bold 12px system-ui}
+#act{position:fixed;z-index:20;right:max(116px,calc(env(safe-area-inset-right) + 104px));bottom:calc(env(safe-area-inset-bottom) + 196px);width:68px;height:54px;border:1px solid #c4c9c0;border-radius:14px;background:#27352fe8;color:#fff;font:bold 11px system-ui}
+#act.ready{background:#6b5a22;border-color:#f3d7a0}
 #atk{position:fixed;z-index:20;right:max(116px,calc(env(safe-area-inset-right) + 104px));bottom:calc(env(safe-area-inset-bottom) + 40px);width:72px;height:72px;border:2px solid #d8a8a0;border-radius:50%;background:#5a1f1a;color:#fff4df;font:bold 13px system-ui}
 #pad{position:fixed;z-index:20;left:16px;bottom:24px;display:grid;grid-template-columns:48px 48px 48px;grid-template-rows:48px 48px;gap:5px}
 #pad button{border:1px solid #aab4b4aa;border-radius:12px;background:#20272be8;color:#fff;font:22px system-ui}
@@ -26,14 +29,14 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 <body>
 <div id="hint">LABORATORIO DE COMBATE</div>
 <button type="button" id="back" onclick="location.href='./index.html'">VOLVER AL JUEGO</button>
-<div id="guide">Abre INVENTARIO → coloca un muñeco → ataca. Mantén ▲ (adelante) o ◀/▶ (lado) al pulsar ATACAR para variar el golpe y encadenar combos. Mantén GUARDIA (tecla K) para bloquear.</div>
+<div id="guide">Abre INVENTARIO → coloca un muñeco → ataca. Mantén ▲ (adelante) o ◀/▶ (lado) al pulsar ATACAR para variar el golpe y encadenar combos. Mantén GUARDIA (K) para bloquear. BEBER (Q) bebe una poción. INTERACTUAR (E) abre el cofre, recoge la llave y abre la puerta.</div>
 <div id="pad">
 <button data-k="w" style="grid-column:2;grid-row:1">▲</button>
 <button data-k="a" style="grid-column:1;grid-row:2">◀</button>
 <button data-k="s" style="grid-column:2;grid-row:2">▼</button>
 <button data-k="d" style="grid-column:3;grid-row:2">▶</button>
 </div>
-<button id="blk">GUARDIA</button><button id="atk">ATACAR</button><button id="run">CORRER</button><button id="jump">⬆<br>SALTAR</button>
+<button id="drink">BEBER</button><button id="act">INTERACTUAR</button><button id="blk">GUARDIA</button><button id="atk">ATACAR</button><button id="run">CORRER</button><button id="jump">⬆<br>SALTAR</button>
 <div id="error"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
 <script type="module">
@@ -42,6 +45,7 @@ import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/
 import { createPlayer, stepPlayer, WALK_SPEED, RUN_SPEED } from './course.js';
 import { createCombatAddon } from './combat-addon.js';
 import * as SW from './swing-style.js';
+import * as I from './inventario.js';
 
 // Laboratorio: arena plana, sin mapa. Mismo personaje y mismos controles que el juego.
 const errorBox = document.getElementById('error');
@@ -80,6 +84,8 @@ const actor = new THREE.Group(); scene.add(actor);
 let mixer = null, idleA = null, walkA = null, runA = null, activeA = null, attacking = false;
 const clipPool = new Map();   // nombre normalizado → clip (UAL1 + UAL2 si existe)
 const actionCache = new Map();
+let gameT = 0, wasAttacking = false, pauseUntil = 0;   // reloj de juego y pausa tras el 3.er golpe
+const stepState = { step: 0, endedAt: -1e9 };           // paso de la cadena: 1 → 2 → 3, pausa, 1 → 2 → 3
 let oneShot = null;            // animación puntual (beber, golpe recibido, muerte): { action, t, dur, hold }
 let swing = null;              // golpe en curso: { style, t, adv, action }
 const normName = n => (n || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -176,9 +182,9 @@ function strikeTime(name) {
 
 // Cada golpe empieza aquí: elige clip, lo acelera para que el impacto coincida con el del juego y guarda su postura.
 function playAttackAnim(a) {
-  const chainLen = combat.bench.fighter.chain.length;
-  const name = SW.pickClip(a.type, chainLen, !!a.combo, n => clipPool.has(n));
-  const style = SW.swingStyle(a, chainLen);
+  const step = SW.advanceStep(stepState, gameT);
+  const name = SW.pickClip(step, n => clipPool.has(n));
+  const style = SW.swingStyle(a, step);
   let action = null;
   if (name) {
     action = actionCache.get(name);
@@ -195,7 +201,7 @@ function playAttackAnim(a) {
 const combat = createCombatAddon({
   THREE, scene, camera, player,
   onAction: onCombatAction,
-  onSwing: a => { playAttackAnim(a); hint.textContent = (a.combo ? 'COMBO · ' + a.combo.name : a.data.name).toUpperCase(); },
+  onSwing: a => { playAttackAnim(a); hint.textContent = (a.combo ? 'COMBO · ' + a.combo.name : 'GOLPE ' + stepState.step + ' · ' + a.data.name).toUpperCase(); },
 });
 
 const keys = {};
@@ -214,6 +220,8 @@ const dirF = () => (keys.w || keys.arrowup ? 1 : 0) - (keys.s || keys.arrowdown 
 const dirS = () => (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
 // Las flechas eligen el TIPO de golpe; si hay un muñeco cerca, el personaje se orienta hacia él (así el golpe lateral no se va al vacío).
 function attack() {
+  // Tras el 3.er golpe hay una pausa: no se encola otro golpe.
+  if (gameT < pauseUntil || (swing && swing.style.step === SW.STEPS && combat.bench.fighter.attack)) return;
   const d = combat.bench.dummies[0];
   if (d && !d.dead && !combat.bench.fighter.attack) {
     const dx = d.x - player.x, dz = d.z - player.z;
@@ -242,9 +250,62 @@ addEventListener('keydown', e => {
   if (k === ' ') { e.preventDefault(); jumpQueued = true; }
   if (k === 'j' && !e.repeat) attack();
   if (k === 'k' && !e.repeat) setGuard(true);
+  if (k === 'q' && !e.repeat) drinkPotion();
+  if (k === 'e' && !e.repeat) interact();
 });
 addEventListener('keyup', e => { const k = e.key.toLowerCase(); release(k); if (k === 'k') setGuard(false); });
 document.addEventListener('contextmenu', e => e.preventDefault());
+
+// --- BEBER: para ver la animación. Elige la poción que haga falta; si no hace falta ninguna, la animación se reproduce igual (prueba).
+function drinkPotion() {
+  const f = combat.bench.fighter;
+  if (f.dead || oneShot || f.attack) return;
+  const kind = f.hp < f.maxHp ? 'vida' : (f.stamina < 95 ? 'energia' : 'furia');
+  const r = combat.drink(kind);
+  if (!r.ok && playOnce('consume', { rate: 1.3 })) combat.toast((r.msg || 'Sin efecto') + ' · prueba de animación');
+}
+document.getElementById('drink').addEventListener('pointerdown', e => { e.preventDefault(); drinkPotion(); });
+
+// --- INTERACTUAR: un solo botón para cofres, llaves y puertas (y lo que se añada después).
+const props = [];
+function addProp(name, x, z, build, spec) {
+  const g = new THREE.Group(); build(g); g.position.set(x, 0, z); scene.add(g);
+  props.push({ name, x, z, mesh: g, ...spec });
+}
+const box = (g, w, h, d, c, x = 0, y = h / 2, z = 0) => {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 }));
+  m.position.set(x, y, z); m.castShadow = true; g.add(m); return m;
+};
+let chestOpen = false, doorOpen = false, keyTaken = false;
+addProp('cofre', -5, 3, g => { box(g, 1.0, 0.55, 0.65, 0x6b4a2b); box(g, 1.04, 0.14, 0.69, 0x8a6a3a, 0, 0.62); },
+  { prompt: () => chestOpen ? null : 'Abrir cofre',
+    act: () => { chestOpen = true; playOnce('chest open'); combat.give({ weapon: ['hacha'], armor: { pechera: ['malla'] }, potions: { vida: 1 } }); } });
+addProp('llave', 5, 3, g => { box(g, 0.5, 0.06, 0.5, 0x5a4a30, 0, 0.5); box(g, 0.1, 0.05, 0.3, 0xe0b840, 0, 0.56); },
+  { prompt: () => keyTaken ? null : 'Recoger llave',
+    act: function () { keyTaken = true; this.mesh.visible = false; playOnce('pickup table'); combat.give({ items: { llave_consejero: 1 } }); } });
+addProp('puerta', 0, 9, g => { box(g, 3.2, 3, 0.3, 0x3a2f26, 0, 1.5); },
+  { prompt: () => doorOpen ? null : 'Abrir puerta',
+    act: function () {
+      if (!I.hasItem(combat.inventory, 'llave_consejero')) { combat.toast('Necesitas la llave del consejero'); return; }
+      doorOpen = true; playOnce('interact'); combat.toast('Puerta abierta'); setTimeout(() => { this.mesh.visible = false; }, 700);
+    } });
+const guideEl = document.getElementById('guide'), actBtn = document.getElementById('act'), guideDefault = guideEl.textContent;
+let nearProp = null;
+function updateInteract() {
+  let best = null, bd = 2.0;
+  for (const p of props) { if (!p.prompt()) continue; const d = Math.hypot(p.x - player.x, p.z - player.z); if (d < bd) { bd = d; best = p; } }
+  if (best !== nearProp) {
+    nearProp = best;
+    guideEl.textContent = best ? 'E · ' + best.prompt() : guideDefault;
+    actBtn.classList.toggle('ready', !!best);
+  }
+}
+function interact() {
+  const f = combat.bench.fighter;
+  if (!nearProp || f.dead || oneShot || f.attack || combat.panelOpen) return;
+  const p = nearProp; p.act.call(p); updateInteract();
+}
+actBtn.addEventListener('pointerdown', e => { e.preventDefault(); interact(); });
 
 const clock = new THREE.Clock();
 const camOffset = new THREE.Vector3(0, 3.1, -6.2);
@@ -258,7 +319,11 @@ function animate() {
   const running = !!(keys.run || keys.shift || runLatch);
   const speed = running ? RUN_SPEED : WALK_SPEED;
   const fighter = combat.bench.fighter;
+  gameT += dt;
   attacking = !!fighter.attack;
+  if (attacking) stepState.endedAt = gameT;
+  if (wasAttacking && !attacking && stepState.step === SW.STEPS) pauseUntil = gameT + SW.STEP3_PAUSE;
+  wasAttacking = attacking;
   // Animaciones puntuales: avanzan solas; la de muerte se queda hasta que reviva.
   if (oneShot) {
     oneShot.t += dt;
@@ -311,6 +376,7 @@ function animate() {
     mixer.update(dt);
   }
   combat.update(dt);
+  updateInteract();
 
   const camY = Math.max(player.y, -0.5);
   camera.position.lerp(tmpV.set(actor.position.x + camOffset.x, camOffset.y + camY, actor.position.z + camOffset.z), Math.min(1, dt * 3));
