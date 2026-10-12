@@ -36,7 +36,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 <button type="button" id="mapView">VISTA · MAPA</button>
 <button type="button" id="characterLab" onclick="location.href='./character-lab.html'">VISUAL · PERSONAJE</button>
 <button type="button" id="combatLab" onclick="location.href='./combat-lab.html'">COMBATE · PRUEBAS</button>
-<div id="hint">EL REGRESO · PATIO CONTINUO</div>
+<div id="hint">EL REGRESO · PUZZLE TLDRAW</div>
 <div id="pad">
 <button data-k="w" style="grid-column:2;grid-row:1">▲</button>
 <button data-k="a" style="grid-column:1;grid-row:2">◀</button>
@@ -62,8 +62,8 @@ addEventListener('error', e => { errorBox.style.display = 'block'; errorBox.text
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x12161c);
-scene.fog = new THREE.Fog(0x12161c, 25, 90);
-const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 0.1, 200);
+scene.fog = new THREE.Fog(0x12161c, 22, 85);
+const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 0.1, 180);
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
@@ -81,10 +81,10 @@ keyLight.castShadow = true;
 keyLight.shadow.mapSize.set(1024, 1024);
 keyLight.shadow.camera.near = 2;
 keyLight.shadow.camera.far = 120;
-keyLight.shadow.camera.left = -60;
-keyLight.shadow.camera.right = 60;
-keyLight.shadow.camera.top = 60;
-keyLight.shadow.camera.bottom = -60;
+keyLight.shadow.camera.left = -55;
+keyLight.shadow.camera.right = 55;
+keyLight.shadow.camera.top = 55;
+keyLight.shadow.camera.bottom = -55;
 keyLight.shadow.bias = -0.001;
 scene.add(keyLight);
 scene.add(new THREE.DirectionalLight(0x9a4535, 1.1).translateX(8).translateY(8).translateZ(-6));
@@ -94,8 +94,8 @@ let pageRead = false, hasKey = false, leverPulled = false, gateClosed = false, f
 
 const course = { segments: [{ a: 100, b: -100 }], gaps: 0, freeMap: true };
 const player = createPlayer(course);
-player.x = 10; player.z = -6; player.y = 0;
-player.checkpoint = { x: 10, z: -6 };
+player.x = 6.5; player.z = 3; player.y = 0;
+player.checkpoint = { x: 6.5, z: 3 };
 player.facing = 0;
 
 const statBox = document.getElementById('stat');
@@ -223,7 +223,7 @@ document.getElementById('jump').addEventListener('pointerdown', e => { e.prevent
 const clock = new THREE.Clock();
 const camOffset = new THREE.Vector3(0, 3.6, -8.5);
 let mapOverview = false;
-const overview = { x: MAP_CENTER.x, z: MAP_CENTER.z, h: 70 };
+const overview = { x: MAP_CENTER.x, z: MAP_CENTER.z, h: 55 };
 const mapBtn = document.getElementById('mapView');
 if (mapBtn) mapBtn.addEventListener('pointerdown', e => {
   e.preventDefault();
@@ -231,7 +231,7 @@ if (mapBtn) mapBtn.addEventListener('pointerdown', e => {
   mapBtn.classList.toggle('on', mapOverview);
   document.getElementById('hint').textContent = mapOverview
     ? 'VISTA MAPA · flechas desplazar · VISTA·MAPA para volver'
-    : 'EL REGRESO · PATIO CONTINUO';
+    : 'EL REGRESO · PUZZLE TLDRAW';
 });
 camera.position.set(player.x + camOffset.x, camOffset.y, player.z + camOffset.z);
 document.addEventListener('contextmenu', e => e.preventDefault());
@@ -249,7 +249,7 @@ function animate() {
   resolveWallCollisions(player);
   resolveGround(player);
 
-  if (!gateClosed && player.x > 34 && player.x < 46 && player.z > 76 && player.z < 88) {
+  if (!gateClosed && player.x > 30 && player.x < 40 && player.z > 64 && player.z < 72) {
     closePassageGate(mapData);
     gateClosed = true;
     document.getElementById('hint').textContent = 'La reja cae... algo anda mal';
@@ -269,7 +269,7 @@ function animate() {
   if (!leverPulled && distanceToLever(player.x, player.y, player.z) < 2.0) {
     leverPulled = true;
     if (mapData.leverArm) mapData.leverArm.rotation.x = 0.8;
-    document.getElementById('hint').textContent = 'La gran reja responde... (cinemática)';
+    document.getElementById('hint').textContent = 'La gran reja responde... (cinemática jefe)';
   }
 
   actor.position.set(player.x, player.y, player.z);
