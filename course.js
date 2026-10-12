@@ -1,6 +1,7 @@
 // course.js — camino lineal con barrancos y física de salto.
 // freeMap: true (o gaps===0) desactiva HALF_WIDTH y el suelo del curso;
 // el mapa usa resolveGround / plataformas propias.
+// freeMap: adelante = +Z (croquis eje-x). Curso lineal histórico: adelante = -Z.
 
 export const HALF_WIDTH = 2.2;
 export const GRAVITY = 12;
@@ -50,7 +51,7 @@ export function createPlayer(course) {
   const spawnZ = free ? (s0?.a ?? 0) - 2 : Math.min(0, s0.a - 1);
   return {
     x: 0, y: 0, z: spawnZ, vy: 0,
-    facing: Math.PI,
+    facing: free ? 0 : Math.PI,
     grounded: true, jumping: false,
     coyote: COYOTE, airTime: 0, jumpBuffer: 0,
     avx: 0, avz: 0,
@@ -67,7 +68,8 @@ export function stepPlayer(p, course, input, dt) {
   const len = Math.hypot(side, f);
   const hasInput = canMove && len > 0;
   const dx = hasInput ? side / len : 0;
-  const dz = hasInput ? -f / len : 0;
+  // freeMap (croquis): flecha arriba = +Z. Curso lineal: flecha arriba = -Z.
+  const dz = hasInput ? (freeMap ? f / len : -f / len) : 0;
   const prevGrounded = p.grounded;
 
   if (jump) p.jumpBuffer = JUMP_BUFFER;
@@ -103,7 +105,6 @@ export function stepPlayer(p, course, input, dt) {
   }
   if (hasInput) p.facing = Math.atan2(dx, dz);
 
-  // freeMap: el suelo lo resuelve resolveGround del mapa
   if (freeMap) {
     if (!p.grounded) {
       p.coyote = Math.max(0, p.coyote - dt);
@@ -128,7 +129,7 @@ export function stepPlayer(p, course, input, dt) {
       p.jumping = false;
       p.airTime = 0;
       p.coyote = COYOTE;
-      p.facing = Math.PI;
+      p.facing = 0;
       p.falls++;
       ev.fell = true;
     }
