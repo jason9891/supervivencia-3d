@@ -95,7 +95,7 @@ export function testHit(b, damage = TEST_HIT) {
   if (f.dead) return null;
   const attacker = { x: f.x + Math.sin(f.facing) * 1.5, z: f.z + Math.cos(f.facing) * 1.5, fury: 0 };
   const res = C.resolveHit(attacker, f, { data: { dmg: damage }, mult: 1, stagger: false }, C.computeStats(b.equip));
-  return { raw: damage, taken: res.damage, killed: res.killed };
+  return { raw: damage, taken: res.damage, killed: res.killed, blocked: res.blocked, guardBroken: res.guardBroken };
 }
 
 // Revive al jugador de pruebas y restablece vida, energía y muñecos.

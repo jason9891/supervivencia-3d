@@ -42,11 +42,13 @@ const SLOT_ORDER = ['weapon', ...C.SLOTS];
 // getFlags (opcional): función que devuelve las banderas del mapa, p. ej. { llave: hasKey, nota: pageRead, comida: foodTaken }.
 //   El inventario las convierte en objetos (llave, notas, comida). Solo se LEE el estado; el mapa no se modifica.
 // storage (opcional): por defecto localStorage del navegador; el inventario se guarda solo.
-export function createCombatAddon({ THREE, scene, camera, player, onSwing, getFlags, storage }) {
+// onAction (opcional): avisa de acciones que la página puede animar: { type:'drink', kind } | { type:'eat' } | { type:'hurt', blocked, guardBroken, killed }.
+export function createCombatAddon({ THREE, scene, camera, player, onSwing, onAction, getFlags, storage }) {
   if (storage === undefined) { try { storage = window.localStorage; } catch { storage = null; } }
   const inv = I.load(storage, { testMode: true });
   const bench = B.createBanco(inv);
   const persist = () => I.save(inv, storage);
+  const emit = e => { try { if (onAction) onAction(e); } catch { /* la animación nunca debe romper el combate */ } };
   let panelOpen = false;
   let msg = '';
   let lastAttack = null;
@@ -121,9 +123,11 @@ export function createCombatAddon({ THREE, scene, camera, player, onSwing, getFl
     } else if (act === 'potion') {
       const r = B.usePotion(bench, t.dataset.kind);
       msg = r.ok ? 'Bebiste: ' + r.msg : r.msg;
+      if (r.ok) emit({ type: 'drink', kind: t.dataset.kind });
     } else if (act === 'item') {
       const r = B.useItem(bench, t.dataset.id);
       msg = r.ok ? 'Usaste: ' + r.msg : r.msg;
+      if (r.ok) emit({ type: 'eat' });
     } else if (act === 'testmode') {
       I.setTestMode(inv, !inv.testMode);
       bench.fighter.weapon = C.WEAPONS[inv.equip.weapon];
@@ -136,7 +140,8 @@ export function createCombatAddon({ THREE, scene, camera, player, onSwing, getFl
       removeDummy(); msg = 'Muñeco retirado';
     } else if (act === 'testhit') {
       const r = B.testHit(bench);
-      msg = r ? `Golpe de ${r.raw}: recibes ${r.taken}` + (r.killed ? ' · caes a 0' : '') : 'Estás caído: pulsa Restablecer';
+      msg = r ? `Golpe de ${r.raw}: recibes ${r.taken}` + (r.blocked ? ' (bloqueado)' : '') + (r.guardBroken ? ' · ¡guardia rota!' : '') + (r.killed ? ' · caes a 0' : '') : 'Estás caído: pulsa Restablecer';
+      if (r) emit({ type: 'hurt', blocked: r.blocked, guardBroken: r.guardBroken, killed: r.killed });
     } else if (act === 'restore') {
       B.restore(bench); msg = 'Vida y energía restablecidas';
     }
@@ -157,7 +162,7 @@ export function createCombatAddon({ THREE, scene, camera, player, onSwing, getFl
       const kind = ['vida', 'energia', 'furia'][+k - 1];
       const r = B.usePotion(bench, kind);
       showToast(r.ok ? 'Bebiste: ' + r.msg : r.msg);
-      if (r.ok) persist();
+      if (r.ok) { persist(); emit({ type: 'drink', kind }); }
     }
   });
 
@@ -241,6 +246,13 @@ export function createCombatAddon({ THREE, scene, camera, player, onSwing, getFl
     return r.started;
   }
 
+  // Guardia: mantener = bloquear (reduce el daño frontal a cambio de energía). Devuelve si quedó activa.
+  function setBlock(on) {
+    if (panelOpen) on = false;
+    C.setBlocking(bench.fighter, on);
+    return bench.fighter.blocking;
+  }
+
   // Botín desde el código (cofres, enemigos, misiones): give({ weapon:['hacha'], armor:{ casco:['malla'] }, potions:{ vida:2 }, items:{ comida:1 } })
   function give(loot) {
     const got = I.give(inv, loot);
@@ -254,6 +266,7 @@ export function createCombatAddon({ THREE, scene, camera, player, onSwing, getFl
       if (got.length) { showToast('Obtuviste: ' + got.join(', ')); persist(); if (panelOpen) renderPanel(); }
     }
     B.syncPlayer(bench, player);
+    if (bench.fighter.blocking && bench.fighter.stamina <= 0) bench.fighter.blocking = false;
     handleEvents(B.update(bench, dt));
     watchSwing();
 
@@ -275,10 +288,10 @@ export function createCombatAddon({ THREE, scene, camera, player, onSwing, getFl
     hpFill.style.width = Math.max(0, f.hp / f.maxHp * 100) + '%';
     stFill.style.width = Math.max(0, f.stamina / C.MAX_STAMINA * 100) + '%';
     const p = bench.potions;
-    hudTxt.textContent = C.WEAPONS[bench.equip.weapon].name.toUpperCase() + (f.fury > 0 ? ' · FURIA' : '') + ' · V' + p.vida + ' E' + p.energia + ' F' + p.furia;
+    hudTxt.textContent = C.WEAPONS[bench.equip.weapon].name.toUpperCase() + (f.blocking ? ' · GUARDIA' : '') + (f.fury > 0 ? ' · FURIA' : '') + ' · V' + p.vida + ' E' + p.energia + ' F' + p.furia;
 
     if (toastT > 0) { toastT -= dt; if (toastT <= 0) toast.style.opacity = '0'; }
   }
 
-  return { pressAttack, update, give, bench, inventory: inv, setPanel, get panelOpen() { return panelOpen; } };
+  return { pressAttack, setBlock, update, give, bench, inventory: inv, setPanel, get panelOpen() { return panelOpen; } };
 }
