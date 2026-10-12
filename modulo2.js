@@ -20,7 +20,7 @@ export const MOD2 = {
   partitionZ: 30,
   // Hueco tabique A↔B
   doorAB: { x0: 74, x1: 80 },
-  // Gradas en ambiente A (sur), suben hacia +X
+  // Gradas en ambiente A (sur), suben hacia +Z
   stairs: { x0: 82, x1: 88, z0: 8, z1: 18 },
 };
 
@@ -33,10 +33,6 @@ export const MOD2_SPAWNS = {
 
 /**
  * Construye el módulo 2 dentro de scene.
- * @param {THREE.Scene} scene
- * @param {{ addWall:(a,b,c,d)=>void, addPlatform:(a,b,c,d,y)=>void, box?: Function }} helpers
- *        Si no pasas box, se crea uno local (solo lab).
- * @returns objetos interactivos (page, key, etc.)
  */
 export function buildModule2(scene, helpers = {}) {
   const mat = (c, r = 0.86, m = 0) =>
@@ -81,64 +77,50 @@ export function buildModule2(scene, helpers = {}) {
   const midX = (minX + maxX) / 2;
 
   // ── Suelos nivel 1 (dos ambientes) ──
-  pad(maxX - minX, partitionZ - minZ - 0.5, LEVEL1_Y, midX, (minZ + partitionZ) / 2, stone); // A sur
-  pad(maxX - minX, maxZ - partitionZ - 0.5, LEVEL1_Y, midX, (partitionZ + maxZ) / 2, dark); // B norte
+  pad(maxX - minX, partitionZ - minZ - 0.5, LEVEL1_Y, midX, (minZ + partitionZ) / 2, stone);
+  pad(maxX - minX, maxZ - partitionZ - 0.5, LEVEL1_Y, midX, (partitionZ + maxZ) / 2, dark);
 
   // ── Muro oeste plaza|módulo CON hueco puerta ──
-  // (map1 puede haber puesto muro continuo; aquí reforzamos tramos + hueco)
   wallBox(minX - 0.4, minX + 0.4, minZ, doorPlaza.z0);
   wallBox(minX - 0.4, minX + 0.4, doorPlaza.z1, maxZ);
-  // Marcos puerta visuales
   box(0.35, 3.2, 0.35, wood, minX, LEVEL1_Y + 1.5, doorPlaza.z0);
   box(0.35, 3.2, 0.35, wood, minX, LEVEL1_Y + 1.5, doorPlaza.z1);
 
-  // ── Muro este (cerrado) ──
   wallBox(maxX - 0.5, maxX + 0.3, minZ, maxZ);
-
-  // ── Muro sur ──
   wallBox(minX, maxX, minZ - 0.3, minZ + 0.4);
-
-  // ── Muro norte módulo (bajo torres) — hueco hacia pasillo 2º piso se abre en altura ──
   wallBox(minX, maxX, maxZ - 0.4, maxZ + 0.3);
 
-  // ── Tabique A|B con puerta ──
   wallBox(minX, doorAB.x0, partitionZ - 0.4, partitionZ + 0.4);
   wallBox(doorAB.x1, maxX, partitionZ - 0.4, partitionZ + 0.4);
 
-  // ── Gradas (ambiente A → piso 2) ──
-  // Escalones sólidos + plataformas intermedias
-  const steps = 8;
-  const stepH = (LEVEL2_Y - LEVEL1_Y) / steps;
+  // ── Gradas: visual + plataformas. NO solid (bloqueaban el paso). ──
+  const steps = 12;
+  const rise = LEVEL2_Y - LEVEL1_Y;
+  const stepH = rise / steps;
   const stepD = (stairs.z1 - stairs.z0) / steps;
   const stepW = stairs.x1 - stairs.x0;
+  const sx = (stairs.x0 + stairs.x1) / 2;
   for (let i = 0; i < steps; i++) {
-    const y = LEVEL1_Y + (i + 1) * stepH;
+    const yTop = LEVEL1_Y + (i + 1) * stepH;
     const z = stairs.z0 + (i + 0.5) * stepD;
-    const x = (stairs.x0 + stairs.x1) / 2;
-    box(stepW, stepH * 0.95, stepD * 0.95, stone, x, y - stepH / 2, z, true);
-    addPlatform(stairs.x0, stairs.x1, z - stepD / 2, z + stepD / 2, y);
+    box(stepW, Math.max(0.12, stepH * 0.9), stepD * 0.92, stone, sx, yTop - stepH * 0.45, z, false);
+    addPlatform(stairs.x0 - 0.15, stairs.x1 + 0.15, z - stepD * 0.55, z + stepD * 0.55, yTop);
   }
+  addPlatform(stairs.x0 - 0.2, stairs.x1 + 0.2, stairs.z1 - 0.3, stairs.z1 + 1.2, LEVEL2_Y);
 
-  // ── Piso 2 (mezzanine sobre A+B, sin techo completo) ──
+  // ── Piso 2 ──
   pad(maxX - minX - 1, maxZ - minZ - 2, LEVEL2_Y, midX, (minZ + maxZ) / 2 + 2, wood);
-
-  // Barandilla simple piso 2 (hueco sobre gradas)
-  wallBox(stairs.x0 - 0.3, stairs.x0, stairs.z0, stairs.z1 + 2);
-  // elevamos visual de barandilla en Y: usamos cajas altas en LEVEL2
   box(0.25, 1.1, stairs.z1 - stairs.z0 + 2, wood, stairs.x0 - 0.15, LEVEL2_Y + 0.55, (stairs.z0 + stairs.z1) / 2 + 1);
 
-  // ── Pasarela norte piso 2 → zona torres (z 52 → 63) ──
+  // ── Pasarela norte piso 2 → torres ──
   pad(8, 12, LEVEL2_Y, midX, 58, wood);
-  // muros laterales pasarela
   box(0.4, 1.2, 10, dark, midX - 4.2, LEVEL2_Y + 0.6, 58);
   box(0.4, 1.2, 10, dark, midX + 4.2, LEVEL2_Y + 0.6, 58);
 
-  // ── Props historia (oficina sur) ──
   const pagePos = new THREE.Vector3(76, LEVEL1_Y + 1.05, 10);
   const keyPos = new THREE.Vector3(78, LEVEL1_Y + 1.02, 14);
   const pageMesh = box(0.45, 0.03, 0.55, paper, pagePos.x, pagePos.y, pagePos.z);
   const keyMesh = box(0.28, 0.08, 0.12, gold, keyPos.x, keyPos.y, keyPos.z);
-  // Mesa rota
   box(2.2, 0.12, 1.0, wood, 76, LEVEL1_Y + 0.7, 11, true);
   box(0.15, 0.7, 0.15, wood, 75.2, LEVEL1_Y + 0.35, 10.6, true);
   box(0.15, 0.7, 0.15, wood, 76.8, LEVEL1_Y + 0.35, 11.4, true);
