@@ -1,7 +1,6 @@
 // map1.js — El Regreso
-// Puzzle tldraw: paredes compartidas, SIN techos.
-// Entrada pasadizo→plaza al ESTE del establo (no por el medio).
-// +X este · +Z norte · Y altura.
+// Paredes = SOLO los segmentos naranja del tldraw (1:1). Sin puertas inventadas.
+// +X este · +Z norte · Y altura. SIN techos.
 
 import * as THREE from 'three';
 import { clearRamps, addRamp, sampleRampY, getSlopeAt, buildRampMesh, RAMPS } from './map-ramps.js';
@@ -18,7 +17,7 @@ export const ZONES = {
   ramp: { minX: 0, maxX: 13.5, minZ: 0, maxZ: 72 },
   corridor: { minX: 13.5, maxX: 67.5, minZ: 63, maxZ: 72 },
   plaza: { minX: 13.5, maxX: 67.5, minZ: 0, maxZ: 63 },
-  stable: { minX: 13.5, maxX: 40, minZ: 43, maxZ: 63 },
+  stable: { minX: 13.5, maxX: 54, minZ: 43, maxZ: 63 },
   module: { minX: 67.5, maxX: 90, minZ: 0, maxZ: 53 },
   towers: { minX: 67.5, maxX: 90, minZ: 63, maxZ: 72 },
 };
@@ -38,11 +37,10 @@ export const STORY_PAGE = {
 let PAGE_POS = new THREE.Vector3(78, LEVEL1_Y + 1, 30);
 let KEY_POS = new THREE.Vector3(80, LEVEL1_Y + 1, 28);
 let LEVER_POS = new THREE.Vector3(84, LEVEL1_Y + 11, 67);
-let FOOD_POS = new THREE.Vector3(26, LEVEL1_Y + 0.45, 52);
+let FOOD_POS = new THREE.Vector3(28, LEVEL1_Y + 0.45, 52);
 
 const PLAYER_R = 0.45;
-const WALL_T = 1.0;
-const WALL_H = 4.5;
+const WALL_H = 5.0;
 
 export const WALLS = [];
 export const PLATFORMS = [];
@@ -117,7 +115,8 @@ export function buildMap1(scene) {
   const iron = mat(0x3a3a40, 0.4, 0.55);
   const mountain = mat(0x3a3e38, 0.98);
   const grass = mat(0x3d5c38, 1);
-  const orangeW = mat(0x8a5a28, 0.85);
+  // Naranja bien visible (como croquis)
+  const orangeW = mat(0xc47a28, 0.75);
 
   function box(w, h, d, material, x, y, z, solid = false) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
@@ -132,15 +131,15 @@ export function buildMap1(scene) {
     box(w, th, d, material, x, y - th / 2, z, false);
     addPlatform(x - w / 2, x + w / 2, z - d / 2, z + d / 2, y);
   }
-  function wallH(x0, x1, z, material = orangeW) {
-    const cx = (x0 + x1) / 2, w = Math.abs(x1 - x0);
-    if (w < 0.3) return;
-    box(w, WALL_H, WALL_T, material, cx, LEVEL1_Y + WALL_H / 2, z, true);
-  }
-  function wallV(z0, z1, x, material = orangeW) {
-    const cz = (z0 + z1) / 2, d = Math.abs(z1 - z0);
-    if (d < 0.3) return;
-    box(WALL_T, WALL_H, d, material, x, LEVEL1_Y + WALL_H / 2, cz, true);
+
+  // Pared desde AABB en unidades de juego (conversión ya hecha desde tldraw)
+  function wallBox(minX, maxX, minZ, maxZ) {
+    const w = maxX - minX;
+    const d = maxZ - minZ;
+    if (w < 0.15 || d < 0.15) return;
+    const cx = (minX + maxX) / 2;
+    const cz = (minZ + maxZ) / 2;
+    box(w, WALL_H, d, orangeW, cx, LEVEL1_Y + WALL_H / 2, cz, true);
   }
 
   // ═══ Perímetro ═══
@@ -151,11 +150,11 @@ export function buildMap1(scene) {
   box(WT, WH, maxZ - minZ, mountain, minX - WT / 2, WH / 2 - 1, (minZ + maxZ) / 2, true);
   box(WT, WH, maxZ - minZ, mountain, maxX + WT / 2, WH / 2 - 1, (minZ + maxZ) / 2, true);
 
-  // ═══ Suelo continuo (todo el rectángulo) ═══
+  // ═══ Suelo continuo ═══
   pad(90, 72, LEVEL1_Y, 45, 36, dirt);
-  pad(90, 10, LEVEL1_Y, 45, 67, stone); // franja pasadizo
+  pad(90, 10, LEVEL1_Y, 45, 67, stone);
 
-  // ═══ Nivel 0 + rampa → desemboca en pasadizo ═══
+  // ═══ Nivel 0 + rampa ═══
   pad(13.5, 9, LEVEL0_Y, 6.75, 4.5, grass);
   const rampDef = {
     sx: 6.75, sz: 9,
@@ -174,60 +173,71 @@ export function buildMap1(scene) {
     g.rotation.y = Math.atan2(r.dx, r.dz);
     g.castShadow = true; scene.add(g);
   }
-  pad(22, 8, LEVEL1_Y, 12, 67, stone); // rellano une rampa+pasadizo
+  pad(22, 8, LEVEL1_Y, 12, 67, stone);
 
-  // ═══════════════════════════════════════════
-  // PAREDES (como tldraw — naranja)
-  // Establo: x 13.5–40, z 43–63
-  // Entrada pasadizo→plaza: ESTE del establo (x>40), NO por el medio
-  // ═══════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════
+  // PAREDES NARANJA del tldraw — coordenadas convertidas 1:1
+  // tldraw frame (100,50)-(820,626) → juego (0,0)-(90,72)
+  // gx = (px-100)/8 · gz_norte = (626-py)/8 · gz_sur = (626-py-h)/8
+  // ═══════════════════════════════════════════════════════════
 
-  // 1) Rampa | resto — abierta al norte (pasadizo)
-  wallV(0, 62, 13.5);
+  // V 205,121 6×505  → x≈13.1–13.9  z 0–63.1   (rampa | patio, abierta al pasadizo)
+  wallBox(13.1, 13.9, 0.0, 63.1);
 
-  // 2) Norte del ESTABLO (cierra pasadizo→establo) x 13.5–40 @ z=63
-  wallH(13.5, 40, 63);
+  // H 208,119 180×6  → x 13.5–36.0  z≈62.9–63.6  (norte establo Oeste)
+  wallBox(13.5, 36.0, 62.9, 63.6);
 
-  // 3) Entrada a PLAZA desde pasadizo: hueco x 40–52 @ z=63
-  //    (al este del establo)
-  //    muro que retoma hacia torres:
-  wallH(52, 67.5, 63);
+  // H 388,119 150×6  → x 36.0–54.8  z≈62.9–63.6  (norte establo Este / plaza alta)
+  wallBox(36.0, 54.8, 62.9, 63.6);
+  //  HUECO natural 54.8–67.3 = entrada pasadizo → plaza (este del establo)
 
-  // 4) Este del ESTABLO (separa establo de plaza) @ x=40, z 43–63
-  wallV(43, 63, 40);
+  // H 638,120 63×5   → x 67.3–75.1  z≈62.9–63.5  (norte hacia T1)
+  wallBox(67.3, 75.1, 62.9, 63.5);
 
-  // 5) Sur del ESTABLO con puerta a plaza @ z=43
-  wallH(13.5, 24, 43); // tramo oeste
-  // hueco puerta ~24–30
-  wallH(30, 40, 43);   // tramo este
+  // V 383,122 7×100  → x 35.4–36.3  z 50.5–63.0  (tabique establo)
+  wallBox(35.4, 36.3, 50.5, 63.0);
 
-  // 6) Tabique 2 ambientes establo @ x≈26.5
-  wallV(43, 63, 26.5);
+  // V 530,123 6×144  → x 53.8–54.5  z 44.9–62.9  (este establo | plaza)
+  wallBox(53.8, 54.5, 44.9, 62.9);
 
-  // 7) Plaza | módulo @ x=67.5 (hueco puerta módulo más abajo)
-  wallV(0, 28, 67.5);
-  // hueco puerta módulo z 28–40
-  wallV(40, 62, 67.5);
-  wallV(63, 72, 67.5); // tramo torres
+  // H 207,264 258×6  → x 13.4–45.6  z 44.9–45.6  (sur establo; hueco 45.6–54.5 a plaza)
+  wallBox(13.4, 45.6, 44.9, 45.6);
 
-  // 8) T1 | portón @ x=75, solo franja norte
-  wallV(63, 72, 75);
+  // V 635,195 9×342  → x 66.9–68.0  z 11.1–53.9  (plaza | módulo)
+  wallBox(66.9, 68.0, 11.1, 53.9);
 
-  // ─── Reja pasadizo ───
+  // H 639,194 178×9  → x 67.4–89.6  z 53.4–54.5  (norte módulo / bajo torres)
+  wallBox(67.4, 89.6, 53.4, 54.5);
+
+  // V 638,51 6×72    → x 67.3–68.0  z 62.9–72.0  (T1 oeste)
+  wallBox(67.3, 68.0, 62.9, 72.0);
+
+  // V 698,53 6×72    → x 74.8–75.5  z 62.6–71.6  (T1|portón)
+  wallBox(74.8, 75.5, 62.6, 71.6);
+
+  // V 743,50 6×73    → x 80.4–81.1  z 62.9–72.0  (T2 oeste / portón)
+  wallBox(80.4, 81.1, 62.9, 72.0);
+
+  // H 744,122 74×5   → x 80.5–89.8  z 62.9–63.5  (sur T2)
+  wallBox(80.5, 89.8, 62.9, 63.5);
+
+  // H 206,620 613×8  → x 13.3–89.9  z 0.25–1.25  (sur interior)
+  wallBox(13.3, 89.9, 0.25, 1.25);
+
+  // ─── Reja en pasadizo (visual, no inventada como muro extra) ───
   const gateLeft = box(2.5, 4.2, 0.4, iron, 32, LEVEL1_Y + 2.0, 67.5, false);
   const gateRight = box(2.5, 4.2, 0.4, iron, 37, LEVEL1_Y + 2.0, 67.5, false);
   const gate = gateLeft;
   gate.name = 'mainGate';
   gate.userData = { mate: gateRight, closed: false };
 
-  // ─── Establo: comida (SIN techo) ───
   const foodMesh = box(0.5, 0.25, 0.4, mat(0xc4a060), FOOD_POS.x, FOOD_POS.y, FOOD_POS.z);
 
-  // ─── Fuente plaza ───
-  box(5, 0.4, 5, stone, 48, LEVEL1_Y + 0.18, 28, true);
-  box(3, 0.7, 3, dark, 48, LEVEL1_Y + 0.5, 28, true);
+  // Fuente plaza
+  box(5, 0.4, 5, stone, 40, LEVEL1_Y + 0.18, 28, true);
+  box(3, 0.7, 3, dark, 40, LEVEL1_Y + 0.5, 28, true);
 
-  // ─── Torres + portón jefe (SIN techos de habitación) ───
+  // Torres (volúmenes, no techos de habitación)
   box(7.5, 11, 9, dark, 71.25, LEVEL1_Y + 5.2, 67.5, true);
   addPlatform(67.5, 75, 63, 72, LEVEL1_Y + 10.5);
   box(9.5, 11, 9, dark, 85.25, LEVEL1_Y + 5.2, 67.5, true);
@@ -236,10 +246,6 @@ export function buildMap1(scene) {
   portcullis.name = 'portcullis';
   box(5, 0.3, 4, wood, 77.5, LEVEL1_Y + 10.6, 66);
   addPlatform(75, 80, 64, 68, LEVEL1_Y + 10.5);
-
-  // ─── Módulo 2N: marcos puerta (SIN techo) ───
-  box(0.4, 3.2, 0.4, wood, 67.5, LEVEL1_Y + 1.5, 32);
-  box(0.4, 3.2, 0.4, wood, 67.5, LEVEL1_Y + 1.5, 38);
 
   const pageMesh = box(0.4, 0.03, 0.5, mat(0xf0e6d0, 0.6), PAGE_POS.x, PAGE_POS.y, PAGE_POS.z);
   const keyMesh = box(0.3, 0.08, 0.12, mat(0xc9a227, 0.4, 0.6), KEY_POS.x, KEY_POS.y, KEY_POS.z);
