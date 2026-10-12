@@ -36,7 +36,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 <button type="button" id="mapView">VISTA · MAPA</button>
 <button type="button" id="characterLab" onclick="location.href='./character-lab.html'">VISUAL · PERSONAJE</button>
 <button type="button" id="combatLab" onclick="location.href='./combat-lab.html'">COMBATE · PRUEBAS</button>
-<div id="hint">EL REGRESO · CROQUIS EJES</div>
+<div id="hint">EL REGRESO · PATIO CONTINUO</div>
 <div id="pad">
 <button data-k="w" style="grid-column:2;grid-row:1">▲</button>
 <button data-k="a" style="grid-column:1;grid-row:2">◀</button>
@@ -62,8 +62,8 @@ addEventListener('error', e => { errorBox.style.display = 'block'; errorBox.text
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x12161c);
-scene.fog = new THREE.Fog(0x12161c, 50, 180);
-const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 0.1, 360);
+scene.fog = new THREE.Fog(0x12161c, 25, 90);
+const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 0.1, 200);
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
@@ -76,26 +76,26 @@ document.body.appendChild(renderer.domElement);
 
 scene.add(new THREE.HemisphereLight(0x8aa0b8, 0x2a2218, 1.0));
 const keyLight = new THREE.DirectionalLight(0xffe8c8, 2.0);
-keyLight.position.set(20, 32, 10);
+keyLight.position.set(20, 28, 10);
 keyLight.castShadow = true;
 keyLight.shadow.mapSize.set(1024, 1024);
 keyLight.shadow.camera.near = 2;
-keyLight.shadow.camera.far = 180;
-keyLight.shadow.camera.left = -90;
-keyLight.shadow.camera.right = 90;
-keyLight.shadow.camera.top = 90;
-keyLight.shadow.camera.bottom = -90;
+keyLight.shadow.camera.far = 120;
+keyLight.shadow.camera.left = -60;
+keyLight.shadow.camera.right = 60;
+keyLight.shadow.camera.top = 60;
+keyLight.shadow.camera.bottom = -60;
 keyLight.shadow.bias = -0.001;
 scene.add(keyLight);
-scene.add(new THREE.DirectionalLight(0x9a4535, 1.1).translateX(10).translateY(10).translateZ(-6));
+scene.add(new THREE.DirectionalLight(0x9a4535, 1.1).translateX(8).translateY(8).translateZ(-6));
 
 const mapData = buildMap1(scene);
 let pageRead = false, hasKey = false, leverPulled = false, gateClosed = false, foodTaken = false;
 
 const course = { segments: [{ a: 100, b: -100 }], gaps: 0, freeMap: true };
 const player = createPlayer(course);
-player.x = 12; player.z = -8; player.y = 0;
-player.checkpoint = { x: 12, z: -8 };
+player.x = 10; player.z = -6; player.y = 0;
+player.checkpoint = { x: 10, z: -6 };
 player.facing = 0;
 
 const statBox = document.getElementById('stat');
@@ -223,15 +223,15 @@ document.getElementById('jump').addEventListener('pointerdown', e => { e.prevent
 const clock = new THREE.Clock();
 const camOffset = new THREE.Vector3(0, 3.6, -8.5);
 let mapOverview = false;
-const overview = { x: MAP_CENTER.x, z: MAP_CENTER.z, h: 95 };
+const overview = { x: MAP_CENTER.x, z: MAP_CENTER.z, h: 70 };
 const mapBtn = document.getElementById('mapView');
 if (mapBtn) mapBtn.addEventListener('pointerdown', e => {
   e.preventDefault();
   mapOverview = !mapOverview;
   mapBtn.classList.toggle('on', mapOverview);
   document.getElementById('hint').textContent = mapOverview
-    ? 'VISTA MAPA · flechas para desplazar · toca VISTA·MAPA para volver'
-    : 'EL REGRESO';
+    ? 'VISTA MAPA · flechas desplazar · VISTA·MAPA para volver'
+    : 'EL REGRESO · PATIO CONTINUO';
 });
 camera.position.set(player.x + camOffset.x, camOffset.y, player.z + camOffset.z);
 document.addEventListener('contextmenu', e => e.preventDefault());
@@ -249,7 +249,7 @@ function animate() {
   resolveWallCollisions(player);
   resolveGround(player);
 
-  if (!gateClosed && player.x > 38 && player.x < 50 && player.z > 112 && player.z < 124) {
+  if (!gateClosed && player.x > 34 && player.x < 46 && player.z > 76 && player.z < 88) {
     closePassageGate(mapData);
     gateClosed = true;
     document.getElementById('hint').textContent = 'La reja cae... algo anda mal';
@@ -290,10 +290,10 @@ function animate() {
   if (mapOverview) {
     const ox = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
     const oz = (keys.w || keys.arrowup ? 1 : 0) - (keys.s || keys.arrowdown ? 1 : 0);
-    overview.x += ox * 28 * dt;
-    overview.z += oz * 28 * dt;
+    overview.x += ox * 22 * dt;
+    overview.z += oz * 22 * dt;
     camera.position.lerp(new THREE.Vector3(overview.x, overview.h, overview.z + 0.01), Math.min(1, dt * 2));
-    camera.lookAt(overview.x, 8, overview.z);
+    camera.lookAt(overview.x, 6, overview.z);
   } else {
     const camY = Math.max(player.y, -0.5);
     camera.position.lerp(new THREE.Vector3(actor.position.x + camOffset.x, camOffset.y + camY, actor.position.z + camOffset.z), Math.min(1, dt * 3));
