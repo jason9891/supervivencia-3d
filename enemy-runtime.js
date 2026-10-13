@@ -1,6 +1,4 @@
-// enemy-runtime.js — carga el monstruo GLB, IA (combat.js) + anim procedural.
-// No toca el personaje: se engancha desde index-app con spawn + update + tryPlayerHit.
-
+// enemy-runtime.js — monstruo GLB + IA + anim. Mira al jugador, aggro en establo.
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/meshopt_decoder.module.js';
@@ -11,6 +9,15 @@ import {
 
 const ENEMY_URL = './assets/characters/tripo_rigging_a71e42e9-2739-425b-a16c-3aa7dba627a6_meshopt.glb';
 const TARGET_HEIGHT = 1.85;
+// Mixamo suele mirar +Z; si el modelo avanza de espaldas, dejar Math.PI.
+const FACE_OFFSET = Math.PI;
+
+// Zona establo (map1 ZONES.stable)
+const STABLE = { minX: 13.5, maxX: 54, minZ: 43, maxZ: 63 };
+
+function inStable(x, z) {
+  return x >= STABLE.minX && x <= STABLE.maxX && z >= STABLE.minZ && z <= STABLE.maxZ;
+}
 
 function fitModel(model, height) {
   model.updateMatrixWorld(true);
@@ -46,6 +53,12 @@ function createHpBar() {
   return { el, fill };
 }
 
+function wrapAngle(a) {
+  while (a > Math.PI) a -= 2 * Math.PI;
+  while (a < -Math.PI) a += 2 * Math.PI;
+  return a;
+}
+
 export async function createEnemyRuntime(opts) {
   const { scene, camera, player } = opts;
   const getGroundY = opts.getGroundY || (() => 0);
@@ -56,8 +69,8 @@ export async function createEnemyRuntime(opts) {
 
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
-
   const units = [];
+  let alertedOnce = false;
 
   function loadGlb(url) {
     return new Promise((resolve, reject) => {
@@ -67,6 +80,11 @@ export async function createEnemyRuntime(opts) {
 
   async function spawn(kind, x, z) {
     const data = createEnemy(kind || 'soldado', x, z);
+    data.def = {
+      ...data.def,
+      speed: 2.85,
+      aggro: 22,
+    };
     data.y = getGroundY(x, z);
 
     let gltf;
@@ -83,7 +101,10 @@ export async function createEnemyRuntime(opts) {
       root.add(mesh);
       root.position.set(x, data.y, z);
       scene.add(root);
-      const unit = { data, root, anim: null, hpBar: createHpBar(), lastState: 'idle' };
+      const unit = {
+        data, root, anim: null, hpBar: createHpBar(),
+        lastState: 'idle', visYaw: data.facing,
+      };
       units.push(unit);
       return unit;
     }
@@ -98,7 +119,10 @@ export async function createEnemyRuntime(opts) {
     const anim = createMixamoProcedural(THREE, model, { height: TARGET_HEIGHT });
     anim.setMode('idle');
 
-    const unit = { data, root, anim, hpBar: createHpBar(), lastState: 'idle' };
+    const unit = {
+      data, root, anim, hpBar: createHpBar(),
+      lastState: 'idle', visYaw: data.facing,
+    };
     units.push(unit);
     return unit;
   }
@@ -118,10 +142,12 @@ export async function createEnemyRuntime(opts) {
       if (!anim.isDead) anim.die();
       return;
     }
-    if (e.state === 'windup' || e.state === 'recover') {
-      if (unit.lastState !== 'windup' && e.state === 'windup') anim.attack();
+    if (e.state === 'windup') {
+      if (unit.lastState !== 'windup') anim.attack();
+    } else if (e.state === 'recover') {
+      // breve
     } else if (e.state === 'chase') {
-      anim.setMode(e.def.speed > 1.3 ? 'run' : 'walk');
+      anim.setMode('walk');
     } else if (e.state === 'hurt') {
       anim.setMode('hurt');
     } else {
@@ -130,12 +156,34 @@ export async function createEnemyRuntime(opts) {
     unit.lastState = e.state;
   }
 
+  function facePlayer(e) {
+    const dx = player.x - e.x;
+    const dz = player.z - e.z;
+    if (Math.hypot(dx, dz) < 0.05) return;
+    e.facing = Math.atan2(dx, dz);
+  }
+
   function update(dt) {
     const pstats = { defense: 4, blockFrac: 0 };
     const events = [];
+    const playerInStable = inStable(player.x, player.z);
 
     for (const unit of units) {
       const e = unit.data;
+
+      if (!e.dead && playerInStable && e.state === 'idle') {
+        e.state = 'chase';
+        e.def.aggro = 40;
+        if (!alertedOnce) {
+          alertedOnce = true;
+          onHint('\u00a1El monstruo te ha visto!');
+        }
+      }
+
+      if (!e.dead && (e.state === 'chase' || e.state === 'windup' || e.state === 'recover' || e.state === 'hurt')) {
+        facePlayer(e);
+      }
+
       const ev = stepEnemy(e, player, onPlat, dt);
       for (const x of ev) {
         if (x.type === 'enemyStrike') {
@@ -149,9 +197,15 @@ export async function createEnemyRuntime(opts) {
         }
       }
 
+      if (!e.dead && e.state !== 'idle') facePlayer(e);
+
       e.y = getGroundY(e.x, e.z);
       unit.root.position.set(e.x, e.y, e.z);
-      unit.root.rotation.y = e.facing;
+
+      let dYaw = wrapAngle(e.facing - unit.visYaw);
+      unit.visYaw = wrapAngle(unit.visYaw + dYaw * Math.min(1, dt * 10));
+      unit.root.rotation.y = unit.visYaw + FACE_OFFSET;
+      unit.root.rotation.z = 0;
 
       if (e.dead) {
         const t = Math.min(1, e.deadT / 0.9);
@@ -192,9 +246,7 @@ export async function createEnemyRuntime(opts) {
       const dist = Math.hypot(dx, dz);
       if (dist > reach + e.radius) continue;
       const ang = Math.atan2(dx, dz);
-      let diff = ang - player.facing;
-      while (diff > Math.PI) diff -= 2 * Math.PI;
-      while (diff < -Math.PI) diff += 2 * Math.PI;
+      let diff = wrapAngle(ang - player.facing);
       if (Math.abs(diff) > 1.1) continue;
 
       const fakeAttack = { data: { dmg }, mult: 1, stagger: dist < 1.2 };
