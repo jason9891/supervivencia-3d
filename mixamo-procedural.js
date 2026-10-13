@@ -160,12 +160,14 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
       const wave = Math.sin(t * Math.PI);
 
       if (attackPhase === 1) {
+        // Brazo derecho hacia adelante
         applyLocalRot(bones.rightArm, -0.35 * wave, 0.2 * wave, -1.5 * wave);
         applyLocalRot(bones.rightForeArm, -1.0 * wave, 0, 0);
         applyLocalRot(bones.spine1, 0, 0.25 * wave, 0);
         applyLocalRot(bones.hips, 0, 0.08 * wave, 0);
       } else {
-        applyLocalRot(bones.leftArm, -0.35 * wave, -0.2 * wave, 1.5 * wave);
+        // Brazo izquierdo también hacia adelante (mismo signo en Z que el derecho)
+        applyLocalRot(bones.leftArm, -0.35 * wave, -0.2 * wave, -1.5 * wave);
         applyLocalRot(bones.leftForeArm, -1.0 * wave, 0, 0);
         applyLocalRot(bones.spine1, 0, -0.25 * wave, 0);
         applyLocalRot(bones.hips, 0, -0.08 * wave, 0);
@@ -209,7 +211,6 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
     }
     applyLocalRot(bones.hips, 0, Math.sin(phase) * 0.06, 0);
 
-    // Piernas en Z (caminar), no en X (abrir)
     applyLocalRot(bones.leftUpLeg, 0, 0, L);
     applyLocalRot(bones.rightUpLeg, 0, 0, -R);
     applyLocalRot(bones.leftLeg, 0, 0, kneeL);
