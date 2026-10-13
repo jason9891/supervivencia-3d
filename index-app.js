@@ -6,8 +6,9 @@ import { backpedal, smoothYaw, createLocoState, stepLoco, createLoco, switchActi
 import {
   buildMap1, getCurrentZone, STORY_PAGE,
   distanceToPage, distanceToKey, distanceToLever, distanceToFood,
-  resolveWallCollisions, resolveGround, closePassageGate, tryUnlockTowerDoor, MAP_CENTER, WALLS
+  resolveWallCollisions, resolveGround, closePassageGate, tryUnlockTowerDoor, MAP_CENTER, WALLS, getGroundHeight
 } from './map1.js';
+import { createEnemyRuntime } from './enemy-runtime.js';
 
 const errorBox = document.getElementById('error');
 addEventListener('error', e => { errorBox.style.display = 'block'; errorBox.textContent = 'Error: ' + (e.message || ''); });
@@ -71,6 +72,20 @@ function showStoryPage() {
   pageRead = true;
   if (mapData.pageMesh) mapData.pageMesh.visible = false;
 }
+
+// --- Enemigo del mapa (establo): sigue, ataca, tiene vida y muere ---
+let enemyRt = null;
+let playerHitArmed = false;
+createEnemyRuntime({
+  scene, camera, player,
+  getGroundY: (x, z) => getGroundHeight(x, z),
+  onPlat: () => true,
+  onHint: (t) => { document.getElementById('hint').textContent = t; },
+}).then(async (rt) => {
+  enemyRt = rt;
+  await rt.spawn('soldado', 30, 50);
+  document.getElementById('hint').textContent = 'Un monstruo merodea el establo\u2026';
+}).catch((e) => console.warn('enemy runtime', e));
 
 const actor = new THREE.Group(); scene.add(actor);
 const mat = (c, r = 0.8) => new THREE.MeshStandardMaterial({ color: c, roughness: r });
@@ -141,6 +156,13 @@ loadHero(THREE, GLTFLoader)
 
 function attack() {
   if (!player.grounded) return;
+  playerHitArmed = true;
+  setTimeout(() => {
+    if (enemyRt && playerHitArmed) {
+      enemyRt.tryPlayerHit({ reach: 2.4, dmg: 16 });
+      playerHitArmed = false;
+    }
+  }, 220);
   if (!attackAction && locomotionMixer) {
     for (const n of ['sword attack', 'sword regular a', 'melee hook', 'attack']) {
       const c = clipMap.get(n);
@@ -238,7 +260,6 @@ const CAM_MIN_DIST = 1.15;
 const CAM_RADIUS = 0.28;
 let mapOverview = false;
 
-/** Vista tipo Blade: acorta la cámara si la línea al personaje atraviesa una pared. */
 function cameraBlockedDist(from, to) {
   const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
   const len = Math.hypot(dx, dy, dz);
@@ -380,6 +401,7 @@ function animate() {
     camera.position.lerp(targetCam, Math.min(1, dt * 5));
     camera.lookAt(look);
   }
+  if (enemyRt) enemyRt.update(dt);
   updateStat();
   renderer.render(scene, camera);
 }
