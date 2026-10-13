@@ -162,9 +162,10 @@ function setupModel(gltf, label) {
   camera.lookAt(0, TARGET_HEIGHT * 0.5, 0);
 
   statusEl.textContent =
-    label + ' · ' + meshes + ' mallas · h≈' + sizeY.toFixed(2) + ' · ' +
-    procedural.boneCount + ' huesos · ' +
-    (procedural.isReady() ? 'procedural OK' : 'pocos huesos');
+    label + ' · ' + meshes + ' mallas · skin=' + procedural.skinnedCount +
+    ' · huesos=' + procedural.boneCount +
+    ' [' + (procedural.foundKeys.slice(0, 6).join(',') || 'ninguno') + ']' +
+    (procedural.isReady() ? ' · OK' : ' · FALLA rig');
 }
 
 function loadUrl(url, label, onFail) {
@@ -228,13 +229,19 @@ function setAngle(a) {
 }
 
 function setMode(mode) {
-  if (!procedural) return;
+  if (!procedural) {
+    statusEl.textContent = 'Sin procedural (modelo no listo)';
+    return;
+  }
   if (mode === 'attack') procedural.attack();
   else procedural.setMode(mode);
   document.querySelectorAll('[data-mode]').forEach((b) => {
     b.classList.toggle('on', b.dataset.mode === mode);
   });
-  statusEl.textContent = 'Modo: ' + mode.toUpperCase();
+  statusEl.textContent =
+    'Modo: ' + mode.toUpperCase() +
+    ' · huesos=' + procedural.boneCount +
+    ' · skin=' + procedural.skinnedCount;
 }
 
 document.querySelectorAll('[data-mode]').forEach((b) => {
