@@ -12,6 +12,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 #top{position:fixed;z-index:5;top:env(safe-area-inset-top);left:0;right:0;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;pointer-events:none}
 #top strong{font-size:12px;letter-spacing:.09em;text-shadow:0 2px 5px #000}
 button{pointer-events:auto;border:1px solid #c4a574;border-radius:9px;background:#211d17ed;color:#f3d7a0;padding:10px 12px;font-weight:700;font-size:12px}
+button.on{background:#3a4a2a;border-color:#8fbf6a}
 #controls{position:fixed;z-index:5;left:0;right:0;bottom:calc(env(safe-area-inset-bottom)+16px);display:flex;justify-content:center;flex-wrap:wrap;gap:7px;padding:0 10px}
 #status{position:fixed;z-index:4;left:12px;right:12px;top:calc(env(safe-area-inset-top)+54px);text-align:center;font-size:12px;color:#e8dfce;text-shadow:0 2px 5px #000;pointer-events:none}
 #err{position:fixed;z-index:10;left:10px;right:10px;top:35%;padding:12px;background:#401b1b;color:#fff;white-space:pre-wrap;display:none}
@@ -24,10 +25,12 @@ button{pointer-events:auto;border:1px solid #c4a574;border-radius:9px;background
 </div>
 <div id="status">Cargando modelo del enemigo…</div>
 <div id="controls">
+  <button data-mode="idle" type="button" class="on">IDLE</button>
+  <button data-mode="walk" type="button">WALK</button>
+  <button data-mode="run" type="button">RUN</button>
+  <button data-mode="attack" type="button">ATTACK</button>
   <button data-angle="0" type="button">FRENTE</button>
-  <button data-angle="1.5708" type="button">PERFIL D.</button>
-  <button data-angle="3.1416" type="button">ESPALDA</button>
-  <button data-angle="-1.5708" type="button">PERFIL I.</button>
+  <button data-angle="1.5708" type="button">PERFIL</button>
   <button id="reset" type="button">REINICIAR</button>
 </div>
 <div id="err"></div>
@@ -36,10 +39,10 @@ button{pointer-events:auto;border:1px solid #c4a574;border-radius:9px;background
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/meshopt_decoder.module.js';
+import { createMixamoProcedural } from './mixamo-procedural.js';
 
 const ENEMY_RIGGED = './assets/characters/tripo_rigging_a71e42e9-2739-425b-a16c-3aa7dba627a6_meshopt.glb';
 const ENEMY_MESH = './assets/characters/tripo_pbr_model_739224f1-e1dd-4aec-976a-084ab2e81a3d_meshopt.glb';
-const ENEMY_URL = ENEMY_RIGGED;
 const TARGET_HEIGHT = 1.9;
 
 const err = document.getElementById('err');
@@ -59,9 +62,6 @@ scene.add(key);
 const fill = new THREE.DirectionalLight(0x8da9d2, 1.2);
 fill.position.set(5, 4, -5);
 scene.add(fill);
-const rim = new THREE.DirectionalLight(0xff8866, 0.8);
-rim.position.set(0, 3, -6);
-scene.add(rim);
 
 const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 100);
 camera.position.set(0, 1.5, 5.5);
@@ -89,107 +89,63 @@ let targetY = 0;
 let dragging = false;
 let lastX = 0;
 let lastY = 0;
-let mixer = null;
-let clipList = [];
-let activeClip = 0;
+let procedural = null;
 const clock = new THREE.Clock();
 
 const loader = new GLTFLoader();
 loader.setMeshoptDecoder(MeshoptDecoder);
-statusEl.textContent = 'Cargando enemigo (puede tardar un poco, ~22 MB)…';
+statusEl.textContent = 'Cargando enemigo rigged…';
+
+function setupModel(gltf, label) {
+  const model = gltf.scene;
+  model.updateMatrixWorld(true);
+
+  const bounds = new THREE.Box3().setFromObject(model);
+  const size = bounds.getSize(new THREE.Vector3());
+  const center = bounds.getCenter(new THREE.Vector3());
+  const scale = size.y > 0 ? TARGET_HEIGHT / size.y : 1;
+  model.scale.setScalar(scale);
+  model.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
+
+  let meshes = 0;
+  model.traverse((o) => {
+    if (!o.isMesh) return;
+    meshes++;
+    o.castShadow = true;
+    o.receiveShadow = true;
+    if (o.material) {
+      const list = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of list) {
+        if (m.map) m.map.colorSpace = THREE.SRGBColorSpace;
+      }
+    }
+  });
+
+  modelRoot = new THREE.Group();
+  modelRoot.add(model);
+  scene.add(modelRoot);
+
+  procedural = createMixamoProcedural(THREE, model, { height: TARGET_HEIGHT });
+  procedural.setMode('idle');
+
+  statusEl.textContent =
+    label + ' · ' + meshes + ' mallas · ' + procedural.boneCount + ' huesos Mixamo · ' +
+    (procedural.isReady() ? 'procedural OK · IDLE/WALK/RUN/ATTACK' : 'pocos huesos — revisa el rig');
+}
 
 loader.load(
-  ENEMY_URL,
-  (gltf) => {
-    const model = gltf.scene;
-    model.updateMatrixWorld(true);
-
-    const bounds = new THREE.Box3().setFromObject(model);
-    const size = bounds.getSize(new THREE.Vector3());
-    const center = bounds.getCenter(new THREE.Vector3());
-    const scale = size.y > 0 ? TARGET_HEIGHT / size.y : 1;
-    model.scale.setScalar(scale);
-    model.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
-
-    let meshes = 0, mats = 0;
-    model.traverse((o) => {
-      if (!o.isMesh) return;
-      meshes++;
-      o.castShadow = true;
-      o.receiveShadow = true;
-      if (o.material) {
-        const list = Array.isArray(o.material) ? o.material : [o.material];
-        for (const m of list) {
-          mats++;
-          if (m.map) m.map.colorSpace = THREE.SRGBColorSpace;
-          if (m.emissiveMap) m.emissiveMap.colorSpace = THREE.SRGBColorSpace;
-        }
-      }
-    });
-
-    modelRoot = new THREE.Group();
-    modelRoot.add(model);
-    scene.add(modelRoot);
-
-    const clips = gltf.animations || [];
-    const animCount = clips.length;
-    let bones = 0;
-    model.traverse(o => { if (o.isBone || o.isSkinnedMesh) bones++; });
-
-    // Animar: si el GLB trae clips, los ciclamos; si no, queda en pose del rig.
-    if (animCount > 0) {
-      mixer = new THREE.AnimationMixer(model);
-      const act = mixer.clipAction(clips[0]);
-      act.play();
-      activeClip = 0;
-      clipList = clips;
-      statusEl.textContent =
-        'RIGGED listo · ' + meshes + ' mallas · ' + bones + ' bones · ' +
-        animCount + ' clips · [A/D] cambia anim · arrastra para girar';
-    } else {
-      statusEl.textContent =
-        'RIGGED sin clips embebidos · ' + meshes + ' mallas · ' + bones +
-        ' bones · para animar hay que retargetear (UAL/Mixamo) · arrastra para girar';
-    }
-  },
+  ENEMY_RIGGED,
+  (gltf) => setupModel(gltf, 'RIGGED'),
   (ev) => {
     if (!ev.total) return;
-    const pct = Math.round((ev.loaded / ev.total) * 100);
-    statusEl.textContent = 'Cargando enemigo… ' + pct + '%';
+    statusEl.textContent = 'Cargando… ' + Math.round((ev.loaded / ev.total) * 100) + '%';
   },
-  (e) => {
-    if (ENEMY_URL === ENEMY_RIGGED) {
-      statusEl.textContent = 'Rigged falló, probando mesh PBR…';
-      loader.load(ENEMY_MESH, (gltf) => {
-        const model = gltf.scene;
-        model.updateMatrixWorld(true);
-        const bounds = new THREE.Box3().setFromObject(model);
-        const size = bounds.getSize(new THREE.Vector3());
-        const center = bounds.getCenter(new THREE.Vector3());
-        const scale = size.y > 0 ? TARGET_HEIGHT / size.y : 1;
-        model.scale.setScalar(scale);
-        model.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
-        model.traverse((o) => {
-          if (!o.isMesh) return;
-          o.castShadow = true; o.receiveShadow = true;
-        });
-        modelRoot = new THREE.Group();
-        modelRoot.add(model);
-        scene.add(modelRoot);
-        statusEl.textContent = 'MESH PBR (sin rig) · arrastra para girar · sube clips para animar';
-      }, undefined, (e2) => {
-        err.style.display = 'block';
-        err.textContent = 'Falló rigged y mesh:\n' + ((e2 && e2.message) || e2 || e);
-        statusEl.textContent = 'Error al cargar el modelo';
-      });
-      return;
-    }
-    err.style.display = 'block';
-    err.textContent =
-      'No se pudo cargar el GLB del enemigo.\n' +
-      ENEMY_URL + '\n' +
-      ((e && e.message) || e || '');
-    statusEl.textContent = 'Error al cargar el modelo';
+  () => {
+    statusEl.textContent = 'Rigged falló, probando mesh PBR…';
+    loader.load(ENEMY_MESH, (g) => setupModel(g, 'MESH'), undefined, (e2) => {
+      err.style.display = 'block';
+      err.textContent = 'No se pudo cargar el modelo:\n' + ((e2 && e2.message) || e2 || '');
+    });
   }
 );
 
@@ -198,11 +154,25 @@ function setAngle(a) {
   if (modelRoot) modelRoot.rotation.y = a;
 }
 
+function setMode(mode) {
+  if (!procedural) return;
+  if (mode === 'attack') procedural.attack();
+  else procedural.setMode(mode);
+  document.querySelectorAll('[data-mode]').forEach((b) => {
+    b.classList.toggle('on', b.dataset.mode === mode || (mode === 'attack' && b.dataset.mode === 'attack'));
+  });
+  statusEl.textContent = 'Modo: ' + mode.toUpperCase() + ' · procedural Mixamo reutilizable';
+}
+
+document.querySelectorAll('[data-mode]').forEach((b) => {
+  b.addEventListener('click', () => setMode(b.dataset.mode));
+});
 document.querySelectorAll('[data-angle]').forEach((b) => {
   b.addEventListener('click', () => setAngle(Number(b.dataset.angle)));
 });
 document.getElementById('reset').addEventListener('click', () => {
   setAngle(0);
+  setMode('idle');
   camera.position.set(0, 1.5, 5.5);
 });
 document.getElementById('back').addEventListener('click', () => {
@@ -230,6 +200,14 @@ renderer.domElement.addEventListener('wheel', (e) => {
   camera.position.z = Math.max(2.5, Math.min(12, camera.position.z + e.deltaY * 0.006));
 });
 
+addEventListener('keydown', (e) => {
+  const k = e.key.toLowerCase();
+  if (k === '1') setMode('idle');
+  if (k === '2') setMode('walk');
+  if (k === '3') setMode('run');
+  if (k === '4' || k === ' ') setMode('attack');
+});
+
 function resize() {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
@@ -238,27 +216,10 @@ function resize() {
 }
 addEventListener('resize', resize);
 
-function playClip(i) {
-  if (!mixer || !clipList.length) return;
-  activeClip = ((i % clipList.length) + clipList.length) % clipList.length;
-  mixer.stopAllAction();
-  const a = mixer.clipAction(clipList[activeClip]);
-  a.reset().play();
-  statusEl.textContent =
-    'Clip ' + (activeClip + 1) + '/' + clipList.length + ' · ' +
-    (clipList[activeClip].name || 'sin nombre') +
-    ' · [A/D] cambia · arrastra para girar';
-}
-addEventListener('keydown', e => {
-  const k = e.key.toLowerCase();
-  if (k === 'd' || k === 'arrowright') playClip(activeClip + 1);
-  if (k === 'a' || k === 'arrowleft') playClip(activeClip - 1);
-});
-
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
-  if (mixer) mixer.update(dt);
+  if (procedural) procedural.update(dt);
   camera.lookAt(0, 0.95, 0);
   renderer.render(scene, camera);
 }
