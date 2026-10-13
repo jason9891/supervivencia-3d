@@ -1,0 +1,181 @@
+// mixamo-procedural.js
+// Animación procedural reutilizable para esqueletos Mixamo (mixamorig:*).
+// No requiere clips embebidos: idle / walk / run / attack básicos.
+// Uso:
+//   import { createMixamoProcedural } from './mixamo-procedural.js';
+//   const anim = createMixamoProcedural(THREE, modelRoot);
+//   anim.setMode('walk');
+//   anim.update(dt);
+
+const BONE_ALIASES = {
+  hips: ['mixamorig:Hips', 'mixamorig_Hips', 'Hips'],
+  spine: ['mixamorig:Spine', 'mixamorig_Spine', 'Spine'],
+  spine1: ['mixamorig:Spine1', 'mixamorig_Spine1', 'Spine1'],
+  spine2: ['mixamorig:Spine2', 'mixamorig_Spine2', 'Spine2'],
+  neck: ['mixamorig:Neck', 'mixamorig_Neck', 'Neck'],
+  head: ['mixamorig:Head', 'mixamorig_Head', 'Head'],
+  leftUpLeg: ['mixamorig:LeftUpLeg', 'mixamorig_LeftUpLeg', 'LeftUpLeg'],
+  leftLeg: ['mixamorig:LeftLeg', 'mixamorig_LeftLeg', 'LeftLeg'],
+  leftFoot: ['mixamorig:LeftFoot', 'mixamorig_LeftFoot', 'LeftFoot'],
+  rightUpLeg: ['mixamorig:RightUpLeg', 'mixamorig_RightUpLeg', 'RightUpLeg'],
+  rightLeg: ['mixamorig:RightLeg', 'mixamorig_RightLeg', 'RightLeg'],
+  rightFoot: ['mixamorig:RightFoot', 'mixamorig_RightFoot', 'RightFoot'],
+  leftShoulder: ['mixamorig:LeftShoulder', 'mixamorig_LeftShoulder', 'LeftShoulder'],
+  leftArm: ['mixamorig:LeftArm', 'mixamorig_LeftArm', 'LeftArm'],
+  leftForeArm: ['mixamorig:LeftForeArm', 'mixamorig_LeftForeArm', 'LeftForeArm'],
+  leftHand: ['mixamorig:LeftHand', 'mixamorig_LeftHand', 'LeftHand'],
+  rightShoulder: ['mixamorig:RightShoulder', 'mixamorig_RightShoulder', 'RightShoulder'],
+  rightArm: ['mixamorig:RightArm', 'mixamorig_RightArm', 'RightArm'],
+  rightForeArm: ['mixamorig:RightForeArm', 'mixamorig_RightForeArm', 'RightForeArm'],
+  rightHand: ['mixamorig:RightHand', 'mixamorig_RightHand', 'RightHand'],
+};
+
+function findBone(root, names) {
+  let found = null;
+  root.traverse((o) => {
+    if (found || !o.isBone) return;
+    if (names.includes(o.name)) found = o;
+  });
+  return found;
+}
+
+function collectBones(root) {
+  const out = {};
+  for (const [key, names] of Object.entries(BONE_ALIASES)) {
+    out[key] = findBone(root, names);
+  }
+  return out;
+}
+
+function captureRest(bones) {
+  const rest = new Map();
+  for (const b of Object.values(bones)) {
+    if (!b) continue;
+    rest.set(b, {
+      pos: b.position.clone(),
+      quat: b.quaternion.clone(),
+    });
+  }
+  return rest;
+}
+
+function restoreRest(rest) {
+  for (const [b, r] of rest) {
+    b.position.copy(r.pos);
+    b.quaternion.copy(r.quat);
+  }
+}
+
+/**
+ * @param {typeof import('three')} THREE
+ * @param {import('three').Object3D} root - escena/grupo del modelo con bones Mixamo
+ * @param {{ height?: number }} [opts]
+ */
+export function createMixamoProcedural(THREE, root, opts = {}) {
+  const height = opts.height || 1.9;
+  const bones = collectBones(root);
+  const rest = captureRest(bones);
+  const boneCount = Object.values(bones).filter(Boolean).length;
+
+  let mode = 'idle'; // idle | walk | run | attack
+  let time = 0;
+  let attackT = 0;
+  let attackActive = false;
+
+  const qTmp = new THREE.Quaternion();
+  const eTmp = new THREE.Euler();
+
+  function applyLocalRot(bone, ax, ay, az) {
+    if (!bone || !rest.has(bone)) return;
+    const r = rest.get(bone);
+    eTmp.set(ax, ay, az, 'XYZ');
+    qTmp.setFromEuler(eTmp);
+    bone.quaternion.copy(r.quat).multiply(qTmp);
+  }
+
+  function setMode(next) {
+    if (next === 'attack') {
+      attackActive = true;
+      attackT = 0;
+      return;
+    }
+    mode = next || 'idle';
+  }
+
+  function update(dt) {
+    if (boneCount < 4) return;
+    time += dt;
+    restoreRest(rest);
+
+    if (attackActive) {
+      attackT += dt;
+      const t = Math.min(1, attackT / 0.55);
+      const swing = Math.sin(t * Math.PI) * 1.4;
+      applyLocalRot(bones.rightArm, -0.3, 0, -swing);
+      applyLocalRot(bones.rightForeArm, -swing * 0.6, 0, 0);
+      applyLocalRot(bones.spine1, 0, swing * 0.15, 0);
+      if (t >= 1) {
+        attackActive = false;
+      }
+      root.updateMatrixWorld(true);
+      return;
+    }
+
+    if (mode === 'idle') {
+      const b = Math.sin(time * 1.6) * 0.03;
+      const s = Math.sin(time * 0.9) * 0.02;
+      applyLocalRot(bones.spine, s * 0.5, 0, 0);
+      applyLocalRot(bones.spine1, b, 0, 0);
+      applyLocalRot(bones.head, -b * 0.4, Math.sin(time * 0.5) * 0.05, 0);
+      applyLocalRot(bones.leftArm, 0.08 + b, 0, 0.06);
+      applyLocalRot(bones.rightArm, 0.08 - b, 0, -0.06);
+      applyLocalRot(bones.leftForeArm, 0.15, 0, 0);
+      applyLocalRot(bones.rightForeArm, 0.15, 0, 0);
+    } else if (mode === 'walk' || mode === 'run') {
+      const run = mode === 'run';
+      const freq = run ? 8.5 : 5.2;
+      const amp = run ? 0.85 : 0.55;
+      const phase = time * freq;
+      const L = Math.sin(phase) * amp;
+      const R = Math.sin(phase + Math.PI) * amp;
+      const kneeL = Math.max(0, -Math.sin(phase)) * (run ? 1.1 : 0.75);
+      const kneeR = Math.max(0, -Math.sin(phase + Math.PI)) * (run ? 1.1 : 0.75);
+
+      if (bones.hips && rest.has(bones.hips)) {
+        const rp = rest.get(bones.hips).pos;
+        bones.hips.position.y = rp.y + Math.abs(Math.sin(phase * 2)) * (run ? 0.04 : 0.025) * height;
+      }
+
+      applyLocalRot(bones.leftUpLeg, L, 0, 0);
+      applyLocalRot(bones.rightUpLeg, R, 0, 0);
+      applyLocalRot(bones.leftLeg, kneeL, 0, 0);
+      applyLocalRot(bones.rightLeg, kneeR, 0, 0);
+      applyLocalRot(bones.leftFoot, -L * 0.35 - kneeL * 0.2, 0, 0);
+      applyLocalRot(bones.rightFoot, -R * 0.35 - kneeR * 0.2, 0, 0);
+
+      const armAmp = run ? 0.7 : 0.45;
+      applyLocalRot(bones.leftArm, -R * armAmp, 0, 0.08);
+      applyLocalRot(bones.rightArm, -L * armAmp, 0, -0.08);
+      applyLocalRot(bones.leftForeArm, 0.2 + Math.max(0, -R) * 0.4, 0, 0);
+      applyLocalRot(bones.rightForeArm, 0.2 + Math.max(0, -L) * 0.4, 0, 0);
+
+      applyLocalRot(bones.spine, Math.sin(phase * 2) * 0.03, Math.sin(phase) * 0.04, 0);
+      applyLocalRot(bones.spine1, run ? 0.12 : 0.04, 0, 0);
+      applyLocalRot(bones.head, -0.05, Math.sin(phase) * 0.03, 0);
+    }
+
+    root.updateMatrixWorld(true);
+  }
+
+  return {
+    bones,
+    boneCount,
+    get mode() { return attackActive ? 'attack' : mode; },
+    setMode,
+    attack() { setMode('attack'); },
+    update,
+    isReady() { return boneCount >= 4; },
+  };
+}
+
+export const MIXAMO_MODES = ['idle', 'walk', 'run', 'attack'];
