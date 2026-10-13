@@ -56,10 +56,69 @@ export function stepLoco(s, { grounded, moving, running, back }, dt, has = () =>
   return pick(idle);
 }
 
+/**
+ * Cambia de animación sin dejar el esqueleto a peso 0 (evita el flash de pose en T / brazos abiertos).
+ * Usa crossFadeTo cuando hay una acción previa, de modo que la suma de pesos se mantiene ~1.
+ * `host.active` es la acción que está sonando.
+ */
+export function switchAction(THREE, host, next, {
+  fade = 0.12,
+  once = false,
+  rate = 1,
+  start = null,
+  reverse = false,
+} = {}) {
+  if (!next) return false;
+  // Misma acción ya en curso: solo actualiza la velocidad.
+  if (host.active === next) {
+    next.setEffectiveTimeScale(rate);
+    next.enabled = true;
+    if (typeof next.getEffectiveWeight === 'function' && next.getEffectiveWeight() < 0.99) next.setEffectiveWeight(1);
+    return true;
+  }
+
+  next.enabled = true;
+  next.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, once ? 1 : Infinity);
+  next.clampWhenFinished = !!once;
+  next.setEffectiveTimeScale(rate);
+
+  const prev = host.active && host.active !== next ? host.active : null;
+
+  if (prev) {
+    // Arranca el nuevo sin pasar por peso 0: crossFadeTo reparte los pesos entre prev y next.
+    if (reverse) next.time = next.getClip().duration;
+    else if (start != null) next.time = start;
+    else next.time = 0;
+    next.paused = false;
+    next.play();
+    // Si prev ya estaba en peso bajo, sube next de inmediato para no dejar hueco.
+    const pw = typeof prev.getEffectiveWeight === 'function' ? prev.getEffectiveWeight() : 1;
+    if (pw < 0.05) {
+      next.setEffectiveWeight(1);
+      prev.setEffectiveWeight(0);
+      prev.stop();
+    } else {
+      try {
+        prev.crossFadeTo(next, fade, false);
+      } catch (e) {
+        next.setEffectiveWeight(1);
+        prev.fadeOut(fade);
+      }
+    }
+  } else {
+    next.reset();
+    if (reverse) next.time = next.getClip().duration;
+    else if (start != null) next.time = start;
+    next.setEffectiveWeight(1);
+    next.play();
+  }
+
+  host.active = next;
+  return true;
+}
+
 // Aplica la elección al mixer. `host.active` es la acción que está sonando (la comparte el resto del código del laboratorio o del juego).
-// Importante: se activa el clip nuevo a peso 1 ANTES de hacer fadeOut del anterior, para que el esqueleto no caiga
-// un frame a la pose de enlace (T-pose / brazos abiertos) al saltar o cambiar de animación.
-export function createLoco(THREE, mixer, clips, host, fade = 0.15) {
+export function createLoco(THREE, mixer, clips, host, fade = 0.12) {
   const cache = new Map();
   const actionOf = name => {
     const clip = clips.get ? clips.get(name) : clips[name];
@@ -75,21 +134,19 @@ export function createLoco(THREE, mixer, clips, host, fade = 0.15) {
       const a = actionOf(p.name); if (!a) return false;
       if (host.active === a && key === p.key) {
         a.setEffectiveTimeScale(p.rate);
-        return true;   // ya suena así
+        // Por si otra animación (ataque, one-shot) bajó el peso y luego volvimos aquí.
+        if (typeof a.getEffectiveWeight === 'function' && a.getEffectiveWeight() < 0.5) a.setEffectiveWeight(1);
+        return true;
       }
-      const prev = host.active && host.active !== a ? host.active : null;
-      a.reset();
-      a.setLoop(p.once ? THREE.LoopOnce : THREE.LoopRepeat, p.once ? 1 : Infinity);
-      a.clampWhenFinished = !!p.once;
-      a.setEffectiveTimeScale(p.rate);
-      if (p.rate < 0) a.time = a.getClip().duration;       // al revés se parte del final del ciclo
-      else if (p.start) a.time = p.start;
-      a.enabled = true;
-      a.setEffectiveWeight(1);   // peso pleno de inmediato → no hay frame en bind pose
-      a.play();
-      if (prev) prev.fadeOut(p.once ? 0.06 : fade);
-      host.active = a; key = p.key;
-      return true;
+      const ok = switchAction(THREE, host, a, {
+        fade: p.once ? 0.08 : fade,
+        once: !!p.once,
+        rate: p.rate,
+        start: p.start != null ? p.start : null,
+        reverse: p.rate < 0,
+      });
+      if (ok) key = p.key;
+      return ok;
     },
   };
 }
