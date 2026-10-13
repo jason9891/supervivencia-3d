@@ -9,10 +9,8 @@ import {
 
 const ENEMY_URL = './assets/characters/tripo_rigging_a71e42e9-2739-425b-a16c-3aa7dba627a6_meshopt.glb';
 const TARGET_HEIGHT = 1.85;
-// Mixamo suele mirar +Z; si el modelo avanza de espaldas, dejar Math.PI.
 const FACE_OFFSET = Math.PI;
 
-// Zona establo (map1 ZONES.stable)
 const STABLE = { minX: 13.5, maxX: 54, minZ: 43, maxZ: 63 };
 
 function inStable(x, z) {
@@ -145,7 +143,6 @@ export async function createEnemyRuntime(opts) {
     if (e.state === 'windup') {
       if (unit.lastState !== 'windup') anim.attack();
     } else if (e.state === 'recover') {
-      // breve
     } else if (e.state === 'chase') {
       anim.setMode('walk');
     } else if (e.state === 'hurt') {
@@ -208,9 +205,10 @@ export async function createEnemyRuntime(opts) {
       unit.root.rotation.z = 0;
 
       if (e.dead) {
-        const t = Math.min(1, e.deadT / 0.9);
-        unit.root.rotation.z = t * 1.2;
-        unit.root.position.y = e.y - t * 0.25;
+        const t = Math.min(1, e.deadT / 1.35);
+        const ease = t * t * (3 - 2 * t);
+        unit.root.rotation.z = ease * 1.35;
+        unit.root.position.y = e.y - ease * 0.35;
       }
 
       syncAnim(unit);
