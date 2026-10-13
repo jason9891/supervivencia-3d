@@ -53,3 +53,15 @@ Pruebas: `node tests/inventario.test.mjs`, `node tests/banco.test.mjs`, `node te
 
 ## Armas y escudos con modelo (Quaternius, CC0)
 `equipment.js` usa los GLB de `assets/weapons/` (ver su `CREDITS.md`): `createEquipment(...).loadModels(GLTFLoader)` los carga y redibuja; los que fallen se sustituyen por las formas simples. Mapa: `WEAPON_MODEL` y `SHIELD_MODEL`. Las armaduras (casco, peto, grebas) siguen siendo piezas procedurales: este pack no las trae.
+
+## Todas las armas (12)
+`combat.js` define 12 armas (espada, hacha, maza + daga, daga curva, espada larga, mandoble, claymore, hacha de mano, hacha de guerra, martillo de guerra, lanza), cada una con sus 3 golpes y combos, y `equipment.js` las dibuja con los GLB de `assets/weapons/`. En modo pruebas están todas desbloqueadas; el panel INVENTARIO tiene una fila "TODAS LAS ARMAS" para equipar cualquiera con un toque (`banco.pick`).
+
+## Movimiento (`locomotion.js`)
+Lógica pura y probada (`tests/locomotion.test.mjs`) que usan `index.html` y `combat-lab.html`:
+- Retroceso: si solo se pulsa atrás (o joystick hacia atrás) el personaje no se da la vuelta; reproduce `Walk_Loop` al revés (UAL Standard no trae clips de retroceso) a 0.7× de velocidad y sin correr.
+- Correr usa `Jog_Fwd_Loop` (3.0 m por ciclo a RUN_SPEED); caminar `Walk_Loop` (2.4 m por ciclo a WALK_SPEED, sin deslizar).
+- Salto: `Jump_Start` acelerado (entra ya en el impulso) → `Jump_Loop` en el aire → `Jump_Land` acelerado solo si aterrizas quieto tras un salto largo; si sigues corriendo, continúa el trote.
+- Giro visual suave (`smoothYaw`); la lógica sigue usando `player.facing`.
+- En el laboratorio CORRER es interruptor, para poder correr y saltar con el pulgar libre.
+No hay clips laterales en UAL Standard: al moverse de lado el personaje gira hacia esa dirección.

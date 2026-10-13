@@ -13,6 +13,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 #run{position:fixed;z-index:20;right:max(28px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 126px);width:68px;height:54px;border:1px solid #c4c9c0;border-radius:14px;background:#27352fe8;color:#fff;font:bold 13px system-ui}
 #jump{position:fixed;z-index:20;right:max(20px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 28px);width:84px;height:84px;border:2px solid #f3d7a0;border-radius:50%;background:#762b23;color:#fff4df;font:bold 15px system-ui}
 #blk{position:fixed;z-index:20;right:max(116px,calc(env(safe-area-inset-right) + 104px));bottom:calc(env(safe-area-inset-bottom) + 126px);width:68px;height:54px;border:1px solid #c4c9c0;border-radius:14px;background:#27352fe8;color:#fff;font:bold 12px system-ui}
+#run.on{background:#6b5a22;border-color:#f3d7a0}
 #blk.on{background:#2c4d6b;border-color:#9fd0f5}
 #drink{position:fixed;z-index:20;right:max(28px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 196px);width:68px;height:54px;border:1px solid #d9c27a;border-radius:14px;background:#4d3b1ee8;color:#fff;font:bold 12px system-ui}
 #act{position:fixed;z-index:20;right:max(116px,calc(env(safe-area-inset-right) + 104px));bottom:calc(env(safe-area-inset-bottom) + 196px);width:68px;height:54px;border:1px solid #c4c9c0;border-radius:14px;background:#27352fe8;color:#fff;font:bold 11px system-ui}
@@ -48,6 +49,7 @@ import * as SW from './swing-style.js';
 import * as I from './inventario.js';
 import { loadHero, fitModel } from './hero.js';
 import { createEquipment } from './equipment.js';
+import { backpedal, smoothYaw, createLocoState, stepLoco, createLoco, BACK_SPEED } from './locomotion.js';
 
 // Laboratorio: arena plana, sin mapa. Mismo personaje y mismos controles que el juego.
 const errorBox = document.getElementById('error');
@@ -97,6 +99,7 @@ function select(next) {
   if (activeA) activeA.fadeOut(0.15);
   next.reset().fadeIn(0.15).play(); activeA = next;
 }
+const locoState = createLocoState(); let loco = null, visYaw = 0;
 let heroInfo = null, equipVisual = null, equipKey = '', equipStore = {}, modelUnit = 1;
 function setup(info) {
   heroInfo = info;
@@ -112,6 +115,7 @@ function setup(info) {
   if (walk) walkA = mixer.clipAction(walk);
   if (run) runA = mixer.clipAction(run);
   for (const c of clips) clipPool.set(normName(c.name), c);
+  loco = createLoco(THREE, mixer, clipPool, { get active() { return activeA; }, set active(v) { activeA = v; } });
   equipVisual = createEquipment(THREE, info.profile);
   equipVisual.loadModels(GLTFLoader).then(() => { equipKey = ''; }); // al cargar los GLB se redibuja el equipo
   hint.textContent = 'LABORATORIO DE COMBATE · ' + (info.source === 'hero' ? 'HUMANO' : 'MANIQUÍ') + ' · ' + clipPool.size + ' ANIMACIONES';
@@ -239,9 +243,10 @@ document.querySelectorAll('[data-k]').forEach(b => {
   b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('lostpointercapture', off);
 });
 const runButton = document.getElementById('run');
-runButton.addEventListener('pointerdown', e => { e.preventDefault(); keys.run = true; runButton.setPointerCapture(e.pointerId); });
-const stopRun = () => { keys.run = false; };
-runButton.addEventListener('pointerup', stopRun); runButton.addEventListener('pointercancel', stopRun); runButton.addEventListener('lostpointercapture', stopRun);
+// CORRER es interruptor (como en el juego): así se puede correr y tocar SALTAR a la vez con el pulgar libre.
+let runToggle = false;
+function setRunToggle(on) { runToggle = !!on; keys.run = runToggle; runButton.classList.toggle('on', runToggle); runButton.textContent = runToggle ? 'CORRIENDO' : 'CORRER'; }
+runButton.addEventListener('pointerdown', e => { e.preventDefault(); setRunToggle(!runToggle); });
 const blk = document.getElementById('blk');
 const setGuard = on => { const g = combat.setBlock(on); blk.classList.toggle('on', g); };
 blk.addEventListener('pointerdown', e => { e.preventDefault(); setGuard(true); blk.setPointerCapture(e.pointerId); });
@@ -338,7 +343,12 @@ function animate() {
   blk.classList.toggle('on', !!fighter.blocking);
   const busy = !!(oneShot && oneShot.lock) || fighter.dead;
   const spd = fighter.blocking ? speed * 0.5 : speed;
-  stepPlayer(player, course, { f, side, speed: spd, running: running && !fighter.blocking, jump: jumpQueued, canMove: !attacking && !busy && !combat.panelOpen }, dt);
+  // Retroceso: si solo se pulsa "atrás" el personaje no se da la vuelta; camina hacia atrás más despacio.
+  const canMove = !attacking && !busy && !combat.panelOpen;
+  const backNow = canMove && player.grounded && backpedal({ fwd: f, strafe: side, facing: player.facing });
+  const keepFacing = player.facing;
+  stepPlayer(player, course, { f, side, speed: backNow ? Math.min(spd, WALK_SPEED * BACK_SPEED) : spd, running: running && !fighter.blocking && !backNow, jump: jumpQueued, canMove }, dt);
+  if (backNow) player.facing = keepFacing;
   jumpQueued = false;
   // Suelo plano y borde de la arena.
   if (player.vy <= 0 && player.y <= 0) { player.y = 0; player.vy = 0; player.grounded = true; }
@@ -365,16 +375,17 @@ function animate() {
     swing = null;
   }
   actor.position.set(player.x, player.y, player.z);
-  actor.rotation.y = player.facing + (pose ? pose.yaw : 0);
+  visYaw = smoothYaw(visYaw, player.facing, dt);   // el giro se ve suave; la lógica usa player.facing
+  actor.rotation.y = visYaw + (pose ? pose.yaw : 0);
   actor.rotation.x = pose ? pose.pitch : 0;
   actor.rotation.z = pose ? pose.roll : 0;
   actor.scale.setScalar(pose ? pose.scale : 1);
   if (mixer) {
+    const moving = !!((f || side) && canMove);
+    const pk = stepLoco(locoState, { grounded: player.grounded, moving, running: running && !fighter.blocking, back: backNow }, dt, n => clipPool.has(n));
     if (!attacking && !oneShot) {
       const guardA = fighter.blocking ? actionFor('idle shield loop', true) : null;
-      const moving = (f || side) && !busy;
-      const next = guardA && !moving ? guardA : (!player.grounded ? idleA : (moving ? (running && !fighter.blocking ? (runA || walkA) : (walkA || idleA)) : (idleA || walkA)));
-      select(next);
+      if (guardA && !moving && player.grounded) select(guardA); else loco && loco.apply(pk);
     }
     mixer.update(dt);
   }

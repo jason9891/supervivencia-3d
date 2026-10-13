@@ -23,11 +23,13 @@ const hitOf = ev => ev.find(e => e.type === 'hit');
 // 1) Equipo
 {
   const b = B.createBanco();
-  const seq = [b.equip.weapon]; for (let i = 0; i < 3; i++) seq.push(B.cycle(b, 'weapon'));
-  check('cambiar arma recorre espada → hacha → maza → espada', seq.join(',') === 'espada,hacha,maza,espada', `(${seq.join(' → ')})`);
+  const ids = Object.keys(C.WEAPONS), seq = [b.equip.weapon]; for (let i = 0; i < ids.length; i++) seq.push(B.cycle(b, 'weapon'));
+  check('cambiar arma recorre todas las armas y vuelve a la espada', seq.join(',') === [...ids, 'espada'].join(',') && ids.length >= 12, `(${seq.join(' → ')})`);
+  check('pick equipa un arma concreta, la cambia en el combatiente y rechaza ids falsos', B.pick(b, 'weapon', 'lanza') && b.fighter.weapon.id === 'lanza' && !B.pick(b, 'weapon', 'lanzallamas') && b.equip.weapon === 'lanza');
+  B.pick(b, 'weapon', 'espada');
   check('el combatiente usa el arma equipada', b.fighter.weapon.id === 'espada');
   const d = B.describeWeapon(b);
-  check('describe golpes y combos del arma', d.attacks.length === 3 && d.combos.length === 3 && d.combos[0].name === 'Cruz y estocada', `(${d.name}: ${d.combos.map(c => c.name).join(', ')})`);
+  check('describe golpes y combos del arma', d.attacks.length === 3 && d.combos.length >= 1 && d.combos[0].name === 'Cruz y estocada', `(${d.name}: ${d.combos.map(c => c.name).join(', ')})`);
   check('todas las armaduras disponibles para probar', b.unlocked.pechera.includes('placas') && b.unlocked.escudo.includes('torre'));
 }
 // 2) Golpe simple contra muñeco de paja

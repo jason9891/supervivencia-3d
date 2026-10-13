@@ -8,7 +8,7 @@ const fakeStorage = () => { const m = {}; return { getItem: k => (k in m ? m[k] 
 // 1) Modo pruebas (por defecto) y modo real
 {
   const t = I.createInventory();
-  check('modo pruebas: todas las armas y armaduras disponibles', t.testMode && t.unlocked.weapon.length === 3 && t.unlocked.pechera.includes('placas') && t.unlocked.escudo.includes('torre'));
+  check('modo pruebas: todas las armas y armaduras disponibles', t.testMode && t.unlocked.weapon.length === Object.keys(C.WEAPONS).length && t.unlocked.pechera.includes('placas') && t.unlocked.escudo.includes('torre'));
   check('modo pruebas: pociones de prueba', t.potions.vida === 3 && t.potions.energia === 3 && t.potions.furia === 2);
   const r = I.createInventory({ testMode: false });
   check('modo real: solo espada y armadura ligera', r.unlocked.weapon.join() === 'espada' && r.unlocked.pechera.join() === 'ninguna,cuero' && r.unlocked.casco.join() === 'ninguno');
@@ -31,7 +31,7 @@ const fakeStorage = () => { const m = {}; return { getItem: k => (k in m ? m[k] 
   const inv = I.createInventory({ testMode: false });
   I.give(inv, { weapon: ['hacha'] });
   I.setTestMode(inv, true);
-  check('al activar pruebas aparece todo', inv.unlocked.weapon.length === 3);
+  check('al activar pruebas aparece todo', inv.unlocked.weapon.length === Object.keys(C.WEAPONS).length);
   inv.equip.weapon = 'maza';
   I.give(inv, { armor: { pechera: ['malla'] } });           // se consigue estando en modo pruebas
   I.setTestMode(inv, false);
@@ -80,13 +80,13 @@ const fakeStorage = () => { const m = {}; return { getItem: k => (k in m ? m[k] 
 {
   const bad = fakeStorage(); bad.setItem(I.SAVE_KEY, '{no es json');
   const x = I.load(bad);
-  check('guardado dañado: se usa el inventario inicial', x.testMode && x.unlocked.weapon.length === 3);
+  check('guardado dañado: se usa el inventario inicial', x.testMode && x.unlocked.weapon.length === Object.keys(C.WEAPONS).length);
   const evil = fakeStorage(); evil.setItem(I.SAVE_KEY, JSON.stringify({ v: 1, equip: { weapon: 'lanzallamas', casco: 'oro' }, unlocked: { weapon: ['lanzallamas'] }, potions: { vida: -5, energia: 9999, furia: 'x' }, items: { espada_magica: 3, comida: 2 }, granted: { llave: 'sí' } }));
   const y = I.load(evil);
   check('datos raros se ignoran', y.equip.weapon === 'espada' && y.equip.casco === 'ninguno' && y.potions.vida === 3 && y.potions.energia === 3 && !('espada_magica' in y.items) && y.items.comida === 2 && !y.granted.llave);
   const boom = { getItem() { throw new Error('bloqueado'); }, setItem() { throw new Error('bloqueado'); } };
   check('sin almacenamiento no falla', I.save(I.createInventory(), boom) === false && I.load(boom).testMode === true);
-  check('sin almacenamiento (null) tampoco', I.save(I.createInventory(), null) === false && I.load(null).unlocked.weapon.length === 3);
+  check('sin almacenamiento (null) tampoco', I.save(I.createInventory(), null) === false && I.load(null).unlocked.weapon.length === Object.keys(C.WEAPONS).length);
 }
 // 7) El banco de pruebas usa el mismo inventario
 {

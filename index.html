@@ -51,6 +51,8 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
 import { createPlayer, stepPlayer, WALK_SPEED, RUN_SPEED } from './course.js';
+import { loadHero } from './hero.js';
+import { backpedal, smoothYaw, createLocoState, stepLoco, createLoco, BACK_SPEED } from './locomotion.js';
 import {
   buildMap1, getCurrentZone, STORY_PAGE,
   distanceToPage, distanceToKey, distanceToLever, distanceToFood,
@@ -131,6 +133,7 @@ addM(actor, new THREE.SphereGeometry(0.22, 12, 10), skin, [0, 1.85, 0]);
 const locomotionActor = new THREE.Group(); scene.add(locomotionActor); locomotionActor.visible = false;
 let locomotionMixer = null, walkAction = null, runAction = null, idleAction = null, activeAction = null;
 let attackAction = null, attacking = false, armed = false;
+const clipMap = new Map(), locoState = createLocoState(); let loco = null, visYaw = 0;
 const gltfLoader = new GLTFLoader();
 const normName = n => (n || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 function findClip(clips, names) {
@@ -156,6 +159,8 @@ function setupLocomotion(gltf, label) {
   locomotionActor.add(model);
   locomotionMixer = new THREE.AnimationMixer(model);
   const clips = gltf.animations || [];
+  for (const c of clips) clipMap.set(normName(c.name), c);
+  loco = createLoco(THREE, locomotionMixer, clipMap, { get active() { return activeAction; }, set active(v) { activeAction = v; } });
   const idleC = findClip(clips, ['idle loop', 'idle standing', 'idle']);
   const walkC = findClip(clips, ['walk loop', 'walk formal loop', 'walk']);
   const runC = findClip(clips, ['sprint loop', 'jog fwd loop', 'run']);
@@ -173,9 +178,12 @@ function setupLocomotion(gltf, label) {
   locomotionActor.visible = true;
   document.getElementById('hint').textContent = label + ' · JOYSTICK v3';
 }
-gltfLoader.load('./assets/characters/ual/UAL1_Standard.glb', g => setupLocomotion(g, 'GUERRERO UAL'), undefined, () => {
-  gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-person-animated.glb', g => setupLocomotion(g, 'RESPALDO'), undefined, () => {});
-});
+// Personaje base: el humano (CC0) con las animaciones de UAL1+UAL2. Si no carga, hero.js cae al maniquí UAL y, como último recurso, al paquete de respaldo.
+loadHero(THREE, GLTFLoader)
+  .then(i => setupLocomotion({ scene: i.model, animations: i.clips }, i.source === 'hero' ? 'HUMANO' : 'MANIQUÍ'))
+  .catch(() => {
+    gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-person-animated.glb', g => setupLocomotion(g, 'RESPALDO'), undefined, () => {});
+  });
 
 function attack() {
   if (!attackAction || attacking || !player.grounded) return;
@@ -278,25 +286,30 @@ function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.04);
 
-  let f = 0, side = 0;
+  let f = 0, side = 0, intentFwd = 0, intentSide = 0, tank = false;
   let lockFacing = null;
   if (!mapOverview) {
     if (joy.active && (Math.abs(joy.x) > 0.12 || Math.abs(joy.y) > 0.12)) {
       if (Math.abs(joy.x) > 0.18) player.facing -= joy.x * 1.15 * dt;
       lockFacing = player.facing;
-      const fwd = joy.y;
+      const fwd = joy.y; intentFwd = fwd; tank = true;
       side = Math.sin(player.facing) * fwd;
       f = Math.cos(player.facing) * fwd;
     } else {
       f = (keys.w || keys.arrowup ? 1 : 0) - (keys.s || keys.arrowdown ? 1 : 0);
       side = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
+      intentFwd = f; intentSide = side;
     }
   }
   const running = !!(runToggle || keys.shift);
   const speed = running ? RUN_SPEED : WALK_SPEED;
 
-  stepPlayer(player, course, { f: mapOverview ? 0 : f, side: mapOverview ? 0 : side, speed, running, jump: mapOverview ? false : jumpQueued, canMove: !attacking && !mapOverview }, dt);
-  if (lockFacing !== null) player.facing = lockFacing;
+  // Retroceso: "atrás" no da la vuelta al personaje; camina hacia atrás más despacio (y sin correr).
+  const canMove = !attacking && !mapOverview;
+  const backNow = canMove && player.grounded && backpedal({ fwd: intentFwd, strafe: intentSide, facing: player.facing, tank });
+  const keepFacing = player.facing;
+  stepPlayer(player, course, { f: mapOverview ? 0 : f, side: mapOverview ? 0 : side, speed: backNow ? Math.min(speed, WALK_SPEED * BACK_SPEED) : speed, running: running && !backNow, jump: mapOverview ? false : jumpQueued, canMove }, dt);
+  if (lockFacing !== null) player.facing = lockFacing; else if (backNow) player.facing = keepFacing;
   if (!mapOverview) jumpQueued = false;
   resolveWallCollisions(player);
   resolveGround(player);
@@ -325,17 +338,15 @@ function animate() {
   }
 
   actor.position.set(player.x, player.y, player.z);
-  actor.rotation.y = player.facing;
+  visYaw = smoothYaw(visYaw, player.facing, dt);   // giro suave (la lógica sigue usando player.facing)
+  actor.rotation.y = visYaw;
   locomotionActor.position.copy(actor.position);
   locomotionActor.rotation.y = actor.rotation.y;
 
   if (locomotionMixer) {
-    if (!attacking) {
-      let next;
-      if (!player.grounded) next = idleAction;
-      else next = (f || side) ? (running ? (runAction || walkAction) : (walkAction || idleAction)) : (idleAction || walkAction);
-      selectLocomotion(next);
-    }
+    const moving = !!((f || side) && canMove);
+    const pk = stepLoco(locoState, { grounded: player.grounded, moving, running, back: backNow }, dt, n => clipMap.has(n));
+    if (!attacking && loco) loco.apply(pk);
     locomotionMixer.update(dt);
   }
 

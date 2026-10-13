@@ -25,6 +25,10 @@ const CSS = `
 #cmb-panel .hd b{color:#f3d7a0;letter-spacing:.06em;font-size:14px}
 #cmb-panel h4{margin:14px 0 6px;color:#f3d7a0;font-size:12px;letter-spacing:.1em;border-bottom:1px solid #c4a57455;padding-bottom:3px}
 #cmb-panel button{touch-action:manipulation;border:1px solid #c4a574;border-radius:8px;background:#2a241c;color:#f3d7a0;font:bold 12px system-ui;padding:8px 10px;margin:2px 3px 2px 0}
+#cmb-panel .chips{display:flex;flex-wrap:wrap;gap:5px;margin:4px 0 6px}
+#cmb-panel .chips button{width:auto;margin:0;padding:6px 9px;font-size:12px}
+#cmb-panel .chips button.sel{background:#6b5a22;border-color:#f3d7a0;color:#fff}
+#cmb-panel .chips button.lock{opacity:.4}
 #cmb-panel .row{display:flex;align-items:center;gap:6px;margin:3px 0}
 #cmb-panel .row .lb{width:62px;color:#b9ad96;font-size:11px;letter-spacing:.06em}
 #cmb-panel .row .nm{flex:1;text-align:center}
@@ -81,6 +85,10 @@ export function createCombatAddon({ THREE, scene, camera, player, onSwing, onAct
         <button data-act="prev" data-slot="${slot}">◀</button>
         <span class="nm">${C.itemName(slot, bench.equip[slot])}</span>
         <button data-act="next" data-slot="${slot}">▶</button></div>`).join('');
+    const chips = Object.values(C.WEAPONS).map(wp => {
+      const own = bench.unlocked.weapon.includes(wp.id);
+      return `<button data-act="pick" data-slot="weapon" data-id="${wp.id}" class="${wp.id === bench.equip.weapon ? 'sel' : ''}${own ? '' : ' lock'}">${wp.name}</button>`;
+    }).join('');
     const atks = w.attacks.map(a => `<div class="atk">${a.icon} <b>${a.name}</b> — daño ${a.dmg} · alcance ${a.reach} · energía ${a.stamina}${a.stagger ? ' · aturde' : ''}</div>`).join('');
     const cmbs = w.combos.map(c => `<div class="cmbo">${c.seq} &nbsp;<b>${c.name}</b> ×${c.mult}${c.stagger ? ' · aturde' : ''}</div>`).join('');
     const p = bench.potions, s = bench.stats;
@@ -92,6 +100,7 @@ export function createCombatAddon({ THREE, scene, camera, player, onSwing, onAct
     panel.innerHTML = `<div class="box">
       <div class="hd"><b>INVENTARIO · PRUEBAS</b><button data-act="close">✕ Cerrar</button></div>
       <h4>EQUIPO${inv.testMode ? ' · MODO PRUEBAS' : ''}</h4>${rows}
+      <h4>TODAS LAS ARMAS</h4><div class="chips">${chips}</div>
       <div class="stats">Defensa <b>${st.defense}</b> · Peso <b>${st.weight}</b> · Velocidad ×${st.speedMul.toFixed(2)} · Bloqueo ${Math.round(st.blockFrac * 100)}%</div>
       <h4>GOLPES Y COMBOS · ${w.name.toUpperCase()}</h4>${atks}
       <div style="margin-top:6px">${cmbs}</div>
@@ -117,7 +126,9 @@ export function createCombatAddon({ THREE, scene, camera, player, onSwing, onAct
   function handleAction(t) {
     const act = t.dataset.act;
     if (act === 'close') return setPanel(false);
-    if (act === 'prev' || act === 'next') {
+    if (act === 'pick') {
+      msg = B.pick(bench, t.dataset.slot, t.dataset.id) ? '' : 'Esa arma aún no la tienes';
+    } else if (act === 'prev' || act === 'next') {
       B.cycle(bench, t.dataset.slot, act === 'next' ? 1 : -1);
       msg = '';
     } else if (act === 'potion') {

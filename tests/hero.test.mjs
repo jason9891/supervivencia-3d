@@ -65,16 +65,16 @@ import fs from 'node:fs';
 const readGlb = f => { const b = fs.readFileSync(f); const jl = b.readUInt32LE(12); return { magic: b.toString('latin1', 0, 4), json: JSON.parse(b.toString('utf8', 20, 20 + jl)) }; };
 for (const [id, nm] of Object.entries(EQ.WEAPON_MODEL)) {
   const g = readGlb(`assets/weapons/${nm}.glb`), x = g.json.nodes[0].extras;
-  check(`${id} (${nm}.glb): GLB válido, largo 0.5–1.1 m, hoja hacia +Z con el agarre en el origen`, g.magic === 'glTF' && x.size[2] > 0.5 && x.size[2] < 1.1 && x.min[2] < -0.1 && x.max[2] > 0.3);
+  check(`${id} (${nm}.glb): GLB válido, largo 0.35–1.7 m, hoja hacia +Z con el agarre en el origen`, g.magic === 'glTF' && x.size[2] > 0.35 && x.size[2] < 1.7 && x.min[2] < -0.05 && x.max[2] > 0.3);
 }
 for (const [id, nm] of Object.entries(EQ.SHIELD_MODEL)) {
   const g = readGlb(`assets/weapons/${nm}.glb`), x = g.json.nodes[0].extras;
   check(`${id} (${nm}.glb): escudo de 0.35–0.8 m, fino en X (cara hacia -X)`, g.magic === 'glTF' && x.size[1] > 0.35 && x.size[1] < 0.8 && x.size[0] < 0.2 && Math.abs(x.max[0] - ({ Shield_Round: .07, Shield_Heater: .06, Shield_Heater_2: .04 })[nm]) < 0.011);
 }
-class FakeLoader { async loadAsync(url) { if (url.includes('Axe')) throw new Error('404'); const sc = new Obj(); sc.add(new Mesh({ type: 'glb' }, {})); sc.clone = () => { const c = new Obj(); c.add(new Mesh({ type: 'glb' }, {})); return c; }; return { scene: sc }; } }
+class FakeLoader { async loadAsync(url) { if (url.endsWith('/Axe.glb')) throw new Error('404'); const sc = new Obj(); sc.add(new Mesh({ type: 'glb' }, {})); sc.clone = () => { const c = new Obj(); c.add(new Mesh({ type: 'glb' }, {})); return c; }; return { scene: sc }; } }
 const mq = new Obj(), bq = {}; mq.getObjectByName = n => bq[n] || (bq[n] = new Obj());
 const eqm = createEquipment(THREE, H.PROFILES.hero);
-check('loadModels cuenta los GLB cargados y tolera los que fallan (5 de 6)', await eqm.loadModels(FakeLoader) === 5);
+check('loadModels cuenta los GLB cargados y tolera los que fallan (14 de 15)', await eqm.loadModels(FakeLoader) === 14);
 const stq = {}; eqm.apply(mq, { weapon: 'espada', escudo: 'torre' }, stq);
 let glbs = 0; mq.traverse?.(() => {}); [bq.hand_r, bq.lowerarm_l].forEach(b => b.traverse(o => { if (o.geometry?.type === 'glb') glbs++; }));
 check('espada y escudo torre usan el modelo GLB', glbs === 2);

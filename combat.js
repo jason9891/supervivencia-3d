@@ -59,6 +59,88 @@ export const WEAPONS = {
       { seq: ['side', 'side', 'neutral'], name: 'Terremoto', mult: 2.3, stagger: true },
     ],
   },
+  // --- Resto del pack (Quaternius, CC0): ligeras y rápidas → pesadas y lentas ---
+  daga: {
+    id: 'daga', name: 'Daga', weight: 1,
+    attacks: {
+      side: atk('Rajar', 8, 1.5, 1.6, 5, 0.38, 0.25),
+      forward: atk('Puñalada', 11, 1.7, 0.6, 7, 0.42, 0.7),
+      neutral: atk('Tajo corto', 9, 1.5, 1.0, 6, 0.4, 0.25),
+    },
+    combos: [{ seq: ['forward', 'forward', 'forward'], name: 'Ráfaga', mult: 1.6 }, { seq: ['side', 'side'], name: 'Cruce veloz', mult: 1.4 }],
+  },
+  daga_curva: {
+    id: 'daga_curva', name: 'Daga curva', weight: 1,
+    attacks: {
+      side: atk('Rajar curvo', 9, 1.6, 1.9, 5, 0.38, 0.25),
+      forward: atk('Puñalada', 11, 1.7, 0.6, 7, 0.42, 0.7),
+      neutral: atk('Gancho', 10, 1.5, 1.2, 6, 0.4, 0.25),
+    },
+    combos: [{ seq: ['side', 'side', 'neutral'], name: 'Media luna', mult: 1.7 }],
+  },
+  espada_larga: {
+    id: 'espada_larga', name: 'Espada larga', weight: 3,
+    attacks: {
+      side: atk('Tajo amplio', 13, 2.1, 2.1, 9, 0.58, 0.35),
+      forward: atk('Estocada', 16, 2.7, 0.7, 11, 0.65, 1.1),
+      neutral: atk('Golpe alto', 15, 2.1, 1.2, 10, 0.62, 0.45),
+    },
+    combos: [{ seq: ['side', 'side', 'forward'], name: 'Cruz y estocada', mult: 2.0, stagger: true }, { seq: ['neutral', 'side'], name: 'Remate', mult: 1.6 }],
+  },
+  mandoble: {
+    id: 'mandoble', name: 'Mandoble', weight: 6,
+    attacks: {
+      side: atk('Barrido', 19, 2.4, 2.2, 13, 0.85, 0.4),
+      forward: atk('Estocada pesada', 22, 2.9, 0.8, 15, 0.9, 1.1),
+      neutral: atk('Tajo vertical', 26, 2.3, 1.1, 17, 1.0, 0.45),
+    },
+    combos: [{ seq: ['side', 'side', 'neutral'], name: 'Molino', mult: 2.1, stagger: true }, { seq: ['forward', 'neutral'], name: 'Lanzada y tajo', mult: 1.8, stagger: true }],
+  },
+  claymore: {
+    id: 'claymore', name: 'Claymore', weight: 7,
+    attacks: {
+      side: atk('Barrido', 21, 2.5, 2.3, 14, 0.9, 0.4),
+      forward: atk('Estocada pesada', 23, 3.0, 0.8, 16, 0.95, 1.1),
+      neutral: atk('Tajo vertical', 28, 2.4, 1.1, 18, 1.05, 0.45, { stagger: true }),
+    },
+    combos: [{ seq: ['neutral', 'side', 'side'], name: 'Huracán', mult: 2.2, stagger: true, arc: 3.6 }, { seq: ['forward', 'forward'], name: 'Doble lanzada', mult: 1.7 }],
+  },
+  hacha_mano: {
+    id: 'hacha_mano', name: 'Hacha de mano', weight: 3,
+    attacks: {
+      side: atk('Hachazo corto', 13, 1.8, 1.7, 8, 0.55, 0.35),
+      forward: atk('Embestida', 15, 2.0, 0.7, 10, 0.6, 0.9),
+      neutral: atk('Corte', 16, 1.8, 1.0, 10, 0.6, 0.35),
+    },
+    combos: [{ seq: ['side', 'neutral'], name: 'Hachazo y corte', mult: 1.7 }],
+  },
+  hacha_guerra: {
+    id: 'hacha_guerra', name: 'Hacha de guerra', weight: 8,
+    attacks: {
+      side: atk('Hachazo doble', 24, 2.3, 2.1, 15, 0.95, 0.4),
+      forward: atk('Embestida', 26, 2.5, 0.9, 17, 1.0, 1.0),
+      neutral: atk('Corte descendente', 31, 2.3, 1.1, 19, 1.1, 0.4, { stagger: true }),
+    },
+    combos: [{ seq: ['side', 'side', 'neutral'], name: 'Torbellino de acero', mult: 2.2, stagger: true, arc: 3.4 }],
+  },
+  martillo: {
+    id: 'martillo', name: 'Martillo de guerra', weight: 9,
+    attacks: {
+      side: atk('Batido', 26, 2.2, 1.9, 17, 1.05, 0.3),
+      forward: atk('Golpe seco', 28, 2.3, 0.9, 18, 1.1, 0.8),
+      neutral: atk('Martillazo', 38, 2.1, 1.0, 22, 1.25, 0.35, { stagger: true }),
+    },
+    combos: [{ seq: ['neutral', 'side'], name: 'Aplastar', mult: 1.9, stagger: true }, { seq: ['side', 'side', 'neutral'], name: 'Terremoto', mult: 2.4, stagger: true }],
+  },
+  lanza: {
+    id: 'lanza', name: 'Lanza', weight: 4,
+    attacks: {
+      side: atk('Barrido', 12, 2.8, 1.5, 9, 0.62, 0.3),
+      forward: atk('Lanzada', 18, 3.6, 0.5, 12, 0.7, 1.3),
+      neutral: atk('Golpe con asta', 13, 2.6, 1.0, 9, 0.6, 0.4),
+    },
+    combos: [{ seq: ['forward', 'forward', 'forward'], name: 'Tres lanzadas', mult: 1.9, stagger: true }, { seq: ['side', 'forward'], name: 'Barrer y clavar', mult: 1.7 }],
+  },
 };
 
 // --- Armaduras y escudos (el primer elemento de cada casilla es "sin nada") ---

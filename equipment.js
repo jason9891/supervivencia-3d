@@ -14,7 +14,11 @@ import { PROFILES } from './hero.js';
 // Modelos de armas y escudos (Quaternius "Medieval Weapons", CC0) convertidos a GLB en metros: el agarre está en el origen,
 // la hoja sale por +Z y la cara del escudo mira a -X (ver assets/weapons/CREDITS.md). Si no cargan se usan las formas simples.
 export const MODEL_DIR = './assets/weapons/';
-export const WEAPON_MODEL = { espada: 'Sword', hacha: 'Axe', maza: 'Hammer_Small' };
+export const WEAPON_MODEL = {
+  espada: 'Sword', hacha: 'Axe', maza: 'Hammer_Small',
+  daga: 'Dagger', daga_curva: 'Dagger_2', espada_larga: 'Sword_2', mandoble: 'Sword_Big', claymore: 'Claymore',
+  hacha_mano: 'Axe_Small', hacha_guerra: 'Axe_Double', martillo: 'Hammer_Double', lanza: 'Spear',
+};
 export const SHIELD_MODEL = { rodela: 'Shield_Round', escudo: 'Shield_Heater', torre: 'Shield_Heater_2' };
 const SHIELD_BACK_X = { Shield_Round: 0.07, Shield_Heater: 0.06, Shield_Heater_2: 0.04 }; // lado del asa (x máximo) de cada escudo
 

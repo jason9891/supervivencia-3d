@@ -43,6 +43,16 @@ export function cycle(b, slot, dir = 1) {
   return b.equip[slot];
 }
 
+// Equipa una pieza concreta (si está disponible). Devuelve true si se equipó.
+export function pick(b, slot, id) {
+  const table = slot === 'weapon' ? C.WEAPONS : C.ARMOR[slot];
+  if (!table || !table[id] || !b.unlocked[slot]?.includes(id)) return false;
+  b.equip[slot] = id;
+  b.fighter.weapon = C.WEAPONS[b.equip.weapon];
+  if (slot === 'weapon') { b.fighter.attack = null; b.fighter.buffered = null; b.fighter.chain = []; b.fighter.chainTimer = 0; }
+  return true;
+}
+
 // Lista legible de los golpes y combos del arma equipada.
 export function describeWeapon(b) {
   const w = C.WEAPONS[b.equip.weapon];

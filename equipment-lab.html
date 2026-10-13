@@ -144,7 +144,7 @@ loadHero(THREE, GLTFLoader).then(i => {
   for (const c of i.clips) pool.set(norm(c.name), c);
   for (const c of [...pool.values()].sort((a, b) => a.name.localeCompare(b.name))) $('clipPick').add(new Option(c.name, c.name));
   eqv = createEquipment(THREE, i.profile);
-  eqv.loadModels(GLTFLoader).then(n => { refresh(); if (n < 6) console.warn('Modelos de armas cargados:', n, '/ 6 (el resto usa formas simples)'); });
+  eqv.loadModels(GLTFLoader).then(n => { refresh(); if (n < 15) console.warn('Modelos de armas cargados:', n, '/ 15 (el resto usa formas simples)'); });
   refresh(); play('Idle_Loop');
   if (i.source !== 'hero') { errorBox.style.display = 'block'; errorBox.textContent = 'No se pudo cargar el humano (assets/characters/hero/night-striker.glb). Se muestra el maniquí amarillo de respaldo.'; }
 }).catch(e => { errorBox.style.display = 'block'; errorBox.textContent = 'No se pudo cargar el personaje: ' + ((e && e.message) || e); });

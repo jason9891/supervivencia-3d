@@ -54,3 +54,10 @@ const combat = createCombatAddon({ THREE, scene, camera, player, onSwing: () => 
 | `animaciones-ual` | personaje / animaciones |
 
 **Regla:** no editar `map1.js` desde ramas de combate; no editar `combat*.js` / `equipment.js` desde ramas de mapa.
+
+## Añadido: movimiento y armas
+
+| Archivo | Qué hace |
+|---|---|
+| `locomotion.js` | Elige la animación de movimiento (retroceso, correr, salto en 3 fases, aterrizaje) y el giro suave. Lo usan `index.html` y `combat-lab.html`. Pruebas: `tests/locomotion.test.mjs`. |
+| `assets/weapons/` | 16 GLB CC0 de Quaternius (12 armas + escudos) con `CREDITS.md`; los usa `equipment.js`. |
