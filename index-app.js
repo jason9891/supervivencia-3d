@@ -79,12 +79,12 @@ let playerHitArmed = false;
 createEnemyRuntime({
   scene, camera, player,
   getGroundY: (x, z) => getGroundHeight(x, z),
-  onPlat: () => true,
+  walls: WALLS,
   onHint: (t) => { document.getElementById('hint').textContent = t; },
 }).then(async (rt) => {
   enemyRt = rt;
-  await rt.spawn('soldado', 30, 50);
-  document.getElementById('hint').textContent = 'Un monstruo merodea el establo\u2026';
+  // Dentro del establo, quieto hasta cruzar la puerta
+  await rt.spawn('soldado', 30, 52);
 }).catch((e) => console.warn('enemy runtime', e));
 
 const actor = new THREE.Group(); scene.add(actor);
