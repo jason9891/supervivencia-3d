@@ -4,60 +4,169 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#101114">
-<title>Laboratorio visual · Personaje</title>
+<title>Visor de armaduras · Personaje</title>
 <style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101114;color:#f1e6d2;font-family:system-ui,sans-serif}canvas{display:block;width:100%;height:100%;touch-action:none}
-#top{position:fixed;z-index:5;top:env(safe-area-inset-top);left:0;right:0;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;pointer-events:none}
-#top strong{font-size:12px;letter-spacing:.09em;text-shadow:0 2px 5px #000}
-button{pointer-events:auto;border:1px solid #c4a574;border-radius:9px;background:#211d17ed;color:#f3d7a0;padding:10px 12px;font-weight:700;font-size:12px}
-#controls{position:fixed;z-index:5;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 16px);display:flex;justify-content:center;flex-wrap:wrap;gap:7px;padding:0 10px}
-#status{position:fixed;z-index:4;left:12px;right:12px;top:calc(env(safe-area-inset-top) + 54px);text-align:center;font-size:12px;color:#e8dfce;text-shadow:0 2px 5px #000;pointer-events:none}
-#err{position:fixed;z-index:10;left:10px;right:10px;top:35%;padding:12px;background:#401b1b;color:#fff;white-space:pre-wrap;display:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#12151a;color:#f1e6d2;font:13px system-ui,sans-serif}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+button{font:inherit;color:#f3d7a0;background:#211d17ee;border:1px solid #c4a574;border-radius:9px;padding:8px 10px;font-weight:700;font-size:12px;cursor:pointer;touch-action:manipulation}
+button.on{background:#6b5a22;border-color:#f3d7a0}
+#top{position:fixed;z-index:5;top:env(safe-area-inset-top);left:0;right:0;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px;pointer-events:none}
+#top>*{pointer-events:auto}#top strong{font-size:12px;letter-spacing:.08em;text-shadow:0 2px 5px #000;pointer-events:none}
+#status{position:fixed;z-index:4;left:12px;top:calc(env(safe-area-inset-top) + 52px);max-width:55vw;font-size:11px;color:#e8dfce;text-shadow:0 2px 5px #000;pointer-events:none}
+#views{position:fixed;z-index:5;top:calc(env(safe-area-inset-top) + 56px);right:12px;display:flex;flex-direction:column;gap:6px}
+#panel{position:fixed;z-index:5;left:0;right:0;bottom:0;max-height:46vh;overflow:auto;padding:12px 12px calc(env(safe-area-inset-bottom) + 12px);background:#14110dee;border-top:1px solid #c4a574;display:grid;gap:8px}
+#panel h4{margin:2px 0 0;font-size:10px;letter-spacing:.1em;color:#c4a574}
+.slot{display:grid;grid-template-columns:72px 1fr;gap:8px;align-items:center}
+.slot>span{font-size:10px;letter-spacing:.08em;color:#c9b88f}
+.opts{display:flex;flex-wrap:wrap;gap:6px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+#stats{font-size:12px;color:#e8dfce}
+#error{position:fixed;z-index:10;left:10px;right:10px;top:30%;padding:12px;background:#401b1b;color:#fff;white-space:pre-wrap;display:none}
 </style>
 </head>
 <body>
-<div id="top"><strong>LABORATORIO VISUAL · PERSONAJE · PRUEBA 5</strong><button id="back">VOLVER AL JUEGO</button></div>
-<div id="status">PRUEBA 5 · Cubierta facial 3D adelantada + rasgos integrados · versión de diagnóstico</div>
-<div id="controls">
-<button data-angle="0">FRENTE</button><button data-angle="1.57079632679">PERFIL D.</button><button data-angle="3.14159265359">NUCA</button><button data-angle="-1.57079632679">PERFIL I.</button><button id="reset">REINICIAR</button>
+<div id="top"><strong>VISOR DE ARMADURAS</strong><span><button id="toEquip">TALLER</button> <button id="back">VOLVER AL JUEGO</button></span></div>
+<div id="status">Cargando personaje…</div>
+<div id="views"><button data-view="front">FRENTE</button><button data-view="side">PERFIL</button><button data-view="back">ESPALDA</button><button data-view="head">CABEZA</button><button data-view="torso">TORSO</button><button data-view="legs">PIERNAS</button><button id="spin">GIRAR</button></div>
+<div id="panel">
+  <h4>ARMADURA</h4>
+  <div class="slot"><span>CASCO</span><div class="opts" id="o-casco"></div></div>
+  <div class="slot"><span>PECHERA</span><div class="opts" id="o-pechera"></div></div>
+  <div class="slot"><span>GREBAS</span><div class="opts" id="o-grebas"></div></div>
+  <div class="slot"><span>ESCUDO</span><div class="opts" id="o-escudo"></div></div>
+  <div class="row"><button data-preset="nada">SIN ARMADURA</button><button data-preset="cuero">CUERO</button><button data-preset="malla">MALLA</button><button data-preset="placas">PLACAS</button><button data-preset="rand">AL AZAR</button></div>
+  <div id="stats"></div>
+  <h4>POSE</h4>
+  <div class="row" id="poses"></div>
 </div>
-<div id="err"></div>
+<div id="error"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
-import { addHeadFaceTexture, CHARACTER_DETAILS_VERSION } from './character-details.js?v=prueba-5';
-const err=document.getElementById('err');
-addEventListener('error',e=>{err.style.display='block';err.textContent='Error: '+(e.message||'');});
-const scene=new THREE.Scene();scene.background=new THREE.Color(0x171a20);
-scene.add(new THREE.HemisphereLight(0xc3d6ee,0x34251d,2.0));
-const key=new THREE.DirectionalLight(0xffe2bd,3.0);key.position.set(-4,8,6);scene.add(key);
-const fill=new THREE.DirectionalLight(0x8da9d2,1.5);fill.position.set(5,4,-5);scene.add(fill);
-const camera=new THREE.PerspectiveCamera(35,innerWidth/innerHeight,.1,100);camera.position.set(0,1.6,5.8);
-const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.25;document.body.appendChild(renderer.domElement);
-const floor=new THREE.Mesh(new THREE.CircleGeometry(2.3,64),new THREE.MeshStandardMaterial({color:0x292c30,roughness:.95}));floor.rotation.x=-Math.PI/2;floor.position.y=-.02;scene.add(floor);
-let modelRoot=null, targetY=0, dragging=false,lastX=0,lastY=0;
-const loader=new GLTFLoader();
-loader.load('./assets/characters/ual/UAL1_Standard.glb',g=>{
- const model=g.scene;model.updateMatrixWorld(true);
- const bounds=new THREE.Box3().setFromObject(model),size=bounds.getSize(new THREE.Vector3()),center=bounds.getCenter(new THREE.Vector3());
- const scale=size.y>0?1.82/size.y:1;model.scale.setScalar(scale);model.position.set(-center.x*scale,-bounds.min.y*scale,-center.z*scale);
- model.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
- const attached=addHeadFaceTexture(model,scale);
- modelRoot=new THREE.Group();modelRoot.add(model);scene.add(modelRoot);
- document.getElementById('status').textContent='PRUEBA 5 · módulo '+CHARACTER_DETAILS_VERSION+' · '+(attached?'detalle aplicado; comprueba FRENTE y NUCA':'no se encontró Head; modelo original');
-},undefined,e=>{err.style.display='block';err.textContent='No se pudo cargar el modelo 3D. Comprueba la conexión y vuelve a abrir esta vista.\n'+(e?.message||'');});
-function setAngle(a){targetY=a;if(modelRoot)modelRoot.rotation.y=a;}
-document.querySelectorAll('[data-angle]').forEach(b=>b.addEventListener('click',()=>setAngle(Number(b.dataset.angle))));
-document.getElementById('reset').addEventListener('click',()=>{setAngle(0);camera.position.set(0,1.6,5.8);});
-document.getElementById('back').addEventListener('click',()=>location.href='./index.html');
-renderer.domElement.addEventListener('pointerdown',e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId);});
-renderer.domElement.addEventListener('pointermove',e=>{if(!dragging)return;targetY+=(e.clientX-lastX)*.012;camera.position.y=Math.max(.6,Math.min(2.8,camera.position.y-(e.clientY-lastY)*.008));lastX=e.clientX;lastY=e.clientY;if(modelRoot)modelRoot.rotation.y=targetY;});
-const stop=()=>dragging=false;renderer.domElement.addEventListener('pointerup',stop);renderer.domElement.addEventListener('pointercancel',stop);
-renderer.domElement.addEventListener('wheel',e=>{camera.position.z=Math.max(3,Math.min(9,camera.position.z+e.deltaY*.006));});
-function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);}
-addEventListener('resize',resize);
-function animate(){requestAnimationFrame(animate);renderer.render(scene,camera);}animate();
+import * as C from './combat.js';
+import { loadHero, fitModel } from './hero.js';
+import { createEquipment } from './equipment.js';
+
+// Visor de armaduras: el humano de hero.js con las piezas de equipment.js (las mismas del juego).
+// Solo muestra; no toca el mapa, el combate ni el modelo del personaje.
+const $ = id => document.getElementById(id);
+const errorBox = $('error'), status = $('status');
+addEventListener('error', e => { errorBox.style.display = 'block'; errorBox.textContent = 'Error: ' + (e.message || ''); });
+
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x171a20);
+scene.add(new THREE.HemisphereLight(0xd4e2ff, 0x382a20, 2.0));
+const key = new THREE.DirectionalLight(0xffe2bd, 3); key.position.set(-4, 8, 6); key.castShadow = true; scene.add(key);
+const rim = new THREE.DirectionalLight(0x8da9d2, 1.4); rim.position.set(5, 4, -5); scene.add(rim);
+const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.05, 60);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5)); renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const floor = new THREE.Mesh(new THREE.CircleGeometry(2.2, 64), new THREE.MeshStandardMaterial({ color: 0x2c2f33, roughness: 0.95 }));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+
+// --- Equipo: solo armadura (sin arma). Los nombres y cifras salen de combat.js ---
+const SLOTS = ['casco', 'pechera', 'grebas', 'escudo'];
+const equip = { weapon: 'ninguna', casco: 'ninguno', pechera: 'ninguna', grebas: 'ninguna', escudo: 'ninguno' };
+function buildOptions() {
+  for (const slot of SLOTS) {
+    const box = $('o-' + slot);
+    for (const [id, it] of Object.entries(C.ARMOR[slot])) {
+      const b = document.createElement('button'); b.textContent = it.name; b.dataset.slot = slot; b.dataset.id = id;
+      b.addEventListener('click', () => { equip[slot] = id; refresh(); });
+      box.appendChild(b);
+    }
+  }
+}
+const none = { casco: 'ninguno', pechera: 'ninguna', grebas: 'ninguna', escudo: 'ninguno' };
+const PRESETS = {
+  nada: () => ({ ...none }),
+  cuero: () => ({ casco: 'cuero', pechera: 'cuero', grebas: 'cuero', escudo: 'rodela' }),
+  malla: () => ({ casco: 'malla', pechera: 'malla', grebas: 'malla', escudo: 'escudo' }),
+  placas: () => ({ casco: 'placas', pechera: 'placas', grebas: 'placas', escudo: 'torre' }),
+  rand: () => Object.fromEntries(SLOTS.map(s => { const ids = Object.keys(C.ARMOR[s]); return [s, ids[Math.floor(Math.random() * ids.length)]]; })),
+};
+document.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => { Object.assign(equip, PRESETS[b.dataset.preset]()); refresh(); }));
+
+// --- Personaje ---
+let info = null, mixer = null, eqv = null, unit = 1, current = null;
+const store = {}, actions = new Map(), pool = new Map();
+const norm = n => (n || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+const actor = new THREE.Group(); scene.add(actor);
+
+function refresh() {
+  if (eqv) eqv.apply(info.model, equip, store, unit);
+  document.querySelectorAll('.opts button').forEach(b => b.classList.toggle('on', equip[b.dataset.slot] === b.dataset.id));
+  // Solo armadura: computeStats de combat.js cuenta también el arma, que aquí no se muestra.
+  let defense = 0, weight = 0;
+  for (const s of SLOTS) { const it = C.ARMOR[s][equip[s]]; defense += it.defense; weight += it.weight; }
+  $('stats').textContent = 'Defensa ' + defense + ' · Peso de armadura ' + weight + ' · Bloqueo ' + Math.round(C.ARMOR.escudo[equip.escudo].block * 100) + '%';
+}
+function play(name, loop = true) {
+  const clip = pool.get(norm(name)); if (!clip || !mixer) return false;
+  let a = actions.get(clip.name); if (!a) { a = mixer.clipAction(clip); actions.set(clip.name, a); }
+  a.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1); a.clampWhenFinished = !loop;
+  if (current && current !== a) current.fadeOut(0.18);
+  a.reset().fadeIn(0.18).play(); current = a;
+  status.textContent = (info.source === 'hero' ? 'Humano' : 'Maniquí (respaldo)') + ' · ' + clip.name;
+  return true;
+}
+for (const [label, clip, loop] of [['REPOSO', 'Idle_Loop', true], ['GUARDIA', 'Idle_Shield_Loop', true], ['CAMINAR', 'Walk_Loop', true], ['CORRER', 'Sprint_Loop', true], ['GOLPE RECIBIDO', 'Hit_Chest', false]]) {
+  const b = document.createElement('button'); b.textContent = label;
+  b.addEventListener('click', () => play(clip, loop));
+  $('poses').appendChild(b);
+}
+
+buildOptions(); refresh();
+loadHero(THREE, GLTFLoader).then(i => {
+  info = i; unit = 1 / fitModel(THREE, i.model); actor.add(i.model);
+  mixer = new THREE.AnimationMixer(i.model);
+  for (const c of i.clips) pool.set(norm(c.name), c);
+  eqv = createEquipment(THREE, i.profile);
+  eqv.loadModels(GLTFLoader).then(refresh);   // escudos con modelo (CC0); si no cargan se ven las formas simples
+  refresh(); play('Idle_Loop');
+  if (i.source !== 'hero') { errorBox.style.display = 'block'; errorBox.textContent = 'No se pudo cargar el humano (assets/characters/hero/night-striker.glb). Se muestra el maniquí amarillo de respaldo.'; }
+}).catch(e => { errorBox.style.display = 'block'; errorBox.textContent = 'No se pudo cargar el personaje: ' + ((e && e.message) || e); });
+
+// --- Cámara: arrastra para girar, rueda o pellizco para acercar; botones de vista ---
+let yaw = 0.35, pitch = 0.12, dist = 4.4, target = new THREE.Vector3(0, 0.95, 0), spin = false;
+const VIEWS = {
+  front: [0, 0.12, 4.4, 0.95], side: [Math.PI / 2, 0.12, 4.4, 0.95], back: [Math.PI, 0.12, 4.4, 0.95],
+  head: [0.25, 0.05, 1.3, 1.62], torso: [0.3, 0.08, 2.0, 1.3], legs: [0.3, 0.05, 2.2, 0.55],
+};
+document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => {
+  const v = VIEWS[b.dataset.view]; [yaw, pitch, dist] = v; target.y = v[3]; spin = false; $('spin').classList.remove('on');
+}));
+$('spin').addEventListener('click', e => { spin = !spin; e.currentTarget.classList.toggle('on', spin); });
+const pts = new Map(); let pinch = 0;
+const cv = renderer.domElement;
+cv.addEventListener('pointerdown', e => { pts.set(e.pointerId, e); cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => {
+  const p = pts.get(e.pointerId); if (!p) return;
+  if (pts.size === 2) { const [a, b] = [...pts.values()]; const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY); if (pinch) dist = Math.min(8, Math.max(0.8, dist * pinch / d)); pinch = d; }
+  else { yaw -= (e.clientX - p.clientX) * 0.01; pitch = Math.max(-0.4, Math.min(1.0, pitch + (e.clientY - p.clientY) * 0.006)); }
+  pts.set(e.pointerId, e);
+});
+const up = e => { pts.delete(e.pointerId); pinch = 0; };
+cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+cv.addEventListener('wheel', e => { dist = Math.min(8, Math.max(0.8, dist + e.deltaY * 0.004)); });
+$('back').addEventListener('click', () => { location.href = './index.html'; });
+$('toEquip').addEventListener('click', () => { location.href = './equipment-lab.html'; });
+
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if (mixer) mixer.update(dt);
+  if (spin) yaw += dt * 0.6;
+  camera.position.set(target.x + Math.sin(yaw) * Math.cos(pitch) * dist, target.y + Math.sin(pitch) * dist, target.z + Math.cos(yaw) * Math.cos(pitch) * dist);
+  camera.lookAt(target);
+  renderer.render(scene, camera);
+}
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+animate();
 </script>
 </body>
 </html>
