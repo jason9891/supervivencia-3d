@@ -1,5 +1,13 @@
-// mixamo-procedural.js — idle/walk/run/attack para rigs Mixamo
-// Uso: const anim = createMixamoProcedural(THREE, model); anim.setMode('walk'); anim.update(dt);
+// mixamo-procedural.js
+// Animación 100% por código para rigs Mixamo (mixamorig:*).
+// No usa clips GLB: idle / walk / run / attack se calculan cada frame.
+//
+// Uso:
+//   import { createMixamoProcedural } from './mixamo-procedural.js';
+//   const anim = createMixamoProcedural(THREE, model, { height: 1.9 });
+//   anim.setMode('walk'); // idle | walk | run
+//   anim.attack();        // combo 2 golpes
+//   anim.update(dt);
 
 const BONE_ALIASES = {
   hips: ['mixamorig:Hips', 'mixamorig_Hips', 'Hips'],
@@ -46,13 +54,11 @@ function indexAllNamed(root) {
     if (o.isSkinnedMesh && o.skeleton && o.skeleton.bones) {
       skeletonBoneCount += o.skeleton.bones.length;
       for (const b of o.skeleton.bones) {
-        if (!b) continue;
-        if (b.name) {
-          byName.set(b.name, b);
-          const k = norm(b.name);
-          if (k) byNorm.set(k, b);
-          if (samples.length < 12) samples.push(b.name);
-        }
+        if (!b || !b.name) continue;
+        byName.set(b.name, b);
+        const k = norm(b.name);
+        if (k) byNorm.set(k, b);
+        if (samples.length < 12) samples.push(b.name);
       }
     }
   });
@@ -93,6 +99,12 @@ function restoreRest(rest) {
   }
 }
 
+/**
+ * Animación procedural por código.
+ * Ejes calibrados para T-pose Mixamo típica:
+ *  - piernas: rotación en Z (adelante/atrás)
+ *  - brazos: rotación en X / Z
+ */
 export function createMixamoProcedural(THREE, root, opts = {}) {
   const height = opts.height || 1.9;
   const { bones, skeletonBoneCount, samples, namedCount } = collectBones(root);
@@ -105,8 +117,8 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
 
   let mode = 'idle';
   let time = 0;
+  let attackPhase = 0;
   let attackT = 0;
-  let attackActive = false;
 
   const qDelta = new THREE.Quaternion();
   const eTmp = new THREE.Euler();
@@ -120,8 +132,13 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
   }
 
   function setMode(next) {
-    if (next === 'attack') { attackActive = true; attackT = 0; return; }
+    if (next === 'attack') {
+      attackPhase = 1;
+      attackT = 0;
+      return;
+    }
     mode = next || 'idle';
+    attackPhase = 0;
   }
 
   function flushSkeleton() {
@@ -136,60 +153,79 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
     time += dt;
     restoreRest(rest);
 
-    if (attackActive) {
+    if (attackPhase > 0) {
       attackT += dt;
-      const t = Math.min(1, attackT / 0.55);
-      const swing = Math.sin(t * Math.PI) * 1.6;
-      applyLocalRot(bones.rightArm, -0.4, 0, -swing);
-      applyLocalRot(bones.rightForeArm, -swing * 0.7, 0, 0);
-      applyLocalRot(bones.spine1, 0, swing * 0.2, 0);
-      if (t >= 1) attackActive = false;
+      const dur = 0.42;
+      const t = Math.min(1, attackT / dur);
+      const wave = Math.sin(t * Math.PI);
+
+      if (attackPhase === 1) {
+        applyLocalRot(bones.rightArm, -0.35 * wave, 0.2 * wave, -1.5 * wave);
+        applyLocalRot(bones.rightForeArm, -1.0 * wave, 0, 0);
+        applyLocalRot(bones.spine1, 0, 0.25 * wave, 0);
+        applyLocalRot(bones.hips, 0, 0.08 * wave, 0);
+      } else {
+        applyLocalRot(bones.leftArm, -0.35 * wave, -0.2 * wave, 1.5 * wave);
+        applyLocalRot(bones.leftForeArm, -1.0 * wave, 0, 0);
+        applyLocalRot(bones.spine1, 0, -0.25 * wave, 0);
+        applyLocalRot(bones.hips, 0, -0.08 * wave, 0);
+      }
+
+      if (t >= 1) {
+        attackT = 0;
+        if (attackPhase === 1) attackPhase = 2;
+        else attackPhase = 0;
+      }
       flushSkeleton();
       return;
     }
 
     if (mode === 'idle') {
-      const b = Math.sin(time * 1.8) * 0.06;
-      const s = Math.sin(time * 1.1) * 0.04;
-      applyLocalRot(bones.spine, s * 0.5, 0, 0);
+      const b = Math.sin(time * 1.7) * 0.04;
+      applyLocalRot(bones.spine, 0.02 + b * 0.3, 0, 0);
       applyLocalRot(bones.spine1, b, 0, 0);
-      applyLocalRot(bones.head, -b * 0.5, Math.sin(time * 0.6) * 0.08, 0);
-      applyLocalRot(bones.leftArm, 0.12 + b, 0, 0.1);
-      applyLocalRot(bones.rightArm, 0.12 - b, 0, -0.1);
-      applyLocalRot(bones.leftForeArm, 0.25, 0, 0);
-      applyLocalRot(bones.rightForeArm, 0.25, 0, 0);
-    } else if (mode === 'walk' || mode === 'run') {
-      const run = mode === 'run';
-      const freq = run ? 9.0 : 5.5;
-      const amp = run ? 1.0 : 0.7;
-      const phase = time * freq;
-      const L = Math.sin(phase) * amp;
-      const R = Math.sin(phase + Math.PI) * amp;
-      const kneeL = Math.max(0, -Math.sin(phase)) * (run ? 1.3 : 0.9);
-      const kneeR = Math.max(0, -Math.sin(phase + Math.PI)) * (run ? 1.3 : 0.9);
-
-      if (bones.hips && rest.has(bones.hips)) {
-        const rp = rest.get(bones.hips).pos;
-        bones.hips.position.y = rp.y + Math.abs(Math.sin(phase * 2)) * (run ? 0.05 : 0.03) * height;
-      }
-
-      applyLocalRot(bones.leftUpLeg, L, 0, 0);
-      applyLocalRot(bones.rightUpLeg, R, 0, 0);
-      applyLocalRot(bones.leftLeg, kneeL, 0, 0);
-      applyLocalRot(bones.rightLeg, kneeR, 0, 0);
-      applyLocalRot(bones.leftFoot, -L * 0.4 - kneeL * 0.25, 0, 0);
-      applyLocalRot(bones.rightFoot, -R * 0.4 - kneeR * 0.25, 0, 0);
-
-      const armAmp = run ? 0.85 : 0.55;
-      applyLocalRot(bones.leftArm, -R * armAmp, 0, 0.12);
-      applyLocalRot(bones.rightArm, -L * armAmp, 0, -0.12);
-      applyLocalRot(bones.leftForeArm, 0.25 + Math.max(0, -R) * 0.5, 0, 0);
-      applyLocalRot(bones.rightForeArm, 0.25 + Math.max(0, -L) * 0.5, 0, 0);
-
-      applyLocalRot(bones.spine, Math.sin(phase * 2) * 0.05, Math.sin(phase) * 0.06, 0);
-      applyLocalRot(bones.spine1, run ? 0.15 : 0.06, 0, 0);
-      applyLocalRot(bones.head, -0.06, Math.sin(phase) * 0.04, 0);
+      applyLocalRot(bones.head, -b * 0.4, Math.sin(time * 0.5) * 0.06, 0);
+      applyLocalRot(bones.leftArm, 0.05, 0, 0.08 + b);
+      applyLocalRot(bones.rightArm, 0.05, 0, -0.08 - b);
+      applyLocalRot(bones.leftForeArm, 0.2, 0, 0);
+      applyLocalRot(bones.rightForeArm, 0.2, 0, 0);
+      flushSkeleton();
+      return;
     }
+
+    const run = mode === 'run';
+    const freq = run ? 8.5 : 5.0;
+    const legAmp = run ? 0.75 : 0.5;
+    const phase = time * freq;
+    const L = Math.sin(phase) * legAmp;
+    const R = Math.sin(phase + Math.PI) * legAmp;
+    const kneeL = Math.max(0, -Math.sin(phase)) * (run ? 1.15 : 0.8);
+    const kneeR = Math.max(0, -Math.sin(phase + Math.PI)) * (run ? 1.15 : 0.8);
+
+    if (bones.hips && rest.has(bones.hips)) {
+      const rp = rest.get(bones.hips).pos;
+      bones.hips.position.y =
+        rp.y + Math.abs(Math.sin(phase * 2)) * (run ? 0.045 : 0.028) * height;
+    }
+    applyLocalRot(bones.hips, 0, Math.sin(phase) * 0.06, 0);
+
+    // Piernas en Z (caminar), no en X (abrir)
+    applyLocalRot(bones.leftUpLeg, 0, 0, L);
+    applyLocalRot(bones.rightUpLeg, 0, 0, -R);
+    applyLocalRot(bones.leftLeg, 0, 0, kneeL);
+    applyLocalRot(bones.rightLeg, 0, 0, -kneeR);
+    applyLocalRot(bones.leftFoot, 0, 0, -L * 0.35 - kneeL * 0.15);
+    applyLocalRot(bones.rightFoot, 0, 0, R * 0.35 + kneeR * 0.15);
+
+    const armAmp = run ? 0.7 : 0.45;
+    applyLocalRot(bones.leftArm, -R * armAmp, 0, 0.1);
+    applyLocalRot(bones.rightArm, -L * armAmp, 0, -0.1);
+    applyLocalRot(bones.leftForeArm, 0.25 + Math.max(0, -R) * 0.45, 0, 0);
+    applyLocalRot(bones.rightForeArm, 0.25 + Math.max(0, -L) * 0.45, 0, 0);
+
+    applyLocalRot(bones.spine, Math.sin(phase * 2) * 0.03, Math.sin(phase) * 0.05, 0);
+    applyLocalRot(bones.spine1, run ? 0.12 : 0.04, 0, 0);
+    applyLocalRot(bones.head, -0.04, Math.sin(phase) * 0.03, 0);
 
     flushSkeleton();
   }
@@ -202,7 +238,11 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
     skeletonBoneCount,
     namedCount,
     samples,
-    get mode() { return attackActive ? 'attack' : mode; },
+    get mode() {
+      if (attackPhase === 1) return 'attack-R';
+      if (attackPhase === 2) return 'attack-L';
+      return mode;
+    },
     setMode,
     attack() { setMode('attack'); },
     update,
