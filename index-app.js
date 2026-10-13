@@ -234,7 +234,35 @@ const clock = new THREE.Clock();
 const CAM_DIST = 4.2;
 const CAM_HEIGHT = 2.4;
 const CAM_LOOK_Y = 1.35;
+const CAM_MIN_DIST = 1.15;
+const CAM_RADIUS = 0.28;
 let mapOverview = false;
+
+/** Vista tipo Blade: acorta la cámara si la línea al personaje atraviesa una pared. */
+function cameraBlockedDist(from, to) {
+  const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
+  const len = Math.hypot(dx, dy, dz);
+  if (len < 1e-4) return 0;
+  const steps = 14;
+  let best = len;
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const x = from.x + dx * t;
+    const y = from.y + dy * t;
+    const z = from.z + dz * t;
+    for (const w of WALLS) {
+      if (
+        x + CAM_RADIUS >= w.minX && x - CAM_RADIUS <= w.maxX &&
+        z + CAM_RADIUS >= w.minZ && z - CAM_RADIUS <= w.maxZ &&
+        y >= 0.2 && y <= 14
+      ) {
+        best = Math.min(best, (i - 1) / steps * len);
+        break;
+      }
+    }
+  }
+  return Math.max(CAM_MIN_DIST, best);
+}
 const overview = { x: MAP_CENTER.x, z: MAP_CENTER.z, h: 95, yaw: 0 };
 const mapBtn = document.getElementById('mapView');
 if (mapBtn) mapBtn.addEventListener('pointerdown', e => {
@@ -336,9 +364,21 @@ function animate() {
     camera.lookAt(overview.x, 0, overview.z);
   } else {
     const fx = Math.sin(visYaw), fz = Math.cos(visYaw);
-    const targetCam = new THREE.Vector3(player.x - fx * CAM_DIST, player.y + CAM_HEIGHT, player.z - fz * CAM_DIST);
-    camera.position.lerp(targetCam, Math.min(1, dt * 4));
-    camera.lookAt(player.x, player.y + CAM_LOOK_Y, player.z);
+    const look = new THREE.Vector3(player.x, player.y + CAM_LOOK_Y, player.z);
+    const ideal = new THREE.Vector3(
+      player.x - fx * CAM_DIST,
+      player.y + CAM_HEIGHT,
+      player.z - fz * CAM_DIST
+    );
+    const free = cameraBlockedDist(look, ideal);
+    const scale = free / CAM_DIST;
+    const targetCam = new THREE.Vector3(
+      player.x - fx * CAM_DIST * scale,
+      player.y + CAM_HEIGHT * (0.55 + 0.45 * scale),
+      player.z - fz * CAM_DIST * scale
+    );
+    camera.position.lerp(targetCam, Math.min(1, dt * 5));
+    camera.lookAt(look);
   }
   updateStat();
   renderer.render(scene, camera);
