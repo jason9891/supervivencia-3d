@@ -1,6 +1,5 @@
 // mixamo-procedural.js
 // Animación procedural reutilizable para esqueletos Mixamo (mixamorig:*).
-// No requiere clips embebidos: idle / walk / run / attack básicos.
 // Uso:
 //   import { createMixamoProcedural } from './mixamo-procedural.js';
 //   const anim = createMixamoProcedural(THREE, modelRoot);
@@ -30,19 +29,37 @@ const BONE_ALIASES = {
   rightHand: ['mixamorig:RightHand', 'mixamorig_RightHand', 'RightHand'],
 };
 
-function findBone(root, names) {
-  let found = null;
+function indexBones(root) {
+  const byName = new Map();
   root.traverse((o) => {
-    if (found || !o.isBone) return;
-    if (names.includes(o.name)) found = o;
+    if (o.isBone || o.type === 'Bone') byName.set(o.name, o);
+    if (o.isSkinnedMesh && o.skeleton && o.skeleton.bones) {
+      for (const b of o.skeleton.bones) {
+        if (b && b.name) byName.set(b.name, b);
+      }
+    }
   });
-  return found;
+  return byName;
 }
 
 function collectBones(root) {
+  const byName = indexBones(root);
   const out = {};
   for (const [key, names] of Object.entries(BONE_ALIASES)) {
-    out[key] = findBone(root, names);
+    let found = null;
+    for (const n of names) {
+      if (byName.has(n)) { found = byName.get(n); break; }
+    }
+    if (!found) {
+      const want = names[0].toLowerCase().replace(/^mixamorig[:_]/, '');
+      for (const [name, bone] of byName) {
+        if (name.toLowerCase().replace(/^mixamorig[:_]/, '') === want) {
+          found = bone;
+          break;
+        }
+      }
+    }
+    out[key] = found;
   }
   return out;
 }
@@ -66,9 +83,15 @@ function restoreRest(rest) {
   }
 }
 
+function listSkinned(root) {
+  const list = [];
+  root.traverse((o) => { if (o.isSkinnedMesh) list.push(o); });
+  return list;
+}
+
 /**
  * @param {typeof import('three')} THREE
- * @param {import('three').Object3D} root - escena/grupo del modelo con bones Mixamo
+ * @param {import('three').Object3D} root
  * @param {{ height?: number }} [opts]
  */
 export function createMixamoProcedural(THREE, root, opts = {}) {
@@ -76,21 +99,23 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
   const bones = collectBones(root);
   const rest = captureRest(bones);
   const boneCount = Object.values(bones).filter(Boolean).length;
+  const skinned = listSkinned(root);
+  const foundKeys = Object.entries(bones).filter(([, b]) => b).map(([k]) => k);
 
-  let mode = 'idle'; // idle | walk | run | attack
+  let mode = 'idle';
   let time = 0;
   let attackT = 0;
   let attackActive = false;
 
-  const qTmp = new THREE.Quaternion();
+  const qDelta = new THREE.Quaternion();
   const eTmp = new THREE.Euler();
 
   function applyLocalRot(bone, ax, ay, az) {
     if (!bone || !rest.has(bone)) return;
     const r = rest.get(bone);
     eTmp.set(ax, ay, az, 'XYZ');
-    qTmp.setFromEuler(eTmp);
-    bone.quaternion.copy(r.quat).multiply(qTmp);
+    qDelta.setFromEuler(eTmp);
+    bone.quaternion.copy(r.quat).multiply(qDelta);
   }
 
   function setMode(next) {
@@ -102,6 +127,13 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
     mode = next || 'idle';
   }
 
+  function flushSkeleton() {
+    root.updateMatrixWorld(true);
+    for (const mesh of skinned) {
+      if (mesh.skeleton) mesh.skeleton.update();
+    }
+  }
+
   function update(dt) {
     if (boneCount < 4) return;
     time += dt;
@@ -110,71 +142,71 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
     if (attackActive) {
       attackT += dt;
       const t = Math.min(1, attackT / 0.55);
-      const swing = Math.sin(t * Math.PI) * 1.4;
-      applyLocalRot(bones.rightArm, -0.3, 0, -swing);
-      applyLocalRot(bones.rightForeArm, -swing * 0.6, 0, 0);
-      applyLocalRot(bones.spine1, 0, swing * 0.15, 0);
-      if (t >= 1) {
-        attackActive = false;
-      }
-      root.updateMatrixWorld(true);
+      const swing = Math.sin(t * Math.PI) * 1.6;
+      applyLocalRot(bones.rightArm, -0.4, 0, -swing);
+      applyLocalRot(bones.rightForeArm, -swing * 0.7, 0, 0);
+      applyLocalRot(bones.spine1, 0, swing * 0.2, 0);
+      if (t >= 1) attackActive = false;
+      flushSkeleton();
       return;
     }
 
     if (mode === 'idle') {
-      const b = Math.sin(time * 1.6) * 0.03;
-      const s = Math.sin(time * 0.9) * 0.02;
+      const b = Math.sin(time * 1.8) * 0.06;
+      const s = Math.sin(time * 1.1) * 0.04;
       applyLocalRot(bones.spine, s * 0.5, 0, 0);
       applyLocalRot(bones.spine1, b, 0, 0);
-      applyLocalRot(bones.head, -b * 0.4, Math.sin(time * 0.5) * 0.05, 0);
-      applyLocalRot(bones.leftArm, 0.08 + b, 0, 0.06);
-      applyLocalRot(bones.rightArm, 0.08 - b, 0, -0.06);
-      applyLocalRot(bones.leftForeArm, 0.15, 0, 0);
-      applyLocalRot(bones.rightForeArm, 0.15, 0, 0);
+      applyLocalRot(bones.head, -b * 0.5, Math.sin(time * 0.6) * 0.08, 0);
+      applyLocalRot(bones.leftArm, 0.12 + b, 0, 0.1);
+      applyLocalRot(bones.rightArm, 0.12 - b, 0, -0.1);
+      applyLocalRot(bones.leftForeArm, 0.25, 0, 0);
+      applyLocalRot(bones.rightForeArm, 0.25, 0, 0);
     } else if (mode === 'walk' || mode === 'run') {
       const run = mode === 'run';
-      const freq = run ? 8.5 : 5.2;
-      const amp = run ? 0.85 : 0.55;
+      const freq = run ? 9.0 : 5.5;
+      const amp = run ? 1.0 : 0.7;
       const phase = time * freq;
       const L = Math.sin(phase) * amp;
       const R = Math.sin(phase + Math.PI) * amp;
-      const kneeL = Math.max(0, -Math.sin(phase)) * (run ? 1.1 : 0.75);
-      const kneeR = Math.max(0, -Math.sin(phase + Math.PI)) * (run ? 1.1 : 0.75);
+      const kneeL = Math.max(0, -Math.sin(phase)) * (run ? 1.3 : 0.9);
+      const kneeR = Math.max(0, -Math.sin(phase + Math.PI)) * (run ? 1.3 : 0.9);
 
       if (bones.hips && rest.has(bones.hips)) {
         const rp = rest.get(bones.hips).pos;
-        bones.hips.position.y = rp.y + Math.abs(Math.sin(phase * 2)) * (run ? 0.04 : 0.025) * height;
+        bones.hips.position.y = rp.y + Math.abs(Math.sin(phase * 2)) * (run ? 0.05 : 0.03) * height;
       }
 
       applyLocalRot(bones.leftUpLeg, L, 0, 0);
       applyLocalRot(bones.rightUpLeg, R, 0, 0);
       applyLocalRot(bones.leftLeg, kneeL, 0, 0);
       applyLocalRot(bones.rightLeg, kneeR, 0, 0);
-      applyLocalRot(bones.leftFoot, -L * 0.35 - kneeL * 0.2, 0, 0);
-      applyLocalRot(bones.rightFoot, -R * 0.35 - kneeR * 0.2, 0, 0);
+      applyLocalRot(bones.leftFoot, -L * 0.4 - kneeL * 0.25, 0, 0);
+      applyLocalRot(bones.rightFoot, -R * 0.4 - kneeR * 0.25, 0, 0);
 
-      const armAmp = run ? 0.7 : 0.45;
-      applyLocalRot(bones.leftArm, -R * armAmp, 0, 0.08);
-      applyLocalRot(bones.rightArm, -L * armAmp, 0, -0.08);
-      applyLocalRot(bones.leftForeArm, 0.2 + Math.max(0, -R) * 0.4, 0, 0);
-      applyLocalRot(bones.rightForeArm, 0.2 + Math.max(0, -L) * 0.4, 0, 0);
+      const armAmp = run ? 0.85 : 0.55;
+      applyLocalRot(bones.leftArm, -R * armAmp, 0, 0.12);
+      applyLocalRot(bones.rightArm, -L * armAmp, 0, -0.12);
+      applyLocalRot(bones.leftForeArm, 0.25 + Math.max(0, -R) * 0.5, 0, 0);
+      applyLocalRot(bones.rightForeArm, 0.25 + Math.max(0, -L) * 0.5, 0, 0);
 
-      applyLocalRot(bones.spine, Math.sin(phase * 2) * 0.03, Math.sin(phase) * 0.04, 0);
-      applyLocalRot(bones.spine1, run ? 0.12 : 0.04, 0, 0);
-      applyLocalRot(bones.head, -0.05, Math.sin(phase) * 0.03, 0);
+      applyLocalRot(bones.spine, Math.sin(phase * 2) * 0.05, Math.sin(phase) * 0.06, 0);
+      applyLocalRot(bones.spine1, run ? 0.15 : 0.06, 0, 0);
+      applyLocalRot(bones.head, -0.06, Math.sin(phase) * 0.04, 0);
     }
 
-    root.updateMatrixWorld(true);
+    flushSkeleton();
   }
 
   return {
     bones,
     boneCount,
+    foundKeys,
+    skinnedCount: skinned.length,
     get mode() { return attackActive ? 'attack' : mode; },
     setMode,
     attack() { setMode('attack'); },
     update,
-    isReady() { return boneCount >= 4; },
+    isReady() { return boneCount >= 4 && skinned.length > 0; },
   };
 }
 
