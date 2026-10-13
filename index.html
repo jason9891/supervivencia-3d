@@ -133,6 +133,7 @@ addM(actor, new THREE.SphereGeometry(0.22, 12, 10), skin, [0, 1.85, 0]);
 const locomotionActor = new THREE.Group(); scene.add(locomotionActor); locomotionActor.visible = false;
 let locomotionMixer = null, walkAction = null, runAction = null, idleAction = null, activeAction = null;
 let attackAction = null, attacking = false, armed = false;
+let attackUntil = 0;
 const clipMap = new Map(), locoState = createLocoState(); let loco = null, visYaw = 0;
 const gltfLoader = new GLTFLoader();
 const normName = n => (n || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -164,7 +165,7 @@ function setupLocomotion(gltf, label) {
   const idleC = findClip(clips, ['idle loop', 'idle standing', 'idle']);
   const walkC = findClip(clips, ['walk loop', 'walk formal loop', 'walk']);
   const runC = findClip(clips, ['sprint loop', 'jog fwd loop', 'run']);
-  const atkC = findClip(clips, ['sword attack', 'attack']);
+  const atkC = findClip(clips, ['sword attack', 'sword regular a', 'melee hook', 'attack']);
   if (idleC) idleAction = locomotionMixer.clipAction(idleC);
   if (walkC) walkAction = locomotionMixer.clipAction(walkC);
   if (runC) runAction = locomotionMixer.clipAction(runC);
@@ -185,8 +186,23 @@ loadHero(THREE, GLTFLoader)
   });
 
 function attack() {
-  if (!attackAction || attacking || !player.grounded) return;
+  if (!player.grounded) return;
+  if (!attackAction && locomotionMixer) {
+    for (const n of ['sword attack', 'sword regular a', 'melee hook', 'attack']) {
+      const c = clipMap.get(n);
+      if (c) {
+        attackAction = locomotionMixer.clipAction(c);
+        attackAction.setLoop(THREE.LoopOnce, 1);
+        attackAction.clampWhenFinished = true;
+        break;
+      }
+    }
+  }
+  if (!attackAction) return;
+  if (attacking && performance.now() / 1000 < attackUntil - 0.15) return;
   attacking = true;
+  const dur = (attackAction.getClip()?.duration || 0.8);
+  attackUntil = performance.now() / 1000 + Math.min(1.2, dur * 0.7 + 0.15);
   const host = { get active() { return activeAction; }, set active(v) { activeAction = v; } };
   switchAction(THREE, host, attackAction, { fade: 0.08, once: true });
 }
@@ -340,6 +356,7 @@ function animate() {
   locomotionActor.position.copy(actor.position);
   locomotionActor.rotation.y = actor.rotation.y;
 
+  if (attacking && performance.now() / 1000 >= attackUntil) attacking = false;
   if (locomotionMixer) {
     const moving = !!((f || side) && canMove);
     const pk = stepLoco(locoState, { grounded: player.grounded, moving, running, back: backNow }, dt, n => clipMap.has(n));
