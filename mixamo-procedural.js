@@ -1,10 +1,5 @@
-// mixamo-procedural.js
-// Animación procedural reutilizable para esqueletos Mixamo (mixamorig:*).
-// Uso:
-//   import { createMixamoProcedural } from './mixamo-procedural.js';
-//   const anim = createMixamoProcedural(THREE, modelRoot);
-//   anim.setMode('walk');
-//   anim.update(dt);
+// mixamo-procedural.js — idle/walk/run/attack para rigs Mixamo
+// Uso: const anim = createMixamoProcedural(THREE, model); anim.setMode('walk'); anim.update(dt);
 
 const BONE_ALIASES = {
   hips: ['mixamorig:Hips', 'mixamorig_Hips', 'Hips'],
@@ -29,21 +24,44 @@ const BONE_ALIASES = {
   rightHand: ['mixamorig:RightHand', 'mixamorig_RightHand', 'RightHand'],
 };
 
-function indexBones(root) {
+function norm(n) {
+  return (n || '').toLowerCase().replace(/^mixamorig[:._\-\s]*/, '').replace(/[^a-z0-9]/g, '');
+}
+
+function indexAllNamed(root) {
   const byName = new Map();
+  const byNorm = new Map();
+  let skeletonBoneCount = 0;
+  const samples = [];
+
   root.traverse((o) => {
-    if (o.isBone || o.type === 'Bone') byName.set(o.name, o);
+    if (o.name) {
+      byName.set(o.name, o);
+      const k = norm(o.name);
+      if (k && !byNorm.has(k)) byNorm.set(k, o);
+      if (samples.length < 12 && (o.isBone || o.type === 'Bone' || /mixamo|hip|spine|arm|leg/i.test(o.name))) {
+        samples.push(o.name);
+      }
+    }
     if (o.isSkinnedMesh && o.skeleton && o.skeleton.bones) {
+      skeletonBoneCount += o.skeleton.bones.length;
       for (const b of o.skeleton.bones) {
-        if (b && b.name) byName.set(b.name, b);
+        if (!b) continue;
+        if (b.name) {
+          byName.set(b.name, b);
+          const k = norm(b.name);
+          if (k) byNorm.set(k, b);
+          if (samples.length < 12) samples.push(b.name);
+        }
       }
     }
   });
-  return byName;
+
+  return { byName, byNorm, skeletonBoneCount, samples };
 }
 
 function collectBones(root) {
-  const byName = indexBones(root);
+  const { byName, byNorm, skeletonBoneCount, samples } = indexAllNamed(root);
   const out = {};
   for (const [key, names] of Object.entries(BONE_ALIASES)) {
     let found = null;
@@ -51,27 +69,19 @@ function collectBones(root) {
       if (byName.has(n)) { found = byName.get(n); break; }
     }
     if (!found) {
-      const want = names[0].toLowerCase().replace(/^mixamorig[:_]/, '');
-      for (const [name, bone] of byName) {
-        if (name.toLowerCase().replace(/^mixamorig[:_]/, '') === want) {
-          found = bone;
-          break;
-        }
-      }
+      const k = norm(names[0]);
+      if (byNorm.has(k)) found = byNorm.get(k);
     }
     out[key] = found;
   }
-  return out;
+  return { bones: out, skeletonBoneCount, samples, namedCount: byName.size };
 }
 
 function captureRest(bones) {
   const rest = new Map();
   for (const b of Object.values(bones)) {
     if (!b) continue;
-    rest.set(b, {
-      pos: b.position.clone(),
-      quat: b.quaternion.clone(),
-    });
+    rest.set(b, { pos: b.position.clone(), quat: b.quaternion.clone() });
   }
   return rest;
 }
@@ -83,24 +93,15 @@ function restoreRest(rest) {
   }
 }
 
-function listSkinned(root) {
-  const list = [];
-  root.traverse((o) => { if (o.isSkinnedMesh) list.push(o); });
-  return list;
-}
-
-/**
- * @param {typeof import('three')} THREE
- * @param {import('three').Object3D} root
- * @param {{ height?: number }} [opts]
- */
 export function createMixamoProcedural(THREE, root, opts = {}) {
   const height = opts.height || 1.9;
-  const bones = collectBones(root);
+  const { bones, skeletonBoneCount, samples, namedCount } = collectBones(root);
   const rest = captureRest(bones);
   const boneCount = Object.values(bones).filter(Boolean).length;
-  const skinned = listSkinned(root);
   const foundKeys = Object.entries(bones).filter(([, b]) => b).map(([k]) => k);
+
+  const skinned = [];
+  root.traverse((o) => { if (o.isSkinnedMesh) skinned.push(o); });
 
   let mode = 'idle';
   let time = 0;
@@ -119,11 +120,7 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
   }
 
   function setMode(next) {
-    if (next === 'attack') {
-      attackActive = true;
-      attackT = 0;
-      return;
-    }
+    if (next === 'attack') { attackActive = true; attackT = 0; return; }
     mode = next || 'idle';
   }
 
@@ -202,6 +199,9 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
     boneCount,
     foundKeys,
     skinnedCount: skinned.length,
+    skeletonBoneCount,
+    namedCount,
+    samples,
     get mode() { return attackActive ? 'attack' : mode; },
     setMode,
     attack() { setMode('attack'); },
