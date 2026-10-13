@@ -145,25 +145,51 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
     time += dt;
     restoreRest(rest);
 
+    // Muerte en 3 fases: tropiezo → caída → cuerpo en el suelo
     if (dead) {
-      deathT = Math.min(1.2, deathT + dt);
-      const t = Math.min(1, deathT / 0.85);
-      const ease = t * t * (3 - 2 * t);
-      applyLocalRot(bones.spine, 0.9 * ease, 0.4 * ease, 0.15 * ease);
-      applyLocalRot(bones.spine1, 0.5 * ease, 0.2 * ease, 0);
-      applyLocalRot(bones.head, 0.6 * ease, 0.3 * ease, 0);
-      applyLocalRot(bones.leftUpLeg, 0.3 * ease, 0, 0.5 * ease);
-      applyLocalRot(bones.rightUpLeg, 0.3 * ease, 0, -0.5 * ease);
-      applyLocalRot(bones.leftLeg, 0.9 * ease, 0, 0);
-      applyLocalRot(bones.rightLeg, 0.9 * ease, 0, 0);
-      applyLocalRot(bones.leftArm, 0.4 * ease, 0, 0.8 * ease);
-      applyLocalRot(bones.rightArm, 0.4 * ease, 0, -0.8 * ease);
-      applyLocalRot(bones.leftForeArm, 0.6 * ease, 0, 0);
-      applyLocalRot(bones.rightForeArm, 0.6 * ease, 0, 0);
+      deathT += dt;
+      const total = 1.35;
+      const u = Math.min(1, deathT / total);
+      let stumble = 0, fall = 0, settle = 0;
+      if (u < 0.28) {
+        stumble = u / 0.28;
+      } else if (u < 0.75) {
+        stumble = 1;
+        fall = (u - 0.28) / 0.47;
+      } else {
+        stumble = 1;
+        fall = 1;
+        settle = (u - 0.75) / 0.25;
+      }
+      const s = stumble * stumble * (3 - 2 * stumble);
+      const f = fall * fall * (3 - 2 * fall);
+      const e = settle * settle * (3 - 2 * settle);
+
+      applyLocalRot(bones.spine, 0.25 * s + 1.15 * f, 0.55 * s + 0.35 * f, 0.08 * s);
+      applyLocalRot(bones.spine1, 0.2 * s + 0.65 * f, 0.25 * f, 0);
+      applyLocalRot(bones.head, 0.35 * s + 0.7 * f, 0.4 * s + 0.25 * f, 0.1 * s);
+
+      applyLocalRot(bones.leftUpLeg, 0.15 * s + 0.55 * f, 0.1 * s, 0.35 * s + 0.55 * f);
+      applyLocalRot(bones.rightUpLeg, 0.45 * s + 0.5 * f, -0.15 * s, -0.25 * s - 0.4 * f);
+      applyLocalRot(bones.leftLeg, 0.5 * s + 1.1 * f, 0, 0);
+      applyLocalRot(bones.rightLeg, 0.9 * s + 1.0 * f, 0, 0);
+      applyLocalRot(bones.leftFoot, -0.2 * s - 0.3 * f, 0, 0);
+      applyLocalRot(bones.rightFoot, -0.35 * s - 0.25 * f, 0, 0);
+
+      applyLocalRot(bones.leftArm, -0.4 * s + 0.5 * f, 0.3 * s, 0.9 * s + 0.5 * f);
+      applyLocalRot(bones.rightArm, 0.6 * s + 0.35 * f, -0.25 * s, -1.0 * s - 0.35 * f);
+      applyLocalRot(bones.leftForeArm, 0.3 * s + 0.7 * f, 0, 0);
+      applyLocalRot(bones.rightForeArm, 0.5 * s + 0.55 * f, 0, 0);
+      applyLocalRot(bones.leftShoulder, 0.1 * s, 0, 0.2 * s);
+      applyLocalRot(bones.rightShoulder, 0.15 * s, 0, -0.25 * s);
+
       if (bones.hips && rest.has(bones.hips)) {
         const rp = rest.get(bones.hips).pos;
-        bones.hips.position.y = rp.y - 0.35 * ease * height;
+        const drop = (0.12 * s + 0.42 * f + 0.08 * e) * height;
+        bones.hips.position.y = rp.y - drop;
+        bones.hips.position.x = rp.x + 0.08 * s * height;
       }
+
       flushSkeleton();
       return;
     }
