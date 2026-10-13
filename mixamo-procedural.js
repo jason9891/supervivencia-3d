@@ -208,8 +208,8 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
     }
 
     const run = mode === 'run';
-    const freq = run ? 8.5 : 5.0;
-    const legAmp = run ? 0.75 : 0.5;
+    const freq = run ? 6.0 : 3.0;
+    const legAmp = run ? 0.7 : 0.48;
     const phase = time * freq;
     const L = Math.sin(phase) * legAmp;
     const R = Math.sin(phase + Math.PI) * legAmp;
