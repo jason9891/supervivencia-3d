@@ -1,4 +1,5 @@
-// enemy-runtime.js — monstruo GLB + IA + anim. Mira al jugador, aggro en establo.
+// enemy-runtime.js — monstruo GLB + IA + anim.
+// Activa solo al cruzar la puerta del establo; mira hacia donde camina; no atraviesa paredes.
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/meshopt_decoder.module.js';
@@ -9,12 +10,17 @@ import {
 
 const ENEMY_URL = './assets/characters/tripo_rigging_a71e42e9-2739-425b-a16c-3aa7dba627a6_meshopt.glb';
 const TARGET_HEIGHT = 1.85;
-const FACE_OFFSET = Math.PI;
+// 0 = Mixamo mira +Z como el facing del juego. Si va de espaldas, usar Math.PI.
+const FACE_OFFSET = 0;
 
-const STABLE = { minX: 13.5, maxX: 54, minZ: 43, maxZ: 63 };
+// Hueco sur del establo (plaza → establo)
+const STABLE_DOOR = { minX: 44.5, maxX: 55.5, minZ: 42.0, maxZ: 48.5 };
 
-function inStable(x, z) {
-  return x >= STABLE.minX && x <= STABLE.maxX && z >= STABLE.minZ && z <= STABLE.maxZ;
+function inDoor(x, z) {
+  return (
+    x >= STABLE_DOOR.minX && x <= STABLE_DOOR.maxX &&
+    z >= STABLE_DOOR.minZ && z <= STABLE_DOOR.maxZ
+  );
 }
 
 function fitModel(model, height) {
@@ -57,18 +63,61 @@ function wrapAngle(a) {
   return a;
 }
 
+function resolveWalls(x, z, radius, walls) {
+  if (!walls || !walls.length) return { x, z };
+  let px = x, pz = z;
+  const r = radius || 0.4;
+  for (let pass = 0; pass < 3; pass++) {
+    for (const w of walls) {
+      const nx = Math.max(w.minX, Math.min(px, w.maxX));
+      const nz = Math.max(w.minZ, Math.min(pz, w.maxZ));
+      let dx = px - nx, dz = pz - nz;
+      const d2 = dx * dx + dz * dz;
+      if (d2 >= r * r) continue;
+      if (d2 < 1e-10) {
+        const left = Math.abs(px - w.minX);
+        const right = Math.abs(w.maxX - px);
+        const down = Math.abs(pz - w.minZ);
+        const up = Math.abs(w.maxZ - pz);
+        const m = Math.min(left, right, down, up);
+        if (m === left) px = w.minX - r;
+        else if (m === right) px = w.maxX + r;
+        else if (m === down) pz = w.minZ - r;
+        else pz = w.maxZ + r;
+      } else {
+        const d = Math.sqrt(d2);
+        const push = (r - d) / d;
+        px += dx * push;
+        pz += dz * push;
+      }
+    }
+  }
+  return { x: px, z: pz };
+}
+
 export async function createEnemyRuntime(opts) {
   const { scene, camera, player } = opts;
   const getGroundY = opts.getGroundY || (() => 0);
-  const onPlat = opts.onPlat || (() => true);
+  const walls = opts.walls || [];
   const onHint = opts.onHint || (() => {});
+
+  const onPlat = (x, z) => {
+    const r = 0.4;
+    for (const w of walls) {
+      const nx = Math.max(w.minX, Math.min(x, w.maxX));
+      const nz = Math.max(w.minZ, Math.min(z, w.maxZ));
+      const dx = x - nx, dz = z - nz;
+      if (dx * dx + dz * dz < r * r) return false;
+    }
+    return true;
+  };
 
   if (MeshoptDecoder.ready) await MeshoptDecoder.ready;
 
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
   const units = [];
-  let alertedOnce = false;
+  let activated = false;
 
   function loadGlb(url) {
     return new Promise((resolve, reject) => {
@@ -78,11 +127,8 @@ export async function createEnemyRuntime(opts) {
 
   async function spawn(kind, x, z) {
     const data = createEnemy(kind || 'soldado', x, z);
-    data.def = {
-      ...data.def,
-      speed: 2.85,
-      aggro: 22,
-    };
+    data.def = { ...data.def, speed: 2.6, aggro: 18 };
+    data.state = 'idle';
     data.y = getGroundY(x, z);
 
     let gltf;
@@ -140,9 +186,13 @@ export async function createEnemyRuntime(opts) {
       if (!anim.isDead) anim.die();
       return;
     }
+    if (!activated) {
+      anim.setMode('idle');
+      unit.lastState = 'idle';
+      return;
+    }
     if (e.state === 'windup') {
       if (unit.lastState !== 'windup') anim.attack();
-    } else if (e.state === 'recover') {
     } else if (e.state === 'chase') {
       anim.setMode('walk');
     } else if (e.state === 'hurt') {
@@ -153,34 +203,42 @@ export async function createEnemyRuntime(opts) {
     unit.lastState = e.state;
   }
 
-  function facePlayer(e) {
-    const dx = player.x - e.x;
-    const dz = player.z - e.z;
-    if (Math.hypot(dx, dz) < 0.05) return;
-    e.facing = Math.atan2(dx, dz);
-  }
-
   function update(dt) {
     const pstats = { defense: 4, blockFrac: 0 };
     const events = [];
-    const playerInStable = inStable(player.x, player.z);
+
+    if (!activated && inDoor(player.x, player.z)) {
+      activated = true;
+      onHint('\u00a1Algo se mueve en el establo!');
+      for (const unit of units) {
+        if (!unit.data.dead) {
+          unit.data.state = 'chase';
+          unit.data.def.aggro = 40;
+        }
+      }
+    }
 
     for (const unit of units) {
       const e = unit.data;
 
-      if (!e.dead && playerInStable && e.state === 'idle') {
-        e.state = 'chase';
-        e.def.aggro = 40;
-        if (!alertedOnce) {
-          alertedOnce = true;
-          onHint('\u00a1El monstruo te ha visto!');
-        }
+      if (!activated) {
+        e.state = 'idle';
+        e.y = getGroundY(e.x, e.z);
+        unit.root.position.set(e.x, e.y, e.z);
+        syncAnim(unit);
+        if (unit.anim) unit.anim.update(dt);
+        const bar = unit.hpBar;
+        const s0 = toScreen(e.x, e.y + 2.15, e.z);
+        if (s0 && !e.dead) {
+          bar.el.style.display = 'block';
+          bar.el.style.left = s0.x + 'px';
+          bar.el.style.top = s0.y + 'px';
+          bar.fill.style.width = Math.max(0, (e.hp / e.maxHp) * 100) + '%';
+        } else bar.el.style.display = 'none';
+        continue;
       }
 
-      if (!e.dead && (e.state === 'chase' || e.state === 'windup' || e.state === 'recover' || e.state === 'hurt')) {
-        facePlayer(e);
-      }
-
+      const prevX = e.x, prevZ = e.z;
       const ev = stepEnemy(e, player, onPlat, dt);
       for (const x of ev) {
         if (x.type === 'enemyStrike') {
@@ -194,13 +252,23 @@ export async function createEnemyRuntime(opts) {
         }
       }
 
-      if (!e.dead && e.state !== 'idle') facePlayer(e);
+      const mdx = e.x - prevX, mdz = e.z - prevZ;
+      if (mdx * mdx + mdz * mdz > 1e-6) {
+        e.facing = Math.atan2(mdx, mdz);
+      } else if (!e.dead) {
+        const dx = player.x - e.x, dz = player.z - e.z;
+        if (Math.hypot(dx, dz) > 0.1) e.facing = Math.atan2(dx, dz);
+      }
+
+      const fixed = resolveWalls(e.x, e.z, e.radius || 0.45, walls);
+      e.x = fixed.x;
+      e.z = fixed.z;
 
       e.y = getGroundY(e.x, e.z);
       unit.root.position.set(e.x, e.y, e.z);
 
       let dYaw = wrapAngle(e.facing - unit.visYaw);
-      unit.visYaw = wrapAngle(unit.visYaw + dYaw * Math.min(1, dt * 10));
+      unit.visYaw = wrapAngle(unit.visYaw + dYaw * Math.min(1, dt * 12));
       unit.root.rotation.y = unit.visYaw + FACE_OFFSET;
       unit.root.rotation.z = 0;
 
@@ -228,7 +296,7 @@ export async function createEnemyRuntime(opts) {
       }
     }
 
-    separate(units.map((u) => u.data), onPlat, 1.1);
+    if (activated) separate(units.map((u) => u.data), onPlat, 1.1);
     return events;
   }
 
@@ -267,6 +335,7 @@ export async function createEnemyRuntime(opts) {
     spawn,
     update,
     tryPlayerHit,
+    get activated() { return activated; },
     get units() { return units; },
     ENEMIES,
   };
