@@ -45,7 +45,8 @@ export function stepLoco(s, { grounded, moving, running, back }, dt, has = () =>
 
   if (!grounded) {
     if (s.airTime < AIR.LOOP_AFTER && has('jump start')) return pick('jump start', { rate: AIR.START_RATE, start: AIR.START_AT, once: true });
-    return pick(first('jump loop') ?? idle);
+    // Preferir jump loop; si no hay, idle (nunca dejar el mixer sin clip → evita pose en T / brazos abiertos).
+    return pick(first('jump loop', 'jump start') ?? idle);
   }
   if (moving) {
     if (back) return pick(walk, { rate: BACK_RATE });
@@ -56,6 +57,8 @@ export function stepLoco(s, { grounded, moving, running, back }, dt, has = () =>
 }
 
 // Aplica la elección al mixer. `host.active` es la acción que está sonando (la comparte el resto del código del laboratorio o del juego).
+// Importante: se activa el clip nuevo a peso 1 ANTES de hacer fadeOut del anterior, para que el esqueleto no caiga
+// un frame a la pose de enlace (T-pose / brazos abiertos) al saltar o cambiar de animación.
 export function createLoco(THREE, mixer, clips, host, fade = 0.15) {
   const cache = new Map();
   const actionOf = name => {
@@ -70,15 +73,21 @@ export function createLoco(THREE, mixer, clips, host, fade = 0.15) {
     reset() { key = ''; },
     apply(p) {
       const a = actionOf(p.name); if (!a) return false;
-      if (host.active === a && key === p.key) return true;   // ya suena así
-      if (host.active && host.active !== a) host.active.fadeOut(p.once ? 0.06 : fade);
+      if (host.active === a && key === p.key) {
+        a.setEffectiveTimeScale(p.rate);
+        return true;   // ya suena así
+      }
+      const prev = host.active && host.active !== a ? host.active : null;
       a.reset();
       a.setLoop(p.once ? THREE.LoopOnce : THREE.LoopRepeat, p.once ? 1 : Infinity);
       a.clampWhenFinished = !!p.once;
       a.setEffectiveTimeScale(p.rate);
       if (p.rate < 0) a.time = a.getClip().duration;       // al revés se parte del final del ciclo
       else if (p.start) a.time = p.start;
-      a.fadeIn(p.once ? 0.05 : fade).play();
+      a.enabled = true;
+      a.setEffectiveWeight(1);   // peso pleno de inmediato → no hay frame en bind pose
+      a.play();
+      if (prev) prev.fadeOut(p.once ? 0.06 : fade);
       host.active = a; key = p.key;
       return true;
     },

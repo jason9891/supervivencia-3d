@@ -48,7 +48,11 @@ function fixEquip(inv) {
 
 // Activa o desactiva el modo pruebas sin perder lo que ya habías conseguido.
 export function setTestMode(inv, on) {
-  if (on === inv.testMode) return inv.testMode;
+  if (on === inv.testMode) {
+    // Refuerza desbloqueos por si un guardado antiguo dejó la lista a medias con testMode=true.
+    if (on) inv.unlocked = allUnlocked();
+    return inv.testMode;
+  }
   if (on) {
     inv.real = { unlocked: clone(inv.unlocked) };
     inv.unlocked = allUnlocked();
@@ -130,11 +134,16 @@ export function save(inv, storage) {
 }
 
 // Carga lo guardado sobre un inventario nuevo. Valida todo: datos raros se ignoran.
+// Si `fallback.testMode` es true (laboratorio de combate), al terminar se fuerza todo desbloqueado
+// para poder probar todas las armas aunque el guardado anterior tuviera pocas piezas.
 export function load(storage, fallback = {}) {
   const inv = createInventory(fallback);
   let data = null;
   try { data = storage ? JSON.parse(storage.getItem(SAVE_KEY) || 'null') : null; } catch { data = null; }
-  if (!data || data.v !== 1) return inv;
+  if (!data || data.v !== 1) {
+    if (fallback.testMode) inv.unlocked = allUnlocked();
+    return inv;
+  }
   const okSlot = (slot, id) => slot === 'weapon' ? id in C.WEAPONS : id in C.ARMOR[slot];
   const cleanUnlocked = u => {
     const out = {};
@@ -160,6 +169,13 @@ export function load(storage, fallback = {}) {
   for (const id of Object.keys(ITEMS)) {
     const n = data.items && data.items[id];
     if (Number.isInteger(n) && n > 0 && n < 100) inv.items[id] = n;
+  }
+  // Laboratorio / modo pruebas del fallback: siempre todas las armas seleccionables.
+  if (fallback.testMode) {
+    if (!inv.testMode) setTestMode(inv, true);
+    else inv.unlocked = allUnlocked();
+  } else if (inv.testMode) {
+    inv.unlocked = allUnlocked();
   }
   // mapItems y granted no se guardan: el mapa vuelve a empezar al recargar la página.
   return inv;
