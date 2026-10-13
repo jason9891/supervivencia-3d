@@ -37,7 +37,9 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.m
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/meshopt_decoder.module.js';
 
-const ENEMY_URL = './assets/characters/tripo_pbr_model_739224f1-e1dd-4aec-976a-084ab2e81a3d_meshopt.glb';
+const ENEMY_RIGGED = './assets/characters/tripo_rigging_a71e42e9-2739-425b-a16c-3aa7dba627a6_meshopt.glb';
+const ENEMY_MESH = './assets/characters/tripo_pbr_model_739224f1-e1dd-4aec-976a-084ab2e81a3d_meshopt.glb';
+const ENEMY_URL = ENEMY_RIGGED;
 const TARGET_HEIGHT = 1.9;
 
 const err = document.getElementById('err');
@@ -87,6 +89,10 @@ let targetY = 0;
 let dragging = false;
 let lastX = 0;
 let lastY = 0;
+let mixer = null;
+let clipList = [];
+let activeClip = 0;
+const clock = new THREE.Clock();
 
 const loader = new GLTFLoader();
 loader.setMeshoptDecoder(MeshoptDecoder);
@@ -125,10 +131,26 @@ loader.load(
     modelRoot.add(model);
     scene.add(modelRoot);
 
-    const animCount = (gltf.animations || []).length;
-    statusEl.textContent =
-      'ENEMIGO listo · ' + meshes + ' mallas · ' + mats + ' mats · ' +
-      animCount + ' animaciones · arrastra para girar · rueda para zoom';
+    const clips = gltf.animations || [];
+    const animCount = clips.length;
+    let bones = 0;
+    model.traverse(o => { if (o.isBone || o.isSkinnedMesh) bones++; });
+
+    // Animar: si el GLB trae clips, los ciclamos; si no, queda en pose del rig.
+    if (animCount > 0) {
+      mixer = new THREE.AnimationMixer(model);
+      const act = mixer.clipAction(clips[0]);
+      act.play();
+      activeClip = 0;
+      clipList = clips;
+      statusEl.textContent =
+        'RIGGED listo · ' + meshes + ' mallas · ' + bones + ' bones · ' +
+        animCount + ' clips · [A/D] cambia anim · arrastra para girar';
+    } else {
+      statusEl.textContent =
+        'RIGGED sin clips embebidos · ' + meshes + ' mallas · ' + bones +
+        ' bones · para animar hay que retargetear (UAL/Mixamo) · arrastra para girar';
+    }
   },
   (ev) => {
     if (!ev.total) return;
@@ -136,6 +158,32 @@ loader.load(
     statusEl.textContent = 'Cargando enemigo… ' + pct + '%';
   },
   (e) => {
+    if (ENEMY_URL === ENEMY_RIGGED) {
+      statusEl.textContent = 'Rigged falló, probando mesh PBR…';
+      loader.load(ENEMY_MESH, (gltf) => {
+        const model = gltf.scene;
+        model.updateMatrixWorld(true);
+        const bounds = new THREE.Box3().setFromObject(model);
+        const size = bounds.getSize(new THREE.Vector3());
+        const center = bounds.getCenter(new THREE.Vector3());
+        const scale = size.y > 0 ? TARGET_HEIGHT / size.y : 1;
+        model.scale.setScalar(scale);
+        model.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
+        model.traverse((o) => {
+          if (!o.isMesh) return;
+          o.castShadow = true; o.receiveShadow = true;
+        });
+        modelRoot = new THREE.Group();
+        modelRoot.add(model);
+        scene.add(modelRoot);
+        statusEl.textContent = 'MESH PBR (sin rig) · arrastra para girar · sube clips para animar';
+      }, undefined, (e2) => {
+        err.style.display = 'block';
+        err.textContent = 'Falló rigged y mesh:\n' + ((e2 && e2.message) || e2 || e);
+        statusEl.textContent = 'Error al cargar el modelo';
+      });
+      return;
+    }
     err.style.display = 'block';
     err.textContent =
       'No se pudo cargar el GLB del enemigo.\n' +
@@ -190,8 +238,27 @@ function resize() {
 }
 addEventListener('resize', resize);
 
+function playClip(i) {
+  if (!mixer || !clipList.length) return;
+  activeClip = ((i % clipList.length) + clipList.length) % clipList.length;
+  mixer.stopAllAction();
+  const a = mixer.clipAction(clipList[activeClip]);
+  a.reset().play();
+  statusEl.textContent =
+    'Clip ' + (activeClip + 1) + '/' + clipList.length + ' · ' +
+    (clipList[activeClip].name || 'sin nombre') +
+    ' · [A/D] cambia · arrastra para girar';
+}
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (k === 'd' || k === 'arrowright') playClip(activeClip + 1);
+  if (k === 'a' || k === 'arrowleft') playClip(activeClip - 1);
+});
+
 function animate() {
   requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if (mixer) mixer.update(dt);
   camera.lookAt(0, 0.95, 0);
   renderer.render(scene, camera);
 }
