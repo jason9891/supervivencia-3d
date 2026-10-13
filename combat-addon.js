@@ -47,9 +47,12 @@ const SLOT_ORDER = ['weapon', ...C.SLOTS];
 //   El inventario las convierte en objetos (llave, notas, comida). Solo se LEE el estado; el mapa no se modifica.
 // storage (opcional): por defecto localStorage del navegador; el inventario se guarda solo.
 // onAction (opcional): avisa de acciones que la página puede animar: { type:'drink', kind } | { type:'eat' } | { type:'hurt', blocked, guardBroken, killed }.
-export function createCombatAddon({ THREE, scene, camera, player, onSwing, onAction, getFlags, storage }) {
+// forceTestUnlock (por defecto true): en el laboratorio de combate todas las armas son seleccionables.
+export function createCombatAddon({ THREE, scene, camera, player, onSwing, onAction, getFlags, storage, forceTestUnlock = true }) {
   if (storage === undefined) { try { storage = window.localStorage; } catch { storage = null; } }
   const inv = I.load(storage, { testMode: true });
+  // Asegura que en el módulo de prueba se puedan elegir TODAS las armas (evita guardados viejos a medias).
+  if (forceTestUnlock) I.setTestMode(inv, true);
   const bench = B.createBanco(inv);
   const persist = () => I.save(inv, storage);
   const emit = e => { try { if (onAction) onAction(e); } catch { /* la animación nunca debe romper el combate */ } };
