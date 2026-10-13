@@ -69,11 +69,25 @@ export function switchAction(THREE, host, next, {
   reverse = false,
 } = {}) {
   if (!next) return false;
-  // Misma acción ya en curso: solo actualiza la velocidad.
-  if (host.active === next) {
+  // Misma acción en curso: en bucles solo actualiza velocidad; en one-shot (ataques) SIEMPRE reinicia
+  // (si no, el 2.º golpe no resetea el clip y el evento "finished" no vuelve a dispararse → personaje atorado).
+  if (host.active === next && !once) {
     next.setEffectiveTimeScale(rate);
     next.enabled = true;
     if (typeof next.getEffectiveWeight === 'function' && next.getEffectiveWeight() < 0.99) next.setEffectiveWeight(1);
+    return true;
+  }
+  if (host.active === next && once) {
+    next.enabled = true;
+    next.setLoop(THREE.LoopOnce, 1);
+    next.clampWhenFinished = true;
+    next.setEffectiveTimeScale(rate);
+    next.reset();
+    if (reverse) next.time = next.getClip().duration;
+    else if (start != null) next.time = start;
+    next.setEffectiveWeight(1);
+    next.play();
+    host.active = next;
     return true;
   }
 
