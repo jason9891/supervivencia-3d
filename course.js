@@ -9,169 +9,114 @@ export const JUMP_V = 5.1;
 export const COYOTE = 0.12;
 export const JUMP_BUFFER = 0.12;
 export const FALL_LIMIT = -8;
-export const WALK_SPEED = 1.8;
-export const RUN_SPEED = 3.2;
-export const AIR_BOOST_WALK = 1.15;
-export const AIR_BOOST_RUN = 1.3;
-export const MIN_AIR_STEER = 0.9;
-
-export const GAPS = [1.2, 2.0, 2.4, 2.8, 3.1];
-
-export function buildCourse(gaps = GAPS) {
-  const segments = [{ a: 4, b: -6 }];
-  let z = -6;
-  for (const gap of gaps) {
-    const a = z - gap;
-    const b = a - 5;
-    segments.push({ a, b });
-    z = b;
-  }
-  const last = segments[segments.length - 1];
-  last.b = last.a - 10;
-  return { segments, gaps: gaps.length, freeMap: false };
-}
-
-function isFreeMap(course) {
-  return !!(course && (course.freeMap || course.gaps === 0));
-}
-
-export function segmentIndex(course, x, z) {
-  if (!isFreeMap(course) && Math.abs(x) > HALF_WIDTH) return -1;
-  return course.segments.findIndex(s => z <= s.a && z >= s.b);
-}
-
-export function onPlatform(course, x, z) {
-  if (isFreeMap(course)) return false;
-  return segmentIndex(course, x, z) !== -1;
-}
+export const WALK_SPEED = 2.2;
+export const RUN_SPEED = 6.0; // base rápida; la armadura la bajará luego
 
 export function createPlayer(course) {
-  const s0 = course.segments[0];
-  const free = isFreeMap(course);
-  const spawnZ = free ? (s0?.a ?? 0) - 2 : Math.min(0, s0.a - 1);
+  const free = !!(course.freeMap || course.gaps === 0);
   return {
-    x: 0, y: 0, z: spawnZ, vy: 0,
-    facing: free ? 0 : Math.PI,
-    grounded: true, jumping: false,
-    coyote: COYOTE, airTime: 0, jumpBuffer: 0,
-    avx: 0, avz: 0,
-    checkpoint: { x: 0, z: spawnZ },
-    best: 0, falls: 0,
+    x: 0,
+    y: 0,
+    z: free ? 0 : 2,
+    vy: 0,
+    facing: 0,
+    grounded: true,
+    coyote: 0,
+    jumpBuf: 0,
+    checkpoint: { x: 0, z: free ? 0 : 2 },
+    best: 0,
+    freeMap: free,
   };
 }
 
+function segAt(course, z) {
+  for (const s of course.segments) if (z >= s.b && z <= s.a) return s;
+  return null;
+}
+
+export function onPath(course, x, z) {
+  if (course.freeMap || course.gaps === 0) return true;
+  if (!segAt(course, z)) return false;
+  return Math.abs(x) <= HALF_WIDTH;
+}
+
+export function nearestGroundY(course, x, z) {
+  if (course.freeMap || course.gaps === 0) return 0;
+  const s = segAt(course, z);
+  if (!s) return null;
+  if (Math.abs(x) > HALF_WIDTH) return null;
+  return 0;
+}
+
 export function stepPlayer(p, course, input, dt) {
-  const ev = { jumped: false, landed: false, fell: false, reachedGoal: false };
   const { f = 0, side = 0, speed = WALK_SPEED, running = false, jump = false, canMove = true } = input;
-  const freeMap = isFreeMap(course);
+  if (jump) p.jumpBuf = JUMP_BUFFER;
+  if (p.jumpBuf > 0) p.jumpBuf -= dt;
 
-  const len = Math.hypot(side, f);
-  const hasInput = canMove && len > 0;
-  const dx = hasInput ? side / len : 0;
-  // freeMap (croquis): flecha arriba = +Z. Curso lineal: flecha arriba = -Z.
-  const dz = hasInput ? (freeMap ? f / len : -f / len) : 0;
-  const prevGrounded = p.grounded;
-
-  if (jump) p.jumpBuffer = JUMP_BUFFER;
-  else p.jumpBuffer = Math.max(0, p.jumpBuffer - dt);
-
-  let tookOff = false;
-  if (p.jumpBuffer > 0 && (p.grounded || (p.coyote > 0 && !p.jumping))) {
-    const boost = running ? AIR_BOOST_RUN : AIR_BOOST_WALK;
-    p.avx = dx * speed * boost;
-    p.avz = dz * speed * boost;
-    p.vy = JUMP_V;
-    p.y += 0.001;
-    p.grounded = false;
-    p.jumping = true;
-    p.coyote = 0;
-    p.airTime = 0;
-    p.jumpBuffer = 0;
-    tookOff = true;
-    ev.jumped = true;
-  }
-
-  if (p.grounded) {
-    p.x += dx * speed * dt;
-    p.z += dz * speed * dt;
-  } else {
-    if (hasInput) {
-      const air = Math.max(Math.hypot(p.avx, p.avz), MIN_AIR_STEER);
-      p.avx = dx * air;
-      p.avz = dz * air;
-    }
-    p.x += p.avx * dt;
-    p.z += p.avz * dt;
-  }
-  if (hasInput) p.facing = Math.atan2(dx, dz);
-
-  if (freeMap) {
-    if (!p.grounded) {
-      p.coyote = Math.max(0, p.coyote - dt);
-      p.airTime += dt;
-      p.vy -= GRAVITY * dt;
-      p.y += p.vy * dt;
+  const hasInput = canMove && (Math.abs(f) > 0.01 || Math.abs(side) > 0.01);
+  let mx = 0, mz = 0;
+  if (hasInput) {
+    if (p.freeMap) {
+      // Adelante del croquis = +Z
+      const len = Math.hypot(f, side) || 1;
+      const ff = f / len, ss = side / len;
+      // facing 0 mira +Z; side positivo = derecha local
+      mx = Math.sin(p.facing) * ff + Math.cos(p.facing) * ss;
+      mz = Math.cos(p.facing) * ff - Math.sin(p.facing) * ss;
+      if (Math.abs(f) > 0.05 || Math.abs(side) > 0.05) {
+        // no reescribir facing aquí si el caller lo bloquea (tank controls)
+      }
     } else {
-      p.coyote = COYOTE;
-      p.airTime = 0;
-      p.jumping = false;
-      p.avx = 0;
-      p.avz = 0;
+      mx = side;
+      mz = -f; // curso histórico: adelante = -Z
     }
-    if (p.y < FALL_LIMIT) {
-      p.x = p.checkpoint.x;
-      p.z = p.checkpoint.z;
-      p.y = 0;
-      p.vy = 0;
-      p.avx = 0;
-      p.avz = 0;
-      p.grounded = true;
-      p.jumping = false;
-      p.airTime = 0;
-      p.coyote = COYOTE;
-      p.facing = 0;
-      p.falls++;
-      ev.fell = true;
-    }
-    return ev;
+    const sp = speed * (running ? 1 : 1);
+    p.x += mx * sp * dt;
+    p.z += mz * sp * dt;
   }
 
-  const supported = onPlatform(course, p.x, p.z);
-  if (supported && p.vy <= 0 && p.y <= 0 && p.y > -0.35) {
-    p.y = 0; p.vy = 0;
-    p.grounded = true;
+  if (!p.freeMap && !course.freeMap) {
+    if (Math.abs(p.x) > HALF_WIDTH) p.x = Math.sign(p.x) * HALF_WIDTH;
+  }
+
+  const prevGrounded = p.grounded;
+  let tookOff = false;
+  if (p.grounded) {
     p.coyote = COYOTE;
-    p.airTime = 0;
-    p.jumping = false;
-    p.avx = 0; p.avz = 0;
-    if (!prevGrounded) ev.landed = true;
-    const idx = segmentIndex(course, p.x, p.z);
-    if (idx > p.best) p.best = idx;
-    const seg = course.segments[idx];
-    p.checkpoint = { x: 0, z: seg.a - 1.5 };
-    if (idx === course.segments.length - 1) ev.reachedGoal = true;
   } else {
-    if (prevGrounded && !tookOff) {
-      p.avx = dx * speed;
-      p.avz = dz * speed;
-    }
+    p.coyote -= dt;
+    p.vy -= GRAVITY * dt;
+  }
+
+  if (p.jumpBuf > 0 && (p.grounded || p.coyote > 0)) {
+    p.vy = JUMP_V;
     p.grounded = false;
-    p.coyote = Math.max(0, p.coyote - dt);
-    p.airTime += dt;
+    p.coyote = 0;
+    p.jumpBuf = 0;
+    tookOff = true;
   }
 
   if (!p.grounded) {
-    p.vy -= GRAVITY * dt;
     p.y += p.vy * dt;
+    if (p.y <= 0) {
+      p.y = 0;
+      p.vy = 0;
+      p.grounded = true;
+    }
+  } else {
+    if (prevGrounded && !tookOff) {
+      p.y = 0;
+      p.vy = 0;
+    }
   }
 
   if (p.y < FALL_LIMIT) {
-    p.x = p.checkpoint.x; p.z = p.checkpoint.z;
-    p.y = 0; p.vy = 0; p.avx = 0; p.avz = 0;
-    p.grounded = true; p.jumping = false; p.airTime = 0; p.coyote = COYOTE;
-    p.facing = Math.PI;
-    p.falls++;
-    ev.fell = true;
+    p.x = p.checkpoint.x;
+    p.z = p.checkpoint.z;
+    p.y = 0;
+    p.vy = 0;
+    p.grounded = true;
   }
-  return ev;
+
+  return p;
 }
