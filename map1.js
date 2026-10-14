@@ -1,9 +1,11 @@
+// map1.js — El Regreso
+// Paredes naranja tldraw 1:1 + Módulo 2 (oficina 2 ambientes).
+// +X este · +Z norte · Y altura.
+
 import * as THREE from 'three';
-import { buildRampMesh } from './ramp-mesh.js';
+import { clearRamps, addRamp, sampleRampY, getSlopeAt, buildRampMesh, RAMPS } from './map-ramps.js';
 import { buildModule2, LEVEL2_Y as MOD2_L2, MOD2 } from './modulo2.js';
 
-export const MAP_W = 90;
-export const MAP_D = 72;
 export const LEVEL0_Y = 0;
 export const LEVEL1_Y = 6;
 export const WALL_H = 5.0;
@@ -12,17 +14,17 @@ export const SPAWN = { x: 6.5, y: LEVEL0_Y, z: 3, facing: 0 };
 export const MAP_CENTER = { x: 45, z: 36, y: LEVEL1_Y };
 
 export const ZONES = {
-  ramp: { minX: 0, maxX: 14, minZ: 0, maxZ: 72 },
-  corridor: { minX: 13.5, maxX: 36, minZ: 63, maxZ: 72 },
-  plaza: { minX: 13.5, maxX: 67, minZ: 0, maxZ: 63 },
+  exterior: { minX: 0, maxX: 14, minZ: 0, maxZ: 18 },
+  ramp: { minX: 0, maxX: 14, minZ: 8, maxZ: 68 },
+  corridor: { minX: 12, maxX: 36, minZ: 62, maxZ: 72 },
+  plaza: { minX: 13.5, maxX: 67, minZ: 1, maxZ: 63 },
   stable: { minX: 13.5, maxX: 54, minZ: 43, maxZ: 63 },
-  mod2: { minX: 67, maxX: 90, minZ: 0, maxZ: 54 },
-  towers: { minX: 67, maxX: 90, minZ: 63, maxZ: 72 },
+  mod2: { minX: 67, maxX: 90, minZ: 1, maxZ: 54 },
+  towers: { minX: 67, maxX: 90, minZ: 62, maxZ: 72 },
 };
 
 export const WALLS = [];
 export const PLATFORMS = [];
-export const RAMPS = [];
 
 let PAGE_POS = new THREE.Vector3(76, LEVEL1_Y + 1.05, 10);
 let KEY_POS = new THREE.Vector3(78, LEVEL1_Y + 1.02, 14);
@@ -30,38 +32,66 @@ let LEVER_POS = new THREE.Vector3(84, LEVEL1_Y + 11, 67);
 let FOOD_POS = new THREE.Vector3(28, LEVEL1_Y + 0.45, 52);
 
 export const STORY_PAGE = {
-  title: 'Fragmento del cronista',
-  text: 'Han pasado muchos a\u00f1os. Los escudos y las espadas han mejorado, pero la magia y los monstruos se volvieron leyenda. Hoy el regreso al pueblo no trae calma: algo despert\u00f3 en las sombras del establo y del puente roto.',
+  title: 'Página arrancada',
+  text:
+    'Han pasado muchos años. Los escudos y las espadas han mejorado, pero la magia y los monstruos se volvieron leyenda.\n\n'
+    + 'Hoy el silencio del pueblo dice otra cosa. Las puertas abiertas, la feria a medias, el establo sin dueño.\n\n'
+    + 'Si lees esto: el mal no es cuento. Busca la llave del consejero y el puente de las torres.',
 };
 
 function addWall(minX, maxX, minZ, maxZ) { WALLS.push({ minX, maxX, minZ, maxZ }); }
 function addPlatform(minX, maxX, minZ, maxZ, y) { PLATFORMS.push({ minX, maxX, minZ, maxZ, y }); }
-function addRamp(def) { RAMPS.push(def); }
 
-export function getGroundHeight(x, z) {
+export function getGroundHeight(x, z, fromY = Infinity) {
   let best = -Infinity;
   for (const p of PLATFORMS) {
-    if (x >= p.minX && x <= p.maxX && z >= p.minZ && z <= p.maxZ) best = Math.max(best, p.y);
-  }
-  for (const r of RAMPS) {
-    // simple ramp height sample along segment
-    const dx = r.ex - r.sx, dz = r.ez - r.sz;
-    const len2 = dx * dx + dz * dz || 1;
-    const t = Math.max(0, Math.min(1, ((x - r.sx) * dx + (z - r.sz) * dz) / len2));
-    const px = r.sx + dx * t, pz = r.sz + dz * t;
-    const dist = Math.hypot(x - px, z - pz);
-    if (dist <= (r.halfWidth || 5.5) + 0.2) {
-      best = Math.max(best, r.y0 + (r.y1 - r.y0) * t);
+    if (x >= p.minX && x <= p.maxX && z >= p.minZ && z <= p.maxZ && p.y <= fromY + 0.35) {
+      if (p.y > best) best = p.y;
     }
   }
+  const ry = sampleRampY(x, z);
+  if (ry != null && ry <= fromY + 0.35 && ry > best) best = ry;
   return best === -Infinity ? LEVEL0_Y : best;
+}
+
+export function resolveGround(player) {
+  const gy = getGroundHeight(player.x, player.z, player.y);
+  if (player.y <= gy + 0.08) {
+    player.y = gy;
+    if (player.vy < 0) player.vy = 0;
+    player.grounded = true;
+  }
+}
+
+export function resolveWallCollisions(player, radius = 0.38) {
+  for (const w of WALLS) {
+    const nx = Math.max(w.minX, Math.min(player.x, w.maxX));
+    const nz = Math.max(w.minZ, Math.min(player.z, w.maxZ));
+    const dx = player.x - nx;
+    const dz = player.z - nz;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < radius * radius && d2 > 1e-8) {
+      const d = Math.sqrt(d2);
+      const push = (radius - d) / d;
+      player.x += dx * push;
+      player.z += dz * push;
+    } else if (d2 <= 1e-8 && player.x >= w.minX && player.x <= w.maxX && player.z >= w.minZ && player.z <= w.maxZ) {
+      const left = player.x - w.minX, right = w.maxX - player.x;
+      const down = player.z - w.minZ, up = w.maxZ - player.z;
+      const m = Math.min(left, right, down, up);
+      if (m === left) player.x = w.minX - radius;
+      else if (m === right) player.x = w.maxX + radius;
+      else if (m === down) player.z = w.minZ - radius;
+      else player.z = w.maxZ + radius;
+    }
+  }
 }
 
 export function getCurrentZone(x, z) {
   for (const [name, b] of Object.entries(ZONES)) {
     if (x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ) return name;
   }
-  return null;
+  return 'exterior';
 }
 
 export function distanceToPage(x, y, z) { return Math.hypot(x - PAGE_POS.x, y - PAGE_POS.y, z - PAGE_POS.z); }
@@ -69,71 +99,44 @@ export function distanceToKey(x, y, z) { return Math.hypot(x - KEY_POS.x, y - KE
 export function distanceToLever(x, y, z) { return Math.hypot(x - LEVER_POS.x, y - LEVER_POS.y, z - LEVER_POS.z); }
 export function distanceToFood(x, y, z) { return Math.hypot(x - FOOD_POS.x, y - FOOD_POS.y, z - FOOD_POS.z); }
 
-export function resolveWallCollisions(p) {
-  const r = 0.35;
-  for (const w of WALLS) {
-    const nx = Math.max(w.minX, Math.min(p.x, w.maxX));
-    const nz = Math.max(w.minZ, Math.min(p.z, w.maxZ));
-    let dx = p.x - nx, dz = p.z - nz;
-    const d2 = dx * dx + dz * dz;
-    if (d2 >= r * r) continue;
-    if (d2 < 1e-10) {
-      const left = Math.abs(p.x - w.minX), right = Math.abs(w.maxX - p.x);
-      const down = Math.abs(p.z - w.minZ), up = Math.abs(w.maxZ - p.z);
-      const m = Math.min(left, right, down, up);
-      if (m === left) p.x = w.minX - r;
-      else if (m === right) p.x = w.maxX + r;
-      else if (m === down) p.z = w.minZ - r;
-      else p.z = w.maxZ + r;
-    } else {
-      const d = Math.sqrt(d2);
-      const push = (r - d) / d;
-      p.x += dx * push; p.z += dz * push;
-    }
-  }
-}
-
-export function resolveGround(p) {
-  const gy = getGroundHeight(p.x, p.z);
-  if (p.y <= gy + 0.05) {
-    p.y = gy;
-    p.vy = 0;
-    p.grounded = true;
-  } else if (p.y > gy + 0.15) {
-    p.grounded = false;
-  }
-}
-
 export function buildMap1(scene) {
-  WALLS.length = 0; PLATFORMS.length = 0; RAMPS.length = 0;
-  const mat = (c, r = 0.85) => new THREE.MeshStandardMaterial({ color: c, roughness: r });
-  const dirt = mat(0x6b5a45);
-  const stone = mat(0x7a7a72);
-  const grass = mat(0x4a7a3a);
-  const orangeW = mat(0xc47a3a);
-  const dark = mat(0x3a3228);
-  const iron = mat(0x4a4a52, 0.5);
-  const wood = mat(0x6b4a2a);
+  WALLS.length = 0;
+  PLATFORMS.length = 0;
+  clearRamps();
+
+  const mat = (c, r = 0.85, metal = 0.05) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: metal });
+  const dirt = mat(0x5c5346);
+  const stone = mat(0x6e6a62);
+  const grass = mat(0x3f6b3a);
+  const wood = mat(0x6b4a2b);
+  const dark = mat(0x2c2822);
+  const iron = mat(0x4a4e52, 0.45, 0.55);
+  const orangeW = mat(0xb86a2b);
 
   function box(w, h, d, material, x, y, z, solid = false) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
-    m.position.set(x, y, z);
-    m.castShadow = true; m.receiveShadow = true;
-    scene.add(m);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
     if (solid) addWall(x - w / 2, x + w / 2, z - d / 2, z + d / 2);
-    return m;
+    return mesh;
   }
+
   function pad(w, d, y, x, z, material) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.25, d), material);
-    m.position.set(x, y - 0.1, z);
-    m.receiveShadow = true; scene.add(m);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.35, d), material);
+    mesh.position.set(x, y - 0.15, z);
+    mesh.receiveShadow = true;
+    scene.add(mesh);
     addPlatform(x - w / 2, x + w / 2, z - d / 2, z + d / 2, y);
   }
+
   function wallBox(minX, maxX, minZ, maxZ) {
-    addWall(minX, maxX, minZ, maxZ);
-    const w = maxX - minX, d = maxZ - minZ;
-    const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
-    box(w, WALL_H, d, orangeW, cx, LEVEL1_Y + WALL_H / 2, cz, false);
+    const w = Math.max(0.15, maxX - minX);
+    const d = Math.max(0.15, maxZ - minZ);
+    const cx = (minX + maxX) / 2;
+    const cz = (minZ + maxZ) / 2;
+    box(w, WALL_H, d, orangeW, cx, LEVEL1_Y + WALL_H / 2, cz, true);
   }
 
   pad(90, 72, LEVEL1_Y, 45, 36, dirt);
@@ -207,7 +210,7 @@ export function buildMap1(scene) {
   const towerDoor = box(1.4, 2.3, 0.3, wood, 84, LEVEL1_Y + 11.5, 63.2, true);
   towerDoor.userData = { locked: true };
 
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), mat(0x3d5c38, 1)); // hierba exterior de d\u00eda
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), mat(0x3d5c38, 1)); // hierba exterior de día
   ground.rotation.x = -Math.PI / 2;
   ground.position.set(45, -0.8, 36);
   ground.receiveShadow = true;
