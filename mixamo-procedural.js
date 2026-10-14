@@ -194,25 +194,49 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
       return;
     }
 
+    // Combo de 3 golpes fluido (R → L → embestida). Cada golpe usa curva sin()
+    // para entrar y salir en 0, así el bucle no "salta".
     if (attackPhase > 0) {
       attackT += dt;
-      const dur = 0.42;
-      const t = Math.min(1, attackT / dur);
+      const hitDur = 0.38;
+      const t = Math.min(1, attackT / hitDur);
       const wave = Math.sin(t * Math.PI);
+      const blend = t > 0.8 ? (t - 0.8) / 0.2 : 0;
+
       if (attackPhase === 1) {
-        applyLocalRot(bones.rightArm, -0.35 * wave, 0.2 * wave, -1.5 * wave);
-        applyLocalRot(bones.rightForeArm, -1.0 * wave, 0, 0);
-        applyLocalRot(bones.spine1, 0, 0.25 * wave, 0);
-        applyLocalRot(bones.hips, 0, 0.08 * wave, 0);
+        applyLocalRot(bones.rightArm, -0.4 * wave, 0.25 * wave, -1.55 * wave);
+        applyLocalRot(bones.rightForeArm, -1.15 * wave, 0, 0);
+        applyLocalRot(bones.rightShoulder, 0, 0, -0.35 * wave);
+        applyLocalRot(bones.spine1, 0.08 * wave, 0.28 * wave, 0);
+        applyLocalRot(bones.spine, 0.05 * wave, 0.12 * wave, 0);
+        applyLocalRot(bones.hips, 0, 0.1 * wave, 0);
+        applyLocalRot(bones.leftArm, -0.15 * blend, -0.1 * blend, -0.4 * blend);
+      } else if (attackPhase === 2) {
+        applyLocalRot(bones.leftArm, -0.4 * wave, -0.25 * wave, -1.55 * wave);
+        applyLocalRot(bones.leftForeArm, -1.15 * wave, 0, 0);
+        applyLocalRot(bones.leftShoulder, 0, 0, 0.35 * wave);
+        applyLocalRot(bones.spine1, 0.08 * wave, -0.28 * wave, 0);
+        applyLocalRot(bones.spine, 0.05 * wave, -0.12 * wave, 0);
+        applyLocalRot(bones.hips, 0, -0.1 * wave, 0);
+        applyLocalRot(bones.rightArm, -0.15 * blend, 0.1 * blend, -0.4 * blend);
       } else {
-        applyLocalRot(bones.leftArm, -0.35 * wave, -0.2 * wave, -1.5 * wave);
-        applyLocalRot(bones.leftForeArm, -1.0 * wave, 0, 0);
-        applyLocalRot(bones.spine1, 0, -0.25 * wave, 0);
-        applyLocalRot(bones.hips, 0, -0.08 * wave, 0);
+        applyLocalRot(bones.rightArm, -0.55 * wave, 0.15 * wave, -1.2 * wave);
+        applyLocalRot(bones.leftArm, -0.55 * wave, -0.15 * wave, -1.2 * wave);
+        applyLocalRot(bones.rightForeArm, -0.9 * wave, 0, 0);
+        applyLocalRot(bones.leftForeArm, -0.9 * wave, 0, 0);
+        applyLocalRot(bones.spine, 0.35 * wave, 0, 0);
+        applyLocalRot(bones.spine1, 0.4 * wave, 0, 0);
+        applyLocalRot(bones.head, 0.25 * wave, 0, 0);
+        applyLocalRot(bones.hips, 0.12 * wave, 0, 0);
+        if (bones.hips && rest.has(bones.hips)) {
+          const rp = rest.get(bones.hips).pos;
+          bones.hips.position.z = rp.z + 0.12 * wave * height;
+        }
       }
+
       if (t >= 1) {
         attackT = 0;
-        if (attackPhase === 1) attackPhase = 2;
+        if (attackPhase < 3) attackPhase += 1;
         else attackPhase = 0;
       }
       flushSkeleton();
@@ -273,11 +297,15 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
       if (dead) return 'dead';
       if (attackPhase === 1) return 'attack-R';
       if (attackPhase === 2) return 'attack-L';
+      if (attackPhase === 3) return 'attack-C';
       return mode;
     },
     get isDead() { return dead; },
     setMode,
-    attack() { setMode('attack'); },
+    attack() {
+      if (dead) return;
+      if (attackPhase === 0) { attackPhase = 1; attackT = 0; }
+    },
     die,
     update,
     isReady() { return boneCount >= 4 && skinned.length > 0; },
