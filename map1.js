@@ -6,75 +6,82 @@ import * as THREE from 'three';
 import { clearRamps, addRamp, sampleRampY, getSlopeAt, buildRampMesh, RAMPS } from './map-ramps.js';
 import { buildModule2, LEVEL2_Y as MOD2_L2, MOD2 } from './modulo2.js';
 
+export const MAP1_NAME = 'El Regreso';
 export const LEVEL0_Y = 0;
 export const LEVEL1_Y = 6;
-export const WALL_H = 5.0;
 
+export const MAP = { minX: 0, maxX: 90, minZ: 0, maxZ: 72 };
 export const SPAWN = { x: 6.5, y: LEVEL0_Y, z: 3, facing: 0 };
 export const MAP_CENTER = { x: 45, z: 36, y: LEVEL1_Y };
 
 export const ZONES = {
-  exterior: { minX: 0, maxX: 14, minZ: 0, maxZ: 18 },
-  ramp: { minX: 0, maxX: 14, minZ: 8, maxZ: 68 },
-  corridor: { minX: 12, maxX: 36, minZ: 62, maxZ: 72 },
-  plaza: { minX: 13.5, maxX: 67, minZ: 1, maxZ: 63 },
+  ramp: { minX: 0, maxX: 13.5, minZ: 0, maxZ: 72 },
+  corridor: { minX: 13.5, maxX: 67.5, minZ: 63, maxZ: 72 },
+  plaza: { minX: 13.5, maxX: 67.5, minZ: 0, maxZ: 63 },
   stable: { minX: 13.5, maxX: 54, minZ: 43, maxZ: 63 },
-  mod2: { minX: 67, maxX: 90, minZ: 1, maxZ: 54 },
-  towers: { minX: 67, maxX: 90, minZ: 62, maxZ: 72 },
+  module: { minX: 67.5, maxX: 90, minZ: 0, maxZ: 53 },
+  towers: { minX: 67.5, maxX: 90, minZ: 63, maxZ: 72 },
 };
 
-export const WALLS = [];
-export const PLATFORMS = [];
+export function getCurrentZone(x, z) {
+  for (const [name, b] of Object.entries(ZONES)) {
+    if (x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ) return name;
+  }
+  return null;
+}
+
+export const STORY_PAGE = {
+  title: 'Oficina del consejero',
+  text: `...los sellos se debilitan.\nLo que creíamos leyenda ha vuelto a caminar.\nBusca las seis runas.`,
+};
 
 let PAGE_POS = new THREE.Vector3(76, LEVEL1_Y + 1.05, 10);
 let KEY_POS = new THREE.Vector3(78, LEVEL1_Y + 1.02, 14);
 let LEVER_POS = new THREE.Vector3(84, LEVEL1_Y + 11, 67);
 let FOOD_POS = new THREE.Vector3(28, LEVEL1_Y + 0.45, 52);
 
-export const STORY_PAGE = {
-  title: 'Página arrancada',
-  text:
-    'Han pasado muchos años. Los escudos y las espadas han mejorado, pero la magia y los monstruos se volvieron leyenda.\n\n'
-    + 'Hoy el silencio del pueblo dice otra cosa. Las puertas abiertas, la feria a medias, el establo sin dueño.\n\n'
-    + 'Si lees esto: el mal no es cuento. Busca la llave del consejero y el puente de las torres.',
-};
+const PLAYER_R = 0.45;
+const WALL_H = 5.0;
+
+export const WALLS = [];
+export const PLATFORMS = [];
 
 function addWall(minX, maxX, minZ, maxZ) { WALLS.push({ minX, maxX, minZ, maxZ }); }
 function addPlatform(minX, maxX, minZ, maxZ, y) { PLATFORMS.push({ minX, maxX, minZ, maxZ, y }); }
 
 export function getGroundHeight(x, z, fromY = Infinity) {
   let best = -Infinity;
+  const ry = sampleRampY(x, z);
+  if (ry !== null && ry <= fromY + 0.85 && ry > best) best = ry;
   for (const p of PLATFORMS) {
-    if (x >= p.minX && x <= p.maxX && z >= p.minZ && z <= p.maxZ && p.y <= fromY + 0.35) {
-      if (p.y > best) best = p.y;
+    if (x >= p.minX && x <= p.maxX && z >= p.minZ && z <= p.maxZ) {
+      if (p.y <= fromY + 0.85 && p.y > best) best = p.y;
     }
   }
-  const ry = sampleRampY(x, z);
-  if (ry != null && ry <= fromY + 0.35 && ry > best) best = ry;
   return best === -Infinity ? LEVEL0_Y : best;
 }
 
 export function resolveGround(player) {
   const gy = getGroundHeight(player.x, player.z, player.y);
-  if (player.y <= gy + 0.08) {
-    player.y = gy;
-    if (player.vy < 0) player.vy = 0;
-    player.grounded = true;
+  if (player.y <= gy + 0.7) {
+    if (player.vy <= 0.7) {
+      player.y = gy; player.vy = 0;
+      player.grounded = true; player.jumping = false;
+      player.coyote = 0.12; player.airTime = 0;
+    }
   }
 }
 
-export function resolveWallCollisions(player, radius = 0.38) {
+export function resolveWallCollisions(player, radius = PLAYER_R) {
   for (const w of WALLS) {
     const nx = Math.max(w.minX, Math.min(player.x, w.maxX));
     const nz = Math.max(w.minZ, Math.min(player.z, w.maxZ));
-    const dx = player.x - nx;
-    const dz = player.z - nz;
+    const dx = player.x - nx, dz = player.z - nz;
     const d2 = dx * dx + dz * dz;
     if (d2 < radius * radius && d2 > 1e-8) {
       const d = Math.sqrt(d2);
       const push = (radius - d) / d;
-      player.x += dx * push;
-      player.z += dz * push;
+      player.x += dx * push; player.z += dz * push;
     } else if (d2 <= 1e-8 && player.x >= w.minX && player.x <= w.maxX && player.z >= w.minZ && player.z <= w.maxZ) {
       const left = player.x - w.minX, right = w.maxX - player.x;
       const down = player.z - w.minZ, up = w.maxZ - player.z;
@@ -85,13 +92,6 @@ export function resolveWallCollisions(player, radius = 0.38) {
       else player.z = w.maxZ + radius;
     }
   }
-}
-
-export function getCurrentZone(x, z) {
-  for (const [name, b] of Object.entries(ZONES)) {
-    if (x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ) return name;
-  }
-  return 'exterior';
 }
 
 export function distanceToPage(x, y, z) { return Math.hypot(x - PAGE_POS.x, y - PAGE_POS.y, z - PAGE_POS.z); }
@@ -210,7 +210,7 @@ export function buildMap1(scene) {
   const towerDoor = box(1.4, 2.3, 0.3, wood, 84, LEVEL1_Y + 11.5, 63.2, true);
   towerDoor.userData = { locked: true };
 
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), mat(0x3d5c38, 1)); // hierba exterior de día
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), mat(0x3d5c38, 1));
   ground.rotation.x = -Math.PI / 2;
   ground.position.set(45, -0.8, 36);
   ground.receiveShadow = true;
@@ -238,5 +238,6 @@ export function tryUnlockTowerDoor(mapData, hasKey) {
   if (!mapData?.towerDoor || !mapData.towerDoor.userData.locked || !hasKey) return false;
   mapData.towerDoor.userData.locked = false;
   mapData.towerDoor.visible = false;
+  mapData.towerDoor.position.y = -40;
   return true;
 }
