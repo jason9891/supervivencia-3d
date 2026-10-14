@@ -4,23 +4,20 @@
 
 export const MAX_HP = 100;
 export const MAX_STAMINA = 100;
-export const STAMINA_REGEN = 24;   // por segundo
-export const STAMINA_DELAY = 0.7;  // pausa antes de empezar a recuperar
-export const COMBO_WINDOW = 0.55;  // tiempo para encadenar el siguiente golpe
+export const STAMINA_REGEN = 24;
+export const STAMINA_DELAY = 0.7;
+export const COMBO_WINDOW = 0.55;
 export const POTION_COOLDOWN = 0.8;
 export const FURY_TIME = 12;
 export const FURY_MULT = 1.35;
-export const BLOCK_ARC = 1.22;     // ~70°: el bloqueo solo cubre lo que viene de frente
+export const BLOCK_ARC = 1.22;
 
 export const ATTACK_ICON = { side: '↔', forward: '▲', neutral: '●' };
 export const ATTACK_LABEL = { side: 'lado', forward: 'adelante', neutral: 'quieto' };
 
-// --- Armas ----------------------------------------------------------------
 const atk = (name, dmg, reach, arc, stamina, dur, lunge, extra = {}) =>
   ({ name, dmg, reach, arc, stamina, dur, hit: dur * 0.5, lunge, ...extra });
 
-// Tipo de ataque según la dirección en la que te mueves al pulsar ATACAR:
-//   adelante (▲) = estocada larga · hacia un lado (↔) = tajo amplio · quieto (●) = golpe alto
 export const WEAPONS = {
   espada: {
     id: 'espada', name: 'Espada', weight: 3,
@@ -59,7 +56,6 @@ export const WEAPONS = {
       { seq: ['side', 'side', 'neutral'], name: 'Terremoto', mult: 2.3, stagger: true },
     ],
   },
-  // --- Resto del pack (Quaternius, CC0): ligeras y rápidas → pesadas y lentas ---
   daga: {
     id: 'daga', name: 'Daga', weight: 1,
     attacks: {
@@ -143,7 +139,6 @@ export const WEAPONS = {
   },
 };
 
-// --- Armaduras y escudos (el primer elemento de cada casilla es "sin nada") ---
 export const ARMOR = {
   casco: {
     ninguno: { name: 'Sin casco', defense: 0, weight: 0 },
@@ -164,7 +159,7 @@ export const ARMOR = {
     placas: { name: 'Grebas de placas', defense: 7, weight: 4, tier: 3 },
   },
   escudo: {
-    ninguno: { name: 'Sin escudo', defense: 0, weight: 0, block: 0.3 }, // se bloquea con el arma
+    ninguno: { name: 'Sin escudo', defense: 0, weight: 0, block: 0.3 },
     rodela: { name: 'Rodela', defense: 1, weight: 2, block: 0.5, tier: 1 },
     escudo: { name: 'Escudo de acero', defense: 2, weight: 4, block: 0.7, tier: 2 },
     torre: { name: 'Escudo torre', defense: 3, weight: 7, block: 0.85, tier: 3 },
@@ -204,7 +199,6 @@ export function computeStats(eq) {
   };
 }
 
-// Cambia la pieza de una casilla (arma o armadura) entre las que ya tienes.
 export function cycleEquip(unlocked, equip, slot, dir = 1) {
   const table = slot === 'weapon' ? WEAPONS : ARMOR[slot];
   const order = Object.keys(table).filter(id => unlocked[slot].includes(id));
@@ -217,7 +211,6 @@ export function itemName(slot, id) {
   return slot === 'weapon' ? WEAPONS[id].name : ARMOR[slot][id].name;
 }
 
-// --- Pociones ---------------------------------------------------------------
 export const POTIONS = {
   vida: { name: 'Poción de vida', short: 'VIDA' },
   energia: { name: 'Poción de energía', short: 'ENERGÍA' },
@@ -243,8 +236,6 @@ export function usePotion(f, inv, kind) {
   return { ok: true, msg: POTIONS[kind].name };
 }
 
-// --- Cofres -------------------------------------------------------------------
-// seg = índice de plataforma del camino donde está el cofre.
 export const CHESTS = [
   { seg: 1, weapon: ['hacha'], armor: { casco: ['cuero'] }, potions: { vida: 2 } },
   { seg: 2, armor: { pechera: ['malla'], escudo: ['rodela'] }, potions: { energia: 1 } },
@@ -268,7 +259,6 @@ export function openChest(unlocked, inv, chest) {
   return got;
 }
 
-// --- Combatientes -------------------------------------------------------------
 export function createFighter(opts = {}) {
   const hp = opts.hp ?? MAX_HP;
   return {
@@ -285,7 +275,6 @@ export function createFighter(opts = {}) {
 const wrapAngle = a => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
 const endsWith = (arr, seq) => arr.length >= seq.length && seq.every((v, i) => arr[arr.length - seq.length + i] === v);
 
-// Tipo de ataque según la dirección pulsada.
 export function attackTypeFor(f, side) {
   if (side) return 'side';
   if (f > 0) return 'forward';
@@ -312,7 +301,6 @@ function startAttack(fi, type) {
   fi.blocking = false;
 }
 
-// Intenta atacar. Si ya estás atacando y pasó el punto de impacto, deja el golpe en cola.
 export function tryAttack(fi, type) {
   if (fi.dead || fi.hitstun > 0) return false;
   const data = fi.weapon.attacks[type];
@@ -331,7 +319,6 @@ export function setBlocking(fi, on) {
   else fi.blocking = false;
 }
 
-// Avanza el estado del combatiente. Devuelve eventos: { type: 'strike' | 'attackEnd' }.
 export function updateFighter(fi, dt, regenMul = 1) {
   const ev = [];
   if (fi.potionCd > 0) fi.potionCd = Math.max(0, fi.potionCd - dt);
@@ -357,7 +344,6 @@ export function updateFighter(fi, dt, regenMul = 1) {
   return ev;
 }
 
-// ¿Está `tgt` dentro del cono de alcance de `att`?
 export function inCone(att, tgt, reach, arc) {
   const dx = tgt.x - att.x, dz = tgt.z - att.z;
   const dist = Math.hypot(dx, dz);
@@ -372,7 +358,6 @@ function frontal(target, attacker) {
   return Math.abs(wrapAngle(Math.atan2(dx, dz) - target.facing)) <= BLOCK_ARC;
 }
 
-// Aplica el daño de un golpe a `target`. `tstats` = { defense, blockFrac }.
 export function resolveHit(attacker, target, attack, tstats) {
   const raw = attack.data.dmg * attack.mult * (attacker.fury > 0 ? FURY_MULT : 1);
   const armored = raw / (1 + tstats.defense / 40);
@@ -401,14 +386,12 @@ export function resolveHit(attacker, target, attack, tstats) {
   return { damage: dmg, blocked, guardBroken, killed: target.dead, target };
 }
 
-// Golpe del jugador contra todos los enemigos que alcance. Devuelve la lista de impactos.
 export function resolvePlayerStrike(player, enemies, attack, onPlat) {
   const hits = [];
   for (const e of enemies) {
     if (e.dead) continue;
     if (!inCone(player, e, attack.reach, attack.arc)) continue;
     const r = resolveHit(player, e, attack, e.stats);
-    // Pequeño empujón hacia atrás (sin sacarlo del camino).
     const dx = e.x - player.x, dz = e.z - player.z, d = Math.hypot(dx, dz) || 1;
     const kb = attack.stagger ? 0.7 : 0.35;
     if (!r.killed && onPlat(e.x + dx / d * kb, e.z + dz / d * kb)) { e.x += dx / d * kb; e.z += dz / d * kb; }
@@ -417,9 +400,8 @@ export function resolvePlayerStrike(player, enemies, attack, onPlat) {
   return hits;
 }
 
-// --- Enemigos -----------------------------------------------------------------
 export const ENEMIES = {
-  soldado: { name: 'Soldado caído', hp: 50, dmg: 9, speed: 1.5, reach: 1.7, windup: 0.6, recover: 1.0, aggro: 9, defense: 4, radius: 0.45, scale: 1, tint: 0x7a2f27 },
+  soldado: { name: 'Soldado caído', hp: 50, dmg: 9, speed: 1.5, reach: 1.7, windup: 0.55, recover: 0.55, aggro: 9, defense: 4, radius: 0.45, scale: 1, tint: 0x7a2f27 },
   guardian: { name: 'Guardián', hp: 120, dmg: 18, speed: 1.1, reach: 2.0, windup: 0.85, recover: 1.4, aggro: 11, defense: 12, radius: 0.55, scale: 1.15, tint: 0x2f4263 },
 };
 
@@ -434,15 +416,30 @@ export function createEnemy(kind, x, z) {
   return e;
 }
 
-// Avanza la IA de un enemigo. Devuelve eventos { type: 'enemyStrike', enemy }.
+/** Intenta avanzar hacia (tx,tz); si choca, desliza por el eje libre. */
+function tryMoveEnemy(e, tx, tz, step, onPlat) {
+  const dx = tx - e.x, dz = tz - e.z;
+  const dist = Math.hypot(dx, dz);
+  if (dist < 1e-6) return false;
+  const ux = dx / dist, uz = dz / dist;
+  const nx = e.x + ux * step, nz = e.z + uz * step;
+  if (onPlat(nx, nz)) { e.x = nx; e.z = nz; return true; }
+  if (onPlat(e.x + ux * step, e.z)) { e.x += ux * step; return true; }
+  if (onPlat(e.x, e.z + uz * step)) { e.z += uz * step; return true; }
+  for (const a of [0.6, -0.6, 1.2, -1.2]) {
+    const c = Math.cos(a), s = Math.sin(a);
+    const rx = ux * c - uz * s, rz = ux * s + uz * c;
+    const ax = e.x + rx * step, az = e.z + rz * step;
+    if (onPlat(ax, az)) { e.x = ax; e.z = az; return true; }
+  }
+  return false;
+}
+
 export function stepEnemy(e, player, onPlat, dt) {
   const ev = [];
   if (e.dead) { e.deadT += dt; e.state = 'dead'; return ev; }
-  if (e.hitstun > 0) {
-    e.hitstun = Math.max(0, e.hitstun - dt);
-    e.state = 'hurt'; e.t = 0;
-    return ev;
-  }
+  // Hitstun: no detiene al monstruo (solo se descuenta; sin estado hurt)
+  if (e.hitstun > 0) e.hitstun = Math.max(0, e.hitstun - dt);
   if (e.state === 'hurt') e.state = 'chase';
   if (player.dead) { e.state = 'idle'; return ev; }
   const dx = player.x - e.x, dz = player.z - e.z, dist = Math.hypot(dx, dz);
@@ -455,31 +452,33 @@ export function stepEnemy(e, player, onPlat, dt) {
     if (dist <= e.def.reach * 0.85) { e.state = 'windup'; e.t = 0; }
     else {
       const step = e.def.speed * dt;
-      const nx = e.x + dx / dist * step, nz = e.z + dz / dist * step;
-      if (onPlat(nx, nz)) { e.x = nx; e.z = nz; }
+      tryMoveEnemy(e, player.x, player.z, step, onPlat);
     }
   } else if (e.state === 'windup') {
     e.t += dt;
-    if (e.t < e.def.windup * 0.75) e.facing = face; // deja de apuntar al final: se puede esquivar
+    e.facing = face;
+    // No avanza durante el golpe (evita levitar sin pasos)
     if (e.t >= e.def.windup) {
       ev.push({ type: 'enemyStrike', enemy: e });
       e.state = 'recover'; e.t = 0;
     }
   } else if (e.state === 'recover') {
     e.t += dt;
+    e.facing = face;
+    if (dist > e.def.reach * 1.05) {
+      tryMoveEnemy(e, player.x, player.z, e.def.speed * 0.35 * dt, onPlat);
+    }
     if (e.t >= e.def.recover) { e.state = 'chase'; e.t = 0; }
   }
   return ev;
 }
 
-// Golpe de un enemigo contra el jugador. Saltar lo esquiva. Devuelve el resultado o null.
 export function resolveEnemyStrike(e, player, pstats) {
   if (player.dead || (player.y || 0) > 0.5) return null;
   if (!inCone(e, player, e.def.reach * 1.15, 1.7)) return null;
   return resolveHit(e, player, { data: { dmg: e.def.dmg }, mult: 1, stagger: false }, pstats);
 }
 
-// Evita que los enemigos se amontonen en el mismo punto.
 export function separate(enemies, onPlat, minDist = 1.0) {
   for (let i = 0; i < enemies.length; i++) for (let j = i + 1; j < enemies.length; j++) {
     const a = enemies[i], b = enemies[j];
@@ -493,10 +492,9 @@ export function separate(enemies, onPlat, minDist = 1.0) {
   }
 }
 
-// --- Objetivo -------------------------------------------------------------------
 export function objectiveState({ best, totalGaps, enemiesDead, enemiesTotal, reachedPortal }) {
   if (reachedPortal) return { stage: 3, text: '¡VICTORIA! Cruzaste el portal' };
   if (best < totalGaps) return { stage: 0, text: 'OBJETIVO: cruza los barrancos ' + best + '/' + totalGaps };
   if (enemiesDead < enemiesTotal) return { stage: 1, text: 'OBJETIVO: derrota a los guardianes ' + enemiesDead + '/' + enemiesTotal };
-  return { stage: 2, text: 'OBJETIVO: ¡cruza el portal dorado!' };
+  return { stage: 2, text: 'OBJETIVO: alcanza el portal' };
 }
