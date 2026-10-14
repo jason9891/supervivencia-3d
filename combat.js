@@ -139,6 +139,11 @@ export const WEAPONS = {
   },
 };
 
+// Variantes: mismo juego de golpes, combos y peso que un arma base; solo cambian el nombre y el modelo (equipment.js).
+// Así una espada nueva (p. ej. una hecha en Tripo) entra al inventario con el mismo comportamiento que las espadas actuales.
+const variant = (base, id, name, extra = {}) => ({ ...WEAPONS[base], id, name, ...extra });
+WEAPONS.espada_veterano = variant('espada', 'espada_veterano', 'Espada del veterano');
+
 export const ARMOR = {
   casco: {
     ninguno: { name: 'Sin casco', defense: 0, weight: 0 },

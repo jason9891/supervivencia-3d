@@ -26,6 +26,7 @@ const hitOf = ev => ev.find(e => e.type === 'hit');
   const ids = Object.keys(C.WEAPONS), seq = [b.equip.weapon]; for (let i = 0; i < ids.length; i++) seq.push(B.cycle(b, 'weapon'));
   check('cambiar arma recorre todas las armas y vuelve a la espada', seq.join(',') === [...ids, 'espada'].join(',') && ids.length >= 12, `(${seq.join(' → ')})`);
   check('pick equipa un arma concreta, la cambia en el combatiente y rechaza ids falsos', B.pick(b, 'weapon', 'lanza') && b.fighter.weapon.id === 'lanza' && !B.pick(b, 'weapon', 'lanzallamas') && b.equip.weapon === 'lanza');
+  check('espada_veterano (Tripo) se equipa y comparte golpes, combos y peso con la espada', B.pick(b, 'weapon', 'espada_veterano') && b.fighter.weapon.id === 'espada_veterano' && b.fighter.weapon.attacks === C.WEAPONS.espada.attacks && b.fighter.weapon.combos === C.WEAPONS.espada.combos && b.fighter.weapon.weight === C.WEAPONS.espada.weight && b.fighter.weapon.name === 'Espada del veterano');
   B.pick(b, 'weapon', 'espada');
   check('el combatiente usa el arma equipada', b.fighter.weapon.id === 'espada');
   const d = B.describeWeapon(b);

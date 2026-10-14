@@ -65,6 +65,10 @@ import fs from 'node:fs';
 const readGlb = f => { const b = fs.readFileSync(f); const jl = b.readUInt32LE(12); return { magic: b.toString('latin1', 0, 4), json: JSON.parse(b.toString('utf8', 20, 20 + jl)) }; };
 for (const [id, nm] of Object.entries(EQ.WEAPON_MODEL)) {
   const g = readGlb(`assets/weapons/${nm}.glb`), x = g.json.nodes[0].extras;
+  if (EQ.MODEL_FIX[nm]) { // modelo propio (Tripo): sin extras; se endereza con MODEL_FIX y se carga con meshopt
+    check(`${id} (${nm}.glb): GLB válido con ajuste MODEL_FIX (giro, agarre y escala)`, g.magic === 'glTF' && EQ.MODEL_FIX[nm].rot.length === 3 && EQ.MODEL_FIX[nm].pos.length === 3 && EQ.MODEL_FIX[nm].scale > 0.3 && EQ.MODEL_FIX[nm].scale < 1.6);
+    continue;
+  }
   check(`${id} (${nm}.glb): GLB válido, largo 0.35–1.7 m, hoja hacia +Z con el agarre en el origen`, g.magic === 'glTF' && x.size[2] > 0.35 && x.size[2] < 1.7 && x.min[2] < -0.05 && x.max[2] > 0.3);
 }
 for (const [id, nm] of Object.entries(EQ.SHIELD_MODEL)) {
@@ -74,7 +78,8 @@ for (const [id, nm] of Object.entries(EQ.SHIELD_MODEL)) {
 class FakeLoader { async loadAsync(url) { if (url.endsWith('/Axe.glb')) throw new Error('404'); const sc = new Obj(); sc.add(new Mesh({ type: 'glb' }, {})); sc.clone = () => { const c = new Obj(); c.add(new Mesh({ type: 'glb' }, {})); return c; }; return { scene: sc }; } }
 const mq = new Obj(), bq = {}; mq.getObjectByName = n => bq[n] || (bq[n] = new Obj());
 const eqm = createEquipment(THREE, H.PROFILES.hero);
-check('loadModels cuenta los GLB cargados y tolera los que fallan (14 de 15)', await eqm.loadModels(FakeLoader) === 14);
+const totalGlb = new Set([...Object.values(EQ.WEAPON_MODEL), ...Object.values(EQ.SHIELD_MODEL)]).size;
+check(`loadModels cuenta los GLB cargados y tolera los que fallan (${totalGlb - 1} de ${totalGlb})`, await eqm.loadModels(FakeLoader) === totalGlb - 1);
 const stq = {}; eqm.apply(mq, { weapon: 'espada', escudo: 'torre' }, stq);
 let glbs = 0; mq.traverse?.(() => {}); [bq.hand_r, bq.lowerarm_l].forEach(b => b.traverse(o => { if (o.geometry?.type === 'glb') glbs++; }));
 check('espada y escudo torre usan el modelo GLB', glbs === 2);

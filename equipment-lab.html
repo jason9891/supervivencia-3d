@@ -37,6 +37,12 @@ button.on{background:#6b5a22;border-color:#f3d7a0}
   <label>ESCUDO<select id="s-escudo"></select></label>
   <div class="row"><button data-preset="nada">SIN EQUIPO</button><button data-preset="cuero">CUERO</button><button data-preset="malla">MALLA</button><button data-preset="placas">PLACAS</button><button data-preset="rand">AL AZAR</button></div>
   <div id="stats"></div>
+  <div id="tune" style="display:none;grid-column:1/-1;gap:6px">
+    <h4>AJUSTAR ARMA (modelo de Tripo)</h4>
+    <div id="tuneSliders" style="display:grid;gap:6px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))"></div>
+    <div class="row"><button id="tuneFlip">INVERTIR PUNTA</button><button id="tuneCopy">COPIAR VALORES</button><button data-view="hand">VER MANO</button></div>
+    <code id="tuneOut" style="font-size:11px;color:#e8dfce;word-break:break-all;-webkit-user-select:text;user-select:text"></code>
+  </div>
   <h4>MOVIMIENTO</h4>
   <div class="row" id="moves"></div>
   <div class="row"><label style="flex:1;min-width:200px">TODAS LAS ANIMACIONES<select id="clipPick"></select></label></div>
@@ -48,7 +54,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.m
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
 import * as C from './combat.js';
 import { loadHero, fitModel } from './hero.js';
-import { createEquipment } from './equipment.js';
+import { createEquipment, MODEL_FIX, WEAPON_MODEL } from './equipment.js';
 
 // Taller de equipo: el humano (CC0) con las animaciones de UAL y las piezas de equipment.js (las mismas del juego).
 // Sin enlaces externos: todo sale del repositorio. Solo muestra; no cambia el personaje ni el mapa.
@@ -70,6 +76,7 @@ floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 
 // --- Selectores de equipo (nombres y piezas salen de combat.js) ---
 const equip = C.defaultEquipment();
+{ const q = new URLSearchParams(location.search).get('arma'); if (q && C.WEAPONS[q]) equip.weapon = q; }   // equipment-lab.html?arma=espada_veterano
 const SLOT_IDS = ['weapon', 'casco', 'pechera', 'grebas', 'escudo'];
 const table = slot => slot === 'weapon' ? C.WEAPONS : C.ARMOR[slot];
 for (const slot of SLOT_IDS) {
@@ -96,8 +103,43 @@ const store = {}, actions = new Map(), pool = new Map();
 const norm = n => (n || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 const actor = new THREE.Group(); scene.add(actor);
 
+// --- Ajuste a ojo de las armas de Tripo (MODEL_FIX en equipment.js): giro, agarre y escala en vivo ---
+const fxOf = () => MODEL_FIX[WEAPON_MODEL[equip.weapon]];
+const DEG = Math.PI / 180;
+const TUNE = [
+  ['GIRO X (°)', fx => fx.rot[0] / DEG, (fx, v) => { fx.rot[0] = v * DEG; }, -180, 180, 1],
+  ['GIRO Y (°)', fx => fx.rot[1] / DEG, (fx, v) => { fx.rot[1] = v * DEG; }, -180, 180, 1],
+  ['GIRO Z (°)', fx => fx.rot[2] / DEG, (fx, v) => { fx.rot[2] = v * DEG; }, -180, 180, 1],
+  ['AGARRE a lo largo (m)', fx => fx.pos[2], (fx, v) => { fx.pos[2] = v; }, -0.8, 0.8, 0.01],
+  ['LADO (m)', fx => fx.pos[0], (fx, v) => { fx.pos[0] = v; }, -0.3, 0.3, 0.005],
+  ['ALTO (m)', fx => fx.pos[1], (fx, v) => { fx.pos[1] = v; }, -0.3, 0.3, 0.005],
+  ['ESCALA', fx => fx.scale, (fx, v) => { fx.scale = v; }, 0.3, 1.6, 0.01],
+];
+const tuneInputs = [];
+for (const [label, get, set, min, max, step] of TUNE) {
+  const l = document.createElement('label'); l.textContent = label;
+  const r = document.createElement('input'); r.type = 'range'; r.min = min; r.max = max; r.step = step; r.style.width = '100%';
+  r.addEventListener('input', () => { const fx = fxOf(); if (!fx) return; set(fx, Number(r.value)); redraw(); });
+  l.appendChild(r); $('tuneSliders').appendChild(l); tuneInputs.push([r, get]);
+}
+const fxText = () => { const fx = fxOf(), r = x => +x.toFixed(3); return fx ? WEAPON_MODEL[equip.weapon] + ': { rot: [' + fx.rot.map(r).join(', ') + '], pos: [' + fx.pos.map(r).join(', ') + '], scale: ' + r(fx.scale) + ', metal: ' + fx.metal + ', rough: ' + fx.rough + ' },' : ''; };
+function syncTune() {
+  const fx = fxOf(); $('tune').style.display = fx ? 'grid' : 'none';
+  if (!fx) return;
+  for (const [r, get] of tuneInputs) r.value = get(fx);
+  $('tuneOut').textContent = fxText();
+}
+function redraw() { if (eqv) eqv.apply(info.model, equip, store, unit); $('tuneOut').textContent = fxText(); }
+$('tuneFlip').addEventListener('click', () => { const fx = fxOf(); if (!fx) return; fx.rot[0] = -fx.rot[0]; fx.pos[2] = -fx.pos[2]; syncTune(); redraw(); });
+$('tuneCopy').addEventListener('click', async () => {
+  const t = fxText();
+  try { await navigator.clipboard.writeText(t); status.textContent = 'Valores copiados: pégalos en el chat.'; }
+  catch { status.textContent = 'No se pudo copiar solo: selecciona el texto de abajo y cópialo.'; }
+});
+
 function refresh() {
   if (eqv) eqv.apply(info.model, equip, store, unit);
+  syncTune();
   const st = C.computeStats(equip);
   $('stats').textContent = 'Defensa ' + st.defense + ' · Peso ' + st.weight + ' · Bloqueo ' + Math.round(st.blockFrac * 100) + '% · Velocidad ×' + st.speedMul.toFixed(2);
 }

@@ -18,8 +18,17 @@ export const WEAPON_MODEL = {
   espada: 'Sword', hacha: 'Axe', maza: 'Hammer_Small',
   daga: 'Dagger', daga_curva: 'Dagger_2', espada_larga: 'Sword_2', mandoble: 'Sword_Big', claymore: 'Claymore',
   hacha_mano: 'Axe_Small', hacha_guerra: 'Axe_Double', martillo: 'Hammer_Double', lanza: 'Spear',
+  espada_veterano: 'Espada_del_veterano',   // hecha en Tripo (ver MODEL_FIX)
 };
 export const SHIELD_MODEL = { rodela: 'Shield_Round', escudo: 'Shield_Heater', torre: 'Shield_Heater_2' };
+
+// Modelos que NO vienen con el agarre en el origen y la hoja en +Z (p. ej. los de Tripo: centrados y apuntando a +Y, con
+// compresión meshopt y material mate). `rot` (rad, XYZ) y `pos` (m) se aplican al modelo antes de ponerlo en la mano;
+// `metal`/`rough` sustituyen al material. Se afinan a ojo en equipment-lab.html (panel AJUSTAR ARMA → COPIAR VALORES).
+export const MODEL_FIX = {
+  Espada_del_veterano: { rot: [Math.PI / 2, 0, 0], pos: [0, 0, 0.35], scale: 0.9, metal: 0.7, rough: 0.4 },
+};
+const MESHOPT_URL = 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/meshopt_decoder.module.js';
 const SHIELD_BACK_X = { Shield_Round: 0.07, Shield_Heater: 0.06, Shield_Heater_2: 0.04 }; // lado del asa (x máximo) de cada escudo
 
 export function createEquipment(THREE, profile = PROFILES.hero) {
@@ -29,13 +38,29 @@ export function createEquipment(THREE, profile = PROFILES.hero) {
   // Carga los GLB (en paralelo). Devuelve cuántos cargaron; los que fallen se sustituyen por la forma simple.
   async function loadModels(GLTFLoader, dir = MODEL_DIR) {
     const loader = new GLTFLoader(); let n = 0;
+    // Los modelos de Tripo vienen comprimidos con meshopt: sin el decodificador no cargan (y se ve la forma simple).
+    try {
+      const { MeshoptDecoder } = await import(MESHOPT_URL);
+      if (MeshoptDecoder.ready) await MeshoptDecoder.ready;
+      loader.setMeshoptDecoder?.(MeshoptDecoder);
+    } catch (e) { /* sin decodificador (p. ej. en Node): solo cargan los GLB sin comprimir */ }
     const names = [...new Set([...Object.values(WEAPON_MODEL), ...Object.values(SHIELD_MODEL)])];
     await Promise.all(names.map(async nm => {
-      try { models[nm] = (await loader.loadAsync(dir + nm + '.glb')).scene; n++; } catch (e) { /* queda la forma simple */ }
+      try {
+        const scene = (await loader.loadAsync(dir + nm + '.glb')).scene;
+        const fx = MODEL_FIX[nm];
+        if (fx) scene.traverse?.(o => { if (o.isMesh && o.material && fx.metal != null) { o.material.metalness = fx.metal; o.material.roughness = fx.rough; } });
+        models[nm] = scene; n++;
+      } catch (e) { /* queda la forma simple */ }
     }));
     return n;
   }
-  const modelPiece = nm => { const m = nm && models[nm]; return m ? group(m.clone(true)) : null; };
+  const modelPiece = nm => {
+    const m = nm && models[nm]; if (!m) return null;
+    const inner = m.clone(true), fx = MODEL_FIX[nm];
+    if (fx) { inner.rotation?.set(...fx.rot); inner.position?.set(...fx.pos); inner.scale?.setScalar(fx.scale); }
+    return group(inner);
+  };
   const mat = (key, color, metal = 0, rough = 0.7) =>
     cache[key] ?? (cache[key] = new THREE.MeshStandardMaterial({ color, metalness: metal, roughness: rough }));
   const steel = () => mat('steel', 0xb4bcc4, 0.8, 0.35);

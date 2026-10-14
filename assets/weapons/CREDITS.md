@@ -11,3 +11,9 @@ ya en **metros** y orientados para la mano del personaje:
 En uso: espada=Sword, hacha=Axe, maza=Hammer_Small, rodela=Shield_Round, escudo=Shield_Heater, torre=Shield_Heater_2.
 Sin usar todavía (listos para armas nuevas): Sword_2, Sword_Big, Claymore, Dagger, Dagger_2, Axe_Small, Axe_Double, Hammer_Double, Spear, Shield_Round_2.
 Si un GLB no carga, `equipment.js` dibuja la forma simple de respaldo.
+
+## Modelos propios (Tripo)
+`Espada_del_veterano.glb`: espada generada en Tripo por el autor del proyecto (7 500 caras, textura 2048 px, comprimida con meshopt).
+No trae el agarre en el origen ni la hoja en +Z, así que `equipment.js` la endereza con `MODEL_FIX` (giro, agarre, escala, material).
+En el inventario es el arma `espada_veterano`: mismos golpes, combos y peso que la espada (`variant` en `combat.js`).
+Se ajusta a ojo en `equipment-lab.html?arma=espada_veterano` (panel AJUSTAR ARMA).
