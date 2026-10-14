@@ -9,9 +9,9 @@ import {
 } from './combat.js';
 
 const ENEMY_URL = './assets/characters/tripo_rigging_a71e42e9-2739-425b-a16c-3aa7dba627a6_meshopt.glb';
-const TARGET_HEIGHT = 1.85;
-// modelo mira -Z respecto al facing del juego
-const FACE_OFFSET = Math.PI;
+const TARGET_HEIGHT = 0.95; // ~mitad de la altura del personaje
+// corregir perfil izquierdo → de frente
+const FACE_OFFSET = Math.PI + Math.PI / 2;
 
 const STABLE_DOOR = { minX: 44.5, maxX: 55.5, minZ: 42.0, maxZ: 48.5 };
 
@@ -126,7 +126,7 @@ export async function createEnemyRuntime(opts) {
 
   async function spawn(kind, x, z) {
     const data = createEnemy(kind || 'soldado', x, z);
-    data.def = { ...data.def, speed: 2.6, aggro: 18 };
+    data.def = { ...data.def, speed: 5.2, aggro: 18 }; // más rápido, misma relación piernas
     data.state = 'idle';
     data.y = getGroundY(x, z);
 
@@ -137,10 +137,10 @@ export async function createEnemyRuntime(opts) {
       console.warn('enemy glb fail', e);
       const root = new THREE.Group();
       const mesh = new THREE.Mesh(
-        new THREE.CapsuleGeometry(0.35, 1.1, 6, 12),
+        new THREE.CapsuleGeometry(0.22, 0.55, 6, 12),
         new THREE.MeshStandardMaterial({ color: 0x7a2f27 })
       );
-      mesh.position.y = 0.9;
+      mesh.position.y = 0.5;
       root.add(mesh);
       root.position.set(x, data.y, z);
       scene.add(root);
@@ -232,7 +232,7 @@ export async function createEnemyRuntime(opts) {
         syncAnim(unit);
         if (unit.anim) unit.anim.update(dt);
         const bar = unit.hpBar;
-        const s0 = toScreen(e.x, e.y + 2.15, e.z);
+        const s0 = toScreen(e.x, e.y + 1.15, e.z);
         if (s0 && !e.dead) {
           bar.el.style.display = 'block';
           bar.el.style.left = s0.x + 'px';
@@ -255,13 +255,12 @@ export async function createEnemyRuntime(opts) {
         }
       }
 
-      // Siempre mirar al jugador
       if (!e.dead) {
         const dx = player.x - e.x, dz = player.z - e.z;
         if (Math.hypot(dx, dz) > 0.05) e.facing = Math.atan2(dx, dz);
       }
 
-      const fixed = resolveWalls(e.x, e.z, e.radius || 0.45, walls);
+      const fixed = resolveWalls(e.x, e.z, e.radius || 0.35, walls);
       e.x = fixed.x;
       e.z = fixed.z;
 
@@ -269,7 +268,7 @@ export async function createEnemyRuntime(opts) {
       unit.root.position.set(e.x, e.y, e.z);
 
       let dYaw = wrapAngle(e.facing - unit.visYaw);
-      unit.visYaw = wrapAngle(unit.visYaw + dYaw * Math.min(1, dt * 12));
+      unit.visYaw = wrapAngle(unit.visYaw + dYaw * Math.min(1, dt * 14));
       unit.root.rotation.y = unit.visYaw + FACE_OFFSET;
       unit.root.rotation.z = 0;
 
@@ -277,7 +276,7 @@ export async function createEnemyRuntime(opts) {
         const t = Math.min(1, e.deadT / 1.35);
         const ease = t * t * (3 - 2 * t);
         unit.root.rotation.z = ease * 1.35;
-        unit.root.position.y = e.y - ease * 0.35;
+        unit.root.position.y = e.y - ease * 0.2;
       }
 
       syncAnim(unit);
@@ -287,7 +286,7 @@ export async function createEnemyRuntime(opts) {
       if (e.dead || e.hp <= 0) {
         bar.el.style.display = 'none';
       } else {
-        const s = toScreen(e.x, e.y + 2.15, e.z);
+        const s = toScreen(e.x, e.y + 1.15, e.z);
         if (s) {
           bar.el.style.display = 'block';
           bar.el.style.left = s.x + 'px';
@@ -297,7 +296,7 @@ export async function createEnemyRuntime(opts) {
       }
     }
 
-    if (activated) separate(units.map((u) => u.data), onPlat, 1.1);
+    if (activated) separate(units.map((u) => u.data), onPlat, 0.9);
     return events;
   }
 
