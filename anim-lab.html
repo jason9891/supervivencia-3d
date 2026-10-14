@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101114">
+<title>Stop-Motion · Animación</title>
+<style>
+*{box-sizing:border-box;-webkit-user-select:none;user-select:none}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101114;color:#f1e6d2;font-family:system-ui,sans-serif}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+#top{position:fixed;z-index:5;top:env(safe-area-inset-top);left:0;right:0;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;pointer-events:none}
+#top strong{font-size:11px;letter-spacing:.08em;text-shadow:0 2px 5px #000}
+#top button{pointer-events:auto}
+button,select{border:1px solid #c4a574;border-radius:8px;background:#211d17ed;color:#f3d7a0;padding:8px 10px;font-weight:700;font-size:11px}
+button.on{background:#3a4a2a;border-color:#8fbf6a}
+button:disabled{opacity:.4}
+#status{position:fixed;z-index:6;left:8px;right:8px;top:calc(env(safe-area-inset-top)+42px);text-align:center;font-size:11px;line-height:1.3;color:#e8dfce;text-shadow:0 2px 5px #000;pointer-events:none;background:#101114bb;padding:6px 8px;border-radius:8px;border:1px solid #c4a57444}
+#panel{position:fixed;z-index:7;left:0;right:0;bottom:0;padding:8px 10px calc(env(safe-area-inset-bottom)+8px);background:linear-gradient(transparent,#101114ee 18%,#101114f5);display:flex;flex-direction:column;gap:7px;max-height:52%;overflow:auto}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center}
+.row label{font-size:10px;color:#c4a574;min-width:14px}
+.slider-row{display:flex;align-items:center;gap:6px;width:100%;max-width:420px;margin:0 auto}
+.slider-row input[type=range]{flex:1;accent-color:#c4a574}
+.slider-row span{font-size:10px;width:36px;text-align:right;color:#ddd}
+#timeline{width:100%;max-width:480px;margin:0 auto;accent-color:#8fbf6a}
+#keysBar{display:flex;gap:4px;justify-content:center;flex-wrap:wrap;min-height:22px}
+.keyDot{width:18px;height:18px;border-radius:50%;border:1px solid #c4a574;background:#2a241c;font-size:9px;color:#f3d7a0;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.keyDot.on{background:#5a7a3a;border-color:#8fbf6a}
+#err{position:fixed;z-index:10;left:10px;right:10px;top:40%;padding:12px;background:#401b1b;color:#fff;white-space:pre-wrap;display:none;max-height:30%;overflow:auto}
+select{max-width:46vw}
+</style>
+</head>
+<body>
+<div id="top">
+  <strong>STOP-MOTION · ANIM</strong>
+  <div style="display:flex;gap:6px;pointer-events:auto">
+    <button id="back" type="button">JUEGO</button>
+    <button id="toLab" type="button">LAB ENEMIGO</button>
+  </div>
+</div>
+<div id="status">Cargando modelo…</div>
+<div id="panel">
+  <div class="row">
+    <select id="clipSel">
+      <option value="idle">Clip: Idle</option>
+      <option value="walk">Clip: Walk</option>
+      <option value="run">Clip: Run</option>
+      <option value="attack">Clip: Attack</option>
+      <option value="death">Clip: Death</option>
+    </select>
+    <select id="boneSel"></select>
+  </div>
+  <div class="slider-row"><label>X</label><input id="rx" type="range" min="-180" max="180" step="1" value="0"><span id="rxv">0°</span></div>
+  <div class="slider-row"><label>Y</label><input id="ry" type="range" min="-180" max="180" step="1" value="0"><span id="ryv">0°</span></div>
+  <div class="slider-row"><label>Z</label><input id="rz" type="range" min="-180" max="180" step="1" value="0"><span id="rzv">0°</span></div>
+  <div class="slider-row"><label>t</label><input id="timeline" type="range" min="0" max="1000" step="1" value="0"><span id="tVal">0.00s</span></div>
+  <div class="row">
+    <label>Dur</label>
+    <input id="dur" type="range" min="20" max="300" step="5" value="100" style="width:120px;accent-color:#c4a574">
+    <span id="durVal">1.00s</span>
+  </div>
+  <div id="keysBar"></div>
+  <div class="row">
+    <button id="btnKey" type="button">+ KEY</button>
+    <button id="btnDel" type="button">BORRAR KEY</button>
+    <button id="btnPlay" type="button">▶ PLAY</button>
+    <button id="btnResetPose" type="button">REST</button>
+    <button id="btnExport" type="button">EXPORT JSON</button>
+    <button id="btnImport" type="button">IMPORT</button>
+    <input id="fileIn" type="file" accept="application/json,.json" hidden>
+  </div>
+</div>
+<div id="err"></div>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/meshopt_decoder.module.js';
+
+const ENEMY_URL = './assets/characters/tripo_rigging_a71e42e9-2739-425b-a16c-3aa7dba627a6_meshopt.glb';
+const TARGET_HEIGHT = 1.9;
+
+const BONE_ORDER = [
+  'hips', 'spine', 'spine1', 'spine2', 'neck', 'head',
+  'leftShoulder', 'leftArm', 'leftForeArm', 'leftHand',
+  'rightShoulder', 'rightArm', 'rightForeArm', 'rightHand',
+  'leftUpLeg', 'leftLeg', 'leftFoot',
+  'rightUpLeg', 'rightLeg', 'rightFoot',
+];
+const BONE_ALIASES = {
+  hips: ['mixamorig:Hips', 'mixamorig_Hips', 'Hips'],
+  spine: ['mixamorig:Spine', 'mixamorig_Spine', 'Spine'],
+  spine1: ['mixamorig:Spine1', 'mixamorig_Spine1', 'Spine1'],
+  spine2: ['mixamorig:Spine2', 'mixamorig_Spine2', 'Spine2'],
+  neck: ['mixamorig:Neck', 'mixamorig_Neck', 'Neck'],
+  head: ['mixamorig:Head', 'mixamorig_Head', 'Head'],
+  leftShoulder: ['mixamorig:LeftShoulder', 'mixamorig_LeftShoulder', 'LeftShoulder'],
+  leftArm: ['mixamorig:LeftArm', 'mixamorig_LeftArm', 'LeftArm'],
+  leftForeArm: ['mixamorig:LeftForeArm', 'mixamorig_LeftForeArm', 'LeftForeArm'],
+  leftHand: ['mixamorig:LeftHand', 'mixamorig_LeftHand', 'LeftHand'],
+  rightShoulder: ['mixamorig:RightShoulder', 'mixamorig_RightShoulder', 'RightShoulder'],
+  rightArm: ['mixamorig:RightArm', 'mixamorig_RightArm', 'RightArm'],
+  rightForeArm: ['mixamorig:RightForeArm', 'mixamorig_RightForeArm', 'RightForeArm'],
+  rightHand: ['mixamorig:RightHand', 'mixamorig_RightHand', 'RightHand'],
+  leftUpLeg: ['mixamorig:LeftUpLeg', 'mixamorig_LeftUpLeg', 'LeftUpLeg'],
+  leftLeg: ['mixamorig:LeftLeg', 'mixamorig_LeftLeg', 'LeftLeg'],
+  leftFoot: ['mixamorig:LeftFoot', 'mixamorig_LeftFoot', 'LeftFoot'],
+  rightUpLeg: ['mixamorig:RightUpLeg', 'mixamorig_RightUpLeg', 'RightUpLeg'],
+  rightLeg: ['mixamorig:RightLeg', 'mixamorig_RightLeg', 'RightLeg'],
+  rightFoot: ['mixamorig:RightFoot', 'mixamorig_RightFoot', 'RightFoot'],
+};
+
+const statusEl = document.getElementById('status');
+const errEl = document.getElementById('err');
+function showErr(msg) {
+  errEl.style.display = 'block';
+  errEl.textContent = msg;
+}
+addEventListener('error', e => showErr(String(e.message || e)));
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x171a20);
+scene.add(new THREE.HemisphereLight(0xc3d6ee, 0x34251d, 1.6));
+const key = new THREE.DirectionalLight(0xffe2bd, 2.6);
+key.position.set(-4, 8, 6);
+scene.add(key);
+scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+const grid = new THREE.GridHelper(8, 16, 0x444444, 0x2a2a2a);
+scene.add(grid);
+
+const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.05, 200);
+camera.position.set(0, 1.5, 5.5);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.25;
+document.body.appendChild(renderer.domElement);
+
+const clock = new THREE.Clock();
+let modelRoot = null;
+let skinned = [];
+let bones = {};
+let rest = new Map();
+let currentPose = {};
+let clips = {
+  idle: { name: 'idle', duration: 1.0, keys: [] },
+  walk: { name: 'walk', duration: 1.0, keys: [] },
+  run: { name: 'run', duration: 0.8, keys: [] },
+  attack: { name: 'attack', duration: 1.2, keys: [] },
+  death: { name: 'death', duration: 1.4, keys: [] },
+};
+let clipName = 'idle';
+let playT = 0;
+let playing = false;
+let orbitY = 0;
+let dragging = false;
+let lastX = 0;
+
+const deg = (r) => (r * 180) / Math.PI;
+const rad = (d) => (d * Math.PI) / 180;
+const qDelta = new THREE.Quaternion();
+const eTmp = new THREE.Euler();
+
+function norm(n) {
+  return (n || '').toLowerCase().replace(/^mixamorig[:._\-\s]*/, '').replace(/[^a-z0-9]/g, '');
+}
+
+function collectBones(root) {
+  const byName = new Map();
+  const byNorm = new Map();
+  root.traverse((o) => {
+    if (o.name) {
+      byName.set(o.name, o);
+      const k = norm(o.name);
+      if (k && !byNorm.has(k)) byNorm.set(k, o);
+    }
+    if (o.isSkinnedMesh && o.skeleton) {
+      skinned.push(o);
+      o.frustumCulled = false;
+      for (const b of o.skeleton.bones) {
+        if (!b?.name) continue;
+        byName.set(b.name, b);
+        const k = norm(b.name);
+        if (k) byNorm.set(k, b);
+      }
+    }
+  });
+  const out = {};
+  for (const [key, names] of Object.entries(BONE_ALIASES)) {
+    let found = null;
+    for (const n of names) if (byName.has(n)) { found = byName.get(n); break; }
+    if (!found) {
+      const k = norm(names[0]);
+      if (byNorm.has(k)) found = byNorm.get(k);
+    }
+    if (found) out[key] = found;
+  }
+  return out;
+}
+
+function captureRest() {
+  rest.clear();
+  for (const b of Object.values(bones)) rest.set(b, b.quaternion.clone());
+}
+
+function applyPose(pose) {
+  for (const [b, q] of rest) b.quaternion.copy(q);
+  for (const [key, eul] of Object.entries(pose || {})) {
+    const b = bones[key];
+    if (!b || !rest.has(b)) continue;
+    eTmp.set(eul.x || 0, eul.y || 0, eul.z || 0, 'XYZ');
+    qDelta.setFromEuler(eTmp);
+    b.quaternion.copy(rest.get(b)).multiply(qDelta);
+  }
+  modelRoot?.updateMatrixWorld(true);
+  for (const m of skinned) if (m.skeleton) m.skeleton.update();
+}
+
+function sampleClip(clip, t) {
+  if (!clip.keys.length) return {};
+  const keys = clip.keys.slice().sort((a, b) => a.t - b.t);
+  if (t <= keys[0].t) return { ...keys[0].pose };
+  if (t >= keys[keys.length - 1].t) return { ...keys[keys.length - 1].pose };
+  let i = 0;
+  while (i < keys.length - 1 && keys[i + 1].t < t) i++;
+  const a = keys[i], b = keys[i + 1];
+  const u = (t - a.t) / Math.max(1e-6, b.t - a.t);
+  const out = {};
+  const boneSet = new Set([...Object.keys(a.pose), ...Object.keys(b.pose)]);
+  for (const k of boneSet) {
+    const ea = a.pose[k] || { x: 0, y: 0, z: 0 };
+    const eb = b.pose[k] || { x: 0, y: 0, z: 0 };
+    out[k] = {
+      x: ea.x + (eb.x - ea.x) * u,
+      y: ea.y + (eb.y - ea.y) * u,
+      z: ea.z + (eb.z - ea.z) * u,
+    };
+  }
+  return out;
+}
+
+function getClip() { return clips[clipName]; }
+
+function currentTime() {
+  const clip = getClip();
+  return (Number(document.getElementById('timeline').value) / 1000) * clip.duration;
+}
+
+function setTimelineFromT(t) {
+  const clip = getClip();
+  const v = clip.duration > 0 ? Math.round((t / clip.duration) * 1000) : 0;
+  document.getElementById('timeline').value = String(Math.max(0, Math.min(1000, v)));
+  document.getElementById('tVal').textContent = t.toFixed(2) + 's';
+}
+
+function refreshKeysBar() {
+  const bar = document.getElementById('keysBar');
+  bar.innerHTML = '';
+  const clip = getClip();
+  const keys = clip.keys.slice().sort((a, b) => a.t - b.t);
+  keys.forEach((k, idx) => {
+    const d = document.createElement('button');
+    d.type = 'button';
+    d.className = 'keyDot';
+    d.textContent = String(idx + 1);
+    d.title = k.t.toFixed(2) + 's · ' + Object.keys(k.pose).length + ' huesos';
+    d.addEventListener('click', () => {
+      setTimelineFromT(k.t);
+      currentPose = JSON.parse(JSON.stringify(k.pose));
+      applyPose(currentPose);
+      syncSlidersFromPose();
+      statusEl.textContent = 'Key @ ' + k.t.toFixed(2) + 's · ' + Object.keys(k.pose).length + ' huesos';
+    });
+    bar.appendChild(d);
+  });
+}
+
+function syncSlidersFromPose() {
+  const key = document.getElementById('boneSel').value;
+  const e = currentPose[key] || { x: 0, y: 0, z: 0 };
+  document.getElementById('rx').value = Math.round(deg(e.x));
+  document.getElementById('ry').value = Math.round(deg(e.y));
+  document.getElementById('rz').value = Math.round(deg(e.z));
+  document.getElementById('rxv').textContent = Math.round(deg(e.x)) + '°';
+  document.getElementById('ryv').textContent = Math.round(deg(e.y)) + '°';
+  document.getElementById('rzv').textContent = Math.round(deg(e.z)) + '°';
+}
+
+function readSlidersToPose() {
+  const key = document.getElementById('boneSel').value;
+  currentPose[key] = {
+    x: rad(Number(document.getElementById('rx').value)),
+    y: rad(Number(document.getElementById('ry').value)),
+    z: rad(Number(document.getElementById('rz').value)),
+  };
+  applyPose(currentPose);
+}
+
+function fitModel(model) {
+  model.updateMatrixWorld(true);
+  model.traverse((o) => {
+    if (o.isMesh || o.isSkinnedMesh) {
+      o.frustumCulled = false;
+      o.castShadow = true;
+      o.receiveShadow = true;
+    }
+  });
+  let bounds = new THREE.Box3().setFromObject(model);
+  let size = bounds.getSize(new THREE.Vector3());
+  if (size.y > 1e-4) {
+    const s = TARGET_HEIGHT / size.y;
+    model.scale.setScalar(s);
+    model.updateMatrixWorld(true);
+    bounds = new THREE.Box3().setFromObject(model);
+    const c = bounds.getCenter(new THREE.Vector3());
+    model.position.x -= c.x;
+    model.position.y -= bounds.min.y;
+    model.position.z -= c.z;
+  }
+}
+
+async function load() {
+  if (MeshoptDecoder.ready) await MeshoptDecoder.ready;
+  const loader = new GLTFLoader();
+  loader.setMeshoptDecoder(MeshoptDecoder);
+  statusEl.textContent = 'Cargando GLB…';
+  const gltf = await new Promise((res, rej) => loader.load(ENEMY_URL, res, undefined, rej));
+  const model = gltf.scene;
+  fitModel(model);
+  modelRoot = new THREE.Group();
+  modelRoot.add(model);
+  scene.add(modelRoot);
+  bones = collectBones(modelRoot);
+  captureRest();
+  const sel = document.getElementById('boneSel');
+  sel.innerHTML = '';
+  for (const k of BONE_ORDER) {
+    if (!bones[k]) continue;
+    const o = document.createElement('option');
+    o.value = k;
+    o.textContent = k;
+    sel.appendChild(o);
+  }
+  for (const c of Object.values(clips)) {
+    if (!c.keys.length) c.keys.push({ t: 0, pose: {} });
+  }
+  refreshKeysBar();
+  applyPose({});
+  statusEl.textContent =
+    'Stop-motion listo · ' + Object.keys(bones).length + ' huesos · elige hueso, mueve sliders, + KEY';
+}
+
+['rx', 'ry', 'rz'].forEach((id) => {
+  document.getElementById(id).addEventListener('input', () => {
+    if (playing) return;
+    document.getElementById(id + 'v').textContent = document.getElementById(id).value + '°';
+    readSlidersToPose();
+  });
+});
+
+document.getElementById('boneSel').addEventListener('change', () => {
+  syncSlidersFromPose();
+});
+
+document.getElementById('timeline').addEventListener('input', () => {
+  if (playing) return;
+  const t = currentTime();
+  document.getElementById('tVal').textContent = t.toFixed(2) + 's';
+  const pose = sampleClip(getClip(), t);
+  currentPose = pose;
+  applyPose(currentPose);
+  syncSlidersFromPose();
+});
+
+document.getElementById('dur').addEventListener('input', () => {
+  const d = Number(document.getElementById('dur').value) / 100;
+  getClip().duration = d;
+  document.getElementById('durVal').textContent = d.toFixed(2) + 's';
+  setTimelineFromT(currentTime());
+});
+
+document.getElementById('clipSel').addEventListener('change', () => {
+  playing = false;
+  document.getElementById('btnPlay').textContent = '▶ PLAY';
+  clipName = document.getElementById('clipSel').value;
+  const c = getClip();
+  document.getElementById('dur').value = String(Math.round(c.duration * 100));
+  document.getElementById('durVal').textContent = c.duration.toFixed(2) + 's';
+  setTimelineFromT(0);
+  currentPose = sampleClip(c, 0);
+  applyPose(currentPose);
+  syncSlidersFromPose();
+  refreshKeysBar();
+  statusEl.textContent = 'Clip: ' + clipName + ' · ' + c.keys.length + ' keys';
+});
+
+document.getElementById('btnKey').addEventListener('click', () => {
+  const t = currentTime();
+  const clip = getClip();
+  const tol = 0.02;
+  let hit = clip.keys.find((k) => Math.abs(k.t - t) < tol);
+  const poseCopy = JSON.parse(JSON.stringify(currentPose));
+  if (hit) {
+    hit.pose = { ...hit.pose, ...poseCopy };
+    hit.t = t;
+  } else {
+    clip.keys.push({ t, pose: poseCopy });
+  }
+  clip.keys.sort((a, b) => a.t - b.t);
+  refreshKeysBar();
+  statusEl.textContent =
+    'Key guardada @ ' + t.toFixed(2) + 's · ' + Object.keys(poseCopy).length + ' huesos en pose';
+});
+
+document.getElementById('btnDel').addEventListener('click', () => {
+  const t = currentTime();
+  const clip = getClip();
+  const before = clip.keys.length;
+  clip.keys = clip.keys.filter((k) => Math.abs(k.t - t) > 0.03);
+  if (!clip.keys.length) clip.keys.push({ t: 0, pose: {} });
+  refreshKeysBar();
+  statusEl.textContent =
+    before === clip.keys.length ? 'No había key cerca' : 'Key borrada · quedan ' + clip.keys.length;
+});
+
+document.getElementById('btnPlay').addEventListener('click', () => {
+  playing = !playing;
+  document.getElementById('btnPlay').textContent = playing ? '⏸ STOP' : '▶ PLAY';
+  document.getElementById('btnPlay').classList.toggle('on', playing);
+  if (playing) playT = currentTime();
+});
+
+document.getElementById('btnResetPose').addEventListener('click', () => {
+  currentPose = {};
+  applyPose(currentPose);
+  syncSlidersFromPose();
+  statusEl.textContent = 'Pose en REST (bind)';
+});
+
+document.getElementById('btnExport').addEventListener('click', () => {
+  const data = { version: 1, rig: 'mixamo', model: ENEMY_URL, clips };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'enemy-clips.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  statusEl.textContent = 'Exportado enemy-clips.json';
+});
+
+document.getElementById('btnImport').addEventListener('click', () => {
+  document.getElementById('fileIn').click();
+});
+document.getElementById('fileIn').addEventListener('change', async (ev) => {
+  const f = ev.target.files?.[0];
+  if (!f) return;
+  try {
+    const text = await f.text();
+    const data = JSON.parse(text);
+    if (data.clips) {
+      for (const [k, v] of Object.entries(data.clips)) clips[k] = v;
+      const sel = document.getElementById('clipSel');
+      for (const k of Object.keys(clips)) {
+        if (![...sel.options].some((o) => o.value === k)) {
+          const o = document.createElement('option');
+          o.value = k;
+          o.textContent = 'Clip: ' + k;
+          sel.appendChild(o);
+        }
+      }
+      document.getElementById('clipSel').dispatchEvent(new Event('change'));
+      statusEl.textContent = 'Importado · clips: ' + Object.keys(clips).join(', ');
+    }
+  } catch (e) {
+    showErr('Import falló: ' + (e.message || e));
+  }
+});
+
+document.getElementById('back').addEventListener('click', () => { location.href = './index.html'; });
+document.getElementById('toLab').addEventListener('click', () => { location.href = './enemy-lab.html'; });
+
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  dragging = true;
+  lastX = e.clientX;
+  renderer.domElement.setPointerCapture(e.pointerId);
+});
+renderer.domElement.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  orbitY += (e.clientX - lastX) * 0.01;
+  lastX = e.clientX;
+  if (modelRoot) modelRoot.rotation.y = orbitY;
+});
+const stopDrag = () => { dragging = false; };
+renderer.domElement.addEventListener('pointerup', stopDrag);
+renderer.domElement.addEventListener('pointercancel', stopDrag);
+renderer.domElement.addEventListener('wheel', (e) => {
+  camera.position.z = Math.max(2, Math.min(14, camera.position.z + e.deltaY * 0.006));
+});
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if (playing) {
+    const clip = getClip();
+    playT += dt;
+    if (playT > clip.duration) playT = 0;
+    setTimelineFromT(playT);
+    currentPose = sampleClip(clip, playT);
+    applyPose(currentPose);
+    syncSlidersFromPose();
+  }
+  camera.lookAt(0, TARGET_HEIGHT * 0.45, 0);
+  renderer.render(scene, camera);
+}
+animate();
+load().catch((e) => showErr('Load: ' + (e.message || e)));
+</script>
+</body>
+</html>
