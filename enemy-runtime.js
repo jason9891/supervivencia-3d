@@ -126,7 +126,7 @@ export async function createEnemyRuntime(opts) {
 
   async function spawn(kind, x, z) {
     const data = createEnemy(kind || 'soldado', x, z);
-    data.def = { ...data.def, speed: 5.2, aggro: 18 }; // más rápido, misma relación piernas
+    data.def = { ...data.def, speed: 5.2, aggro: 18 };
     data.state = 'idle';
     data.y = getGroundY(x, z);
 
@@ -195,7 +195,6 @@ export async function createEnemyRuntime(opts) {
       else if (anim.mode === 'idle' || anim.mode === 'walk') anim.attack();
     } else if (e.state === 'chase') {
       if (anim.mode && String(anim.mode).startsWith('attack')) {
-        // deja terminar el combo
       } else {
         anim.setMode('walk');
       }
@@ -331,10 +330,42 @@ export async function createEnemyRuntime(opts) {
     return hits;
   }
 
+  /** Empuja jugador y monstruo para que no se traspasen (cuerpos sólidos). */
+  function resolveAgainstPlayer(player) {
+    if (!player) return;
+    const pr = 0.42;
+    for (const unit of units) {
+      const e = unit.data;
+      if (e.dead) continue;
+      const er = (e.radius || 0.4) * 0.95;
+      let dx = player.x - e.x;
+      let dz = player.z - e.z;
+      let dist = Math.hypot(dx, dz);
+      const minD = pr + er;
+      if (dist >= minD) continue;
+      if (dist < 1e-5) {
+        dx = Math.sin(player.facing || 0);
+        dz = Math.cos(player.facing || 0);
+        dist = 1;
+      }
+      const push = (minD - dist) / dist;
+      player.x += dx * push * 0.6;
+      player.z += dz * push * 0.6;
+      e.x -= dx * push * 0.4;
+      e.z -= dz * push * 0.4;
+      const fixed = resolveWalls(e.x, e.z, er, walls);
+      e.x = fixed.x;
+      e.z = fixed.z;
+      unit.root.position.x = e.x;
+      unit.root.position.z = e.z;
+    }
+  }
+
   return {
     spawn,
     update,
     tryPlayerHit,
+    resolveAgainstPlayer,
     get activated() { return activated; },
     get units() { return units; },
     ENEMIES,
