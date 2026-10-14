@@ -217,20 +217,22 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
         applyLocalRot(bones.hips, 0, -0.12 * wave, 0);
         applyLocalRot(bones.rightArm, -0.18 * blend, 0.12 * blend, -0.45 * blend);
       } else {
-        // Golpe fuerte simétrico: ambos brazos SOLO hacia adelante (eje X)
-        const charge = t < 0.30 ? (t / 0.30) : 1;
-        const strike = t < 0.30 ? 0 : Math.sin(((t - 0.30) / 0.70) * Math.PI);
-        const wind = charge * (1 - strike * 0.1);
-        applyLocalRot(bones.rightArm, -0.4 * wind - 1.35 * strike, 0, 0);
-        applyLocalRot(bones.leftArm, -0.4 * wind - 1.35 * strike, 0, 0);
-        applyLocalRot(bones.rightForeArm, -0.6 * wind - 1.35 * strike, 0, 0);
-        applyLocalRot(bones.leftForeArm, -0.6 * wind - 1.35 * strike, 0, 0);
-        applyLocalRot(bones.rightShoulder, 0.2 * wind + 0.3 * strike, 0, 0);
-        applyLocalRot(bones.leftShoulder, 0.2 * wind + 0.3 * strike, 0, 0);
-        applyLocalRot(bones.spine, 0.22 * wind + 0.5 * strike, 0, 0);
-        applyLocalRot(bones.spine1, 0.28 * wind + 0.55 * strike, 0, 0);
-        applyLocalRot(bones.head, 0.1 * wind + 0.25 * strike, 0, 0);
-        applyLocalRot(bones.hips, 0.08 * wind + 0.12 * strike, 0, 0);
+        // Golpe fuerte: ambas garras al FRENTE (mismo eje Z que golpes 1-2)
+        // Cuerpo casi quieto para no torcer el torso del bestia
+        const charge = t < 0.28 ? (t / 0.28) : 1;
+        const strike = t < 0.28 ? 0 : Math.sin(((t - 0.28) / 0.72) * Math.PI);
+        const wind = charge * (1 - strike * 0.08);
+        const armZ = -0.9 * wind - 1.55 * strike;
+        const armX = -0.25 * wind - 0.45 * strike;
+        applyLocalRot(bones.rightArm, armX, 0, armZ);
+        applyLocalRot(bones.leftArm, armX, 0, armZ);
+        applyLocalRot(bones.rightForeArm, -0.7 * wind - 1.2 * strike, 0, 0);
+        applyLocalRot(bones.leftForeArm, -0.7 * wind - 1.2 * strike, 0, 0);
+        applyLocalRot(bones.rightShoulder, 0, 0, -0.25 * wind - 0.35 * strike);
+        applyLocalRot(bones.leftShoulder, 0, 0, 0.25 * wind + 0.35 * strike);
+        applyLocalRot(bones.spine, 0.12 * wind + 0.2 * strike, 0, 0);
+        applyLocalRot(bones.spine1, 0.14 * wind + 0.22 * strike, 0, 0);
+        applyLocalRot(bones.head, 0.08 * wind + 0.12 * strike, 0, 0);
       }
 
       if (t >= 1) {
