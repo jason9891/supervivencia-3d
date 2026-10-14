@@ -9,8 +9,7 @@ import {
 } from './combat.js';
 
 const ENEMY_URL = './assets/characters/tripo_rigging_a71e42e9-2739-425b-a16c-3aa7dba627a6_meshopt.glb';
-const TARGET_HEIGHT = 0.95; // ~mitad de la altura del personaje
-// corregir perfil izquierdo → de frente
+const TARGET_HEIGHT = 0.95;
 const FACE_OFFSET = Math.PI + Math.PI / 2;
 
 const STABLE_DOOR = { minX: 44.5, maxX: 55.5, minZ: 42.0, maxZ: 48.5 };
@@ -190,18 +189,16 @@ export async function createEnemyRuntime(opts) {
       unit.lastState = 'idle';
       return;
     }
-    if (e.state === 'windup' || e.state === 'recover') {
-      if (unit.lastState !== 'windup' && e.state === 'windup') anim.attack();
-      else if (anim.mode === 'idle' || anim.mode === 'walk') anim.attack();
+    const inAttack = anim.mode && String(anim.mode).startsWith('attack');
+    if (e.state === 'windup') {
+      if (unit.lastState !== 'windup') anim.attack();
+      else if (!inAttack) anim.attack();
+    } else if (e.state === 'recover') {
+      if (!inAttack) anim.setMode('walk');
     } else if (e.state === 'chase') {
-      if (anim.mode && String(anim.mode).startsWith('attack')) {
-      } else {
-        anim.setMode('walk');
-      }
-    } else if (e.state === 'hurt') {
-      anim.setMode('hurt');
+      if (!inAttack) anim.setMode('walk');
     } else {
-      anim.setMode('idle');
+      if (!inAttack) anim.setMode('idle');
     }
     unit.lastState = e.state;
   }
@@ -241,7 +238,13 @@ export async function createEnemyRuntime(opts) {
         continue;
       }
 
+      const prevX = e.x, prevZ = e.z;
       const ev = stepEnemy(e, player, onPlat, dt);
+      // Si aún está en animación de combo, no avanzar (evita levitar sin pasos)
+      if (unit.anim && unit.anim.mode && String(unit.anim.mode).startsWith('attack') && e.state === 'chase') {
+        e.x = prevX;
+        e.z = prevZ;
+      }
       for (const x of ev) {
         if (x.type === 'enemyStrike') {
           const r = resolveEnemyStrike(e, player, pstats);
@@ -330,7 +333,6 @@ export async function createEnemyRuntime(opts) {
     return hits;
   }
 
-  /** Empuja jugador y monstruo para que no se traspasen (cuerpos sólidos). */
   function resolveAgainstPlayer(player) {
     if (!player) return;
     const pr = 0.42;
