@@ -195,7 +195,6 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
 
     if (attackPhase > 0) {
       attackT += dt;
-      // Golpes 1-2 cortos; el 3º más largo y pesado
       const hitDur = attackPhase === 3 ? 0.72 : 0.48;
       const t = Math.min(1, attackT / hitDur);
       const wave = Math.sin(t * Math.PI);
@@ -218,23 +217,20 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
         applyLocalRot(bones.hips, 0, -0.12 * wave, 0);
         applyLocalRot(bones.rightArm, -0.18 * blend, 0.12 * blend, -0.45 * blend);
       } else {
-        // Golpe fuerte: carga + embestida
-        const charge = t < 0.35 ? (t / 0.35) : 1;
-        const strike = t < 0.35 ? 0 : Math.sin(((t - 0.35) / 0.65) * Math.PI);
-        const wind = charge * (1 - strike * 0.15);
-        applyLocalRot(bones.rightArm, -0.25 * wind - 0.85 * strike, 0.2 * wind, -0.6 * wind - 1.5 * strike);
-        applyLocalRot(bones.leftArm, -0.25 * wind - 0.85 * strike, -0.2 * wind, -0.6 * wind - 1.5 * strike);
-        applyLocalRot(bones.rightForeArm, -0.5 * wind - 1.1 * strike, 0, 0);
-        applyLocalRot(bones.leftForeArm, -0.5 * wind - 1.1 * strike, 0, 0);
-        applyLocalRot(bones.spine, 0.15 * wind + 0.55 * strike, 0, 0);
-        applyLocalRot(bones.spine1, 0.2 * wind + 0.6 * strike, 0, 0);
-        applyLocalRot(bones.head, 0.15 * wind + 0.4 * strike, 0, 0);
-        applyLocalRot(bones.hips, 0.08 * wind + 0.2 * strike, 0, 0);
-        if (bones.hips && rest.has(bones.hips)) {
-          const rp = rest.get(bones.hips).pos;
-          bones.hips.position.z = rp.z + (0.06 * wind + 0.22 * strike) * height;
-          bones.hips.position.y = rp.y + 0.04 * wind * height;
-        }
+        // Golpe fuerte: ambos brazos AL FRENTE (sin ladeo lateral)
+        const charge = t < 0.32 ? (t / 0.32) : 1;
+        const strike = t < 0.32 ? 0 : Math.sin(((t - 0.32) / 0.68) * Math.PI);
+        const wind = charge * (1 - strike * 0.12);
+        applyLocalRot(bones.rightArm, -0.35 * wind - 1.05 * strike, 0, -0.35 * wind - 0.25 * strike);
+        applyLocalRot(bones.leftArm, -0.35 * wind - 1.05 * strike, 0, 0.35 * wind + 0.25 * strike);
+        applyLocalRot(bones.rightForeArm, -0.55 * wind - 1.25 * strike, 0, 0);
+        applyLocalRot(bones.leftForeArm, -0.55 * wind - 1.25 * strike, 0, 0);
+        applyLocalRot(bones.rightShoulder, 0.15 * wind + 0.25 * strike, 0, -0.15 * strike);
+        applyLocalRot(bones.leftShoulder, 0.15 * wind + 0.25 * strike, 0, 0.15 * strike);
+        applyLocalRot(bones.spine, 0.2 * wind + 0.55 * strike, 0, 0);
+        applyLocalRot(bones.spine1, 0.25 * wind + 0.65 * strike, 0, 0);
+        applyLocalRot(bones.head, 0.12 * wind + 0.3 * strike, 0, 0);
+        applyLocalRot(bones.hips, 0.1 * wind + 0.15 * strike, 0, 0);
       }
 
       if (t >= 1) {
@@ -261,7 +257,7 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
     }
 
     const run = mode === 'run';
-    const freq = run ? 10.0 : 6.0; // más rápido, misma relación paso/avance
+    const freq = run ? 10.0 : 6.0;
     const legAmp = run ? 0.72 : 0.52;
     const phase = time * freq;
     const L = Math.sin(phase) * legAmp;
