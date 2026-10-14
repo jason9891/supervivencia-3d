@@ -1,27 +1,61 @@
-// map1.js — El Regreso
-// Paredes naranja tldraw 1:1 + Módulo 2 (oficina 2 ambientes).
-// +X este · +Z norte · Y altura.
-
 import * as THREE from 'three';
-import { clearRamps, addRamp, sampleRampY, getSlopeAt, buildRampMesh, RAMPS } from './map-ramps.js';
+import { buildRampMesh } from './ramp-mesh.js';
 import { buildModule2, LEVEL2_Y as MOD2_L2, MOD2 } from './modulo2.js';
 
-export const MAP1_NAME = 'El Regreso';
+export const MAP_W = 90;
+export const MAP_D = 72;
 export const LEVEL0_Y = 0;
 export const LEVEL1_Y = 6;
+export const WALL_H = 5.0;
 
-export const MAP = { minX: 0, maxX: 90, minZ: 0, maxZ: 72 };
 export const SPAWN = { x: 6.5, y: LEVEL0_Y, z: 3, facing: 0 };
 export const MAP_CENTER = { x: 45, z: 36, y: LEVEL1_Y };
 
 export const ZONES = {
-  ramp: { minX: 0, maxX: 13.5, minZ: 0, maxZ: 72 },
-  corridor: { minX: 13.5, maxX: 67.5, minZ: 63, maxZ: 72 },
-  plaza: { minX: 13.5, maxX: 67.5, minZ: 0, maxZ: 63 },
+  ramp: { minX: 0, maxX: 14, minZ: 0, maxZ: 72 },
+  corridor: { minX: 13.5, maxX: 36, minZ: 63, maxZ: 72 },
+  plaza: { minX: 13.5, maxX: 67, minZ: 0, maxZ: 63 },
   stable: { minX: 13.5, maxX: 54, minZ: 43, maxZ: 63 },
-  module: { minX: 67.5, maxX: 90, minZ: 0, maxZ: 53 },
-  towers: { minX: 67.5, maxX: 90, minZ: 63, maxZ: 72 },
+  mod2: { minX: 67, maxX: 90, minZ: 0, maxZ: 54 },
+  towers: { minX: 67, maxX: 90, minZ: 63, maxZ: 72 },
 };
+
+export const WALLS = [];
+export const PLATFORMS = [];
+export const RAMPS = [];
+
+let PAGE_POS = new THREE.Vector3(76, LEVEL1_Y + 1.05, 10);
+let KEY_POS = new THREE.Vector3(78, LEVEL1_Y + 1.02, 14);
+let LEVER_POS = new THREE.Vector3(84, LEVEL1_Y + 11, 67);
+let FOOD_POS = new THREE.Vector3(28, LEVEL1_Y + 0.45, 52);
+
+export const STORY_PAGE = {
+  title: 'Fragmento del cronista',
+  text: 'Han pasado muchos a\u00f1os. Los escudos y las espadas han mejorado, pero la magia y los monstruos se volvieron leyenda. Hoy el regreso al pueblo no trae calma: algo despert\u00f3 en las sombras del establo y del puente roto.',
+};
+
+function addWall(minX, maxX, minZ, maxZ) { WALLS.push({ minX, maxX, minZ, maxZ }); }
+function addPlatform(minX, maxX, minZ, maxZ, y) { PLATFORMS.push({ minX, maxX, minZ, maxZ, y }); }
+function addRamp(def) { RAMPS.push(def); }
+
+export function getGroundHeight(x, z) {
+  let best = -Infinity;
+  for (const p of PLATFORMS) {
+    if (x >= p.minX && x <= p.maxX && z >= p.minZ && z <= p.maxZ) best = Math.max(best, p.y);
+  }
+  for (const r of RAMPS) {
+    // simple ramp height sample along segment
+    const dx = r.ex - r.sx, dz = r.ez - r.sz;
+    const len2 = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((x - r.sx) * dx + (z - r.sz) * dz) / len2));
+    const px = r.sx + dx * t, pz = r.sz + dz * t;
+    const dist = Math.hypot(x - px, z - pz);
+    if (dist <= (r.halfWidth || 5.5) + 0.2) {
+      best = Math.max(best, r.y0 + (r.y1 - r.y0) * t);
+    }
+  }
+  return best === -Infinity ? LEVEL0_Y : best;
+}
 
 export function getCurrentZone(x, z) {
   for (const [name, b] of Object.entries(ZONES)) {
@@ -30,122 +64,77 @@ export function getCurrentZone(x, z) {
   return null;
 }
 
-export const STORY_PAGE = {
-  title: 'Oficina del consejero',
-  text: `...los sellos se debilitan.\nLo que creíamos leyenda ha vuelto a caminar.\nBusca las seis runas.`,
-};
-
-let PAGE_POS = new THREE.Vector3(76, LEVEL1_Y + 1.05, 10);
-let KEY_POS = new THREE.Vector3(78, LEVEL1_Y + 1.02, 14);
-let LEVER_POS = new THREE.Vector3(84, LEVEL1_Y + 11, 67);
-let FOOD_POS = new THREE.Vector3(28, LEVEL1_Y + 0.45, 52);
-
-const PLAYER_R = 0.45;
-const WALL_H = 5.0;
-
-export const WALLS = [];
-export const PLATFORMS = [];
-
-function addWall(minX, maxX, minZ, maxZ) { WALLS.push({ minX, maxX, minZ, maxZ }); }
-function addPlatform(minX, maxX, minZ, maxZ, y) { PLATFORMS.push({ minX, maxX, minZ, maxZ, y }); }
-
-export function getGroundHeight(x, z, fromY = Infinity) {
-  let best = -Infinity;
-  const ry = sampleRampY(x, z);
-  if (ry !== null && ry <= fromY + 0.85 && ry > best) best = ry;
-  for (const p of PLATFORMS) {
-    if (x >= p.minX && x <= p.maxX && z >= p.minZ && z <= p.maxZ) {
-      if (p.y <= fromY + 0.85 && p.y > best) best = p.y;
-    }
-  }
-  return best === -Infinity ? LEVEL0_Y : best;
-}
-
-export function resolveGround(player) {
-  const gy = getGroundHeight(player.x, player.z, player.y);
-  if (player.y <= gy + 0.7) {
-    if (player.vy <= 0.7) {
-      player.y = gy; player.vy = 0;
-      player.grounded = true; player.jumping = false;
-      player.avx = 0; player.avz = 0;
-    }
-  } else if (player.grounded && player.y - gy > 0.6) player.grounded = false;
-}
-
-export function resolveWallCollisions(player) {
-  let x = player.x, z = player.z;
-  for (const w of WALLS) {
-    const nx = Math.max(w.minX, Math.min(x, w.maxX));
-    const nz = Math.max(w.minZ, Math.min(z, w.maxZ));
-    const dx = x - nx, dz = z - nz;
-    const distSq = dx * dx + dz * dz;
-    if (distSq < PLAYER_R * PLAYER_R && distSq > 1e-8) {
-      const dist = Math.sqrt(distSq);
-      const push = (PLAYER_R - dist) / dist;
-      x += dx * push; z += dz * push;
-    } else if (distSq <= 1e-8) {
-      const left = x - w.minX, right = w.maxX - x;
-      const near = z - w.minZ, far = w.maxZ - z;
-      const m = Math.min(left, right, near, far);
-      if (m === left) x = w.minX - PLAYER_R;
-      else if (m === right) x = w.maxX + PLAYER_R;
-      else if (m === near) z = w.minZ - PLAYER_R;
-      else z = w.maxZ + PLAYER_R;
-    }
-  }
-  const m = 1.5;
-  x = Math.max(MAP.minX + m, Math.min(MAP.maxX - m, x));
-  z = Math.max(MAP.minZ + m, Math.min(MAP.maxZ - m, z));
-  player.x = x; player.z = z;
-}
-
 export function distanceToPage(x, y, z) { return Math.hypot(x - PAGE_POS.x, y - PAGE_POS.y, z - PAGE_POS.z); }
 export function distanceToKey(x, y, z) { return Math.hypot(x - KEY_POS.x, y - KEY_POS.y, z - KEY_POS.z); }
 export function distanceToLever(x, y, z) { return Math.hypot(x - LEVER_POS.x, y - LEVER_POS.y, z - LEVER_POS.z); }
 export function distanceToFood(x, y, z) { return Math.hypot(x - FOOD_POS.x, y - FOOD_POS.y, z - FOOD_POS.z); }
-export { getSlopeAt };
+
+export function resolveWallCollisions(p) {
+  const r = 0.35;
+  for (const w of WALLS) {
+    const nx = Math.max(w.minX, Math.min(p.x, w.maxX));
+    const nz = Math.max(w.minZ, Math.min(p.z, w.maxZ));
+    let dx = p.x - nx, dz = p.z - nz;
+    const d2 = dx * dx + dz * dz;
+    if (d2 >= r * r) continue;
+    if (d2 < 1e-10) {
+      const left = Math.abs(p.x - w.minX), right = Math.abs(w.maxX - p.x);
+      const down = Math.abs(p.z - w.minZ), up = Math.abs(w.maxZ - p.z);
+      const m = Math.min(left, right, down, up);
+      if (m === left) p.x = w.minX - r;
+      else if (m === right) p.x = w.maxX + r;
+      else if (m === down) p.z = w.minZ - r;
+      else p.z = w.maxZ + r;
+    } else {
+      const d = Math.sqrt(d2);
+      const push = (r - d) / d;
+      p.x += dx * push; p.z += dz * push;
+    }
+  }
+}
+
+export function resolveGround(p) {
+  const gy = getGroundHeight(p.x, p.z);
+  if (p.y <= gy + 0.05) {
+    p.y = gy;
+    p.vy = 0;
+    p.grounded = true;
+  } else if (p.y > gy + 0.15) {
+    p.grounded = false;
+  }
+}
 
 export function buildMap1(scene) {
-  WALLS.length = 0; PLATFORMS.length = 0; clearRamps();
-
-  const mat = (c, r = 0.86, m = 0) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m });
-  const stone = mat(0x6a7068, 0.9);
-  const dark = mat(0x4a5048, 0.88);
-  const dirt = mat(0x5a5348, 0.95);
-  const wood = mat(0x6b4a32, 0.85);
-  const iron = mat(0x3a3a40, 0.4, 0.55);
-  const mountain = mat(0x3a3e38, 0.98);
-  const grass = mat(0x3d5c38, 1);
-  const orangeW = mat(0xc47a28, 0.75);
+  WALLS.length = 0; PLATFORMS.length = 0; RAMPS.length = 0;
+  const mat = (c, r = 0.85) => new THREE.MeshStandardMaterial({ color: c, roughness: r });
+  const dirt = mat(0x6b5a45);
+  const stone = mat(0x7a7a72);
+  const grass = mat(0x4a7a3a);
+  const orangeW = mat(0xc47a3a);
+  const dark = mat(0x3a3228);
+  const iron = mat(0x4a4a52, 0.5);
+  const wood = mat(0x6b4a2a);
 
   function box(w, h, d, material, x, y, z, solid = false) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
-    mesh.position.set(x, y, z);
-    mesh.castShadow = true; mesh.receiveShadow = true;
-    scene.add(mesh);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+    m.position.set(x, y, z);
+    m.castShadow = true; m.receiveShadow = true;
+    scene.add(m);
     if (solid) addWall(x - w / 2, x + w / 2, z - d / 2, z + d / 2);
-    return mesh;
+    return m;
   }
   function pad(w, d, y, x, z, material) {
-    const th = Math.max(0.35, 0.25 + y * 0.04);
-    box(w, th, d, material, x, y - th / 2, z, false);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.25, d), material);
+    m.position.set(x, y - 0.1, z);
+    m.receiveShadow = true; scene.add(m);
     addPlatform(x - w / 2, x + w / 2, z - d / 2, z + d / 2, y);
   }
   function wallBox(minX, maxX, minZ, maxZ) {
-    const w = maxX - minX;
-    const d = maxZ - minZ;
-    if (w < 0.15 || d < 0.15) return;
-    const cx = (minX + maxX) / 2;
-    const cz = (minZ + maxZ) / 2;
-    box(w, WALL_H, d, orangeW, cx, LEVEL1_Y + WALL_H / 2, cz, true);
+    addWall(minX, maxX, minZ, maxZ);
+    const w = maxX - minX, d = maxZ - minZ;
+    const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
+    box(w, WALL_H, d, orangeW, cx, LEVEL1_Y + WALL_H / 2, cz, false);
   }
-
-  const { minX, maxX, minZ, maxZ } = MAP;
-  const WH = 14, WT = 2.5;
-  box(maxX - minX + WT * 2, WH, WT, mountain, (minX + maxX) / 2, WH / 2 - 1, maxZ + WT / 2, true);
-  box(maxX - minX + WT * 2, WH, WT, mountain, (minX + maxX) / 2, WH / 2 - 1, minZ - WT / 2, true);
-  box(WT, WH, maxZ - minZ, mountain, minX - WT / 2, WH / 2 - 1, (minZ + maxZ) / 2, true);
-  box(WT, WH, maxZ - minZ, mountain, maxX + WT / 2, WH / 2 - 1, (minZ + maxZ) / 2, true);
 
   pad(90, 72, LEVEL1_Y, 45, 36, dirt);
   pad(90, 10, LEVEL1_Y, 45, 67, stone);
@@ -203,12 +192,10 @@ export function buildMap1(scene) {
   addPlatform(80.5, 90, 63, 72, LEVEL1_Y + 10.5);
   const portcullis = box(5.5, 8, 0.7, iron, 77.5, LEVEL1_Y + 3.6, 63.5, true);
   portcullis.name = 'portcullis';
-  // Puente ROTO entre torres (hueco para probar salto). Restos a cada lado.
   box(1.6, 0.28, 3.2, wood, 75.9, LEVEL1_Y + 10.55, 66.5);
   addPlatform(75.1, 76.7, 64.8, 68.2, LEVEL1_Y + 10.5);
   box(1.6, 0.28, 3.2, wood, 79.1, LEVEL1_Y + 10.55, 66.5);
   addPlatform(78.3, 79.9, 64.8, 68.2, LEVEL1_Y + 10.5);
-  // Tablones caídos (solo visual, sin plataforma)
   box(1.2, 0.15, 0.35, wood, 77.5, LEVEL1_Y + 10.2, 65.2);
   box(0.9, 0.15, 0.3, wood, 77.2, LEVEL1_Y + 9.6, 67.8);
 
@@ -220,7 +207,7 @@ export function buildMap1(scene) {
   const towerDoor = box(1.4, 2.3, 0.3, wood, 84, LEVEL1_Y + 11.5, 63.2, true);
   towerDoor.userData = { locked: true };
 
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), mat(0x101410, 1));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), mat(0x3d5c38, 1)); // hierba exterior de d\u00eda
   ground.rotation.x = -Math.PI / 2;
   ground.position.set(45, -0.8, 36);
   ground.receiveShadow = true;
@@ -248,6 +235,5 @@ export function tryUnlockTowerDoor(mapData, hasKey) {
   if (!mapData?.towerDoor || !mapData.towerDoor.userData.locked || !hasKey) return false;
   mapData.towerDoor.userData.locked = false;
   mapData.towerDoor.visible = false;
-  mapData.towerDoor.position.y = -40;
   return true;
 }
