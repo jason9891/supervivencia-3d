@@ -19,9 +19,10 @@ button:disabled{opacity:.4}
 #panel{position:fixed;z-index:7;left:0;right:0;bottom:0;padding:8px 10px calc(env(safe-area-inset-bottom)+8px);background:linear-gradient(transparent,#101114ee 18%,#101114f5);display:flex;flex-direction:column;gap:7px;max-height:52%;overflow:auto}
 .row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center}
 .row label{font-size:10px;color:#c4a574;min-width:14px}
-.slider-row{display:flex;align-items:center;gap:6px;width:100%;max-width:420px;margin:0 auto}
-.slider-row input[type=range]{flex:1;accent-color:#c4a574}
-.slider-row span{font-size:10px;width:36px;text-align:right;color:#ddd}
+.slider-row{display:flex;align-items:center;gap:4px;width:100%;max-width:440px;margin:0 auto}
+.slider-row input[type=range]{flex:1;accent-color:#c4a574;min-width:0}
+.slider-row span{font-size:10px;width:34px;text-align:right;color:#ddd}
+.slider-row .step{padding:6px 9px;min-width:34px;font-size:14px;line-height:1}
 #timeline{width:100%;max-width:480px;margin:0 auto;accent-color:#8fbf6a}
 #keysBar{display:flex;gap:4px;justify-content:center;flex-wrap:wrap;min-height:22px}
 .keyDot{width:18px;height:18px;border-radius:50%;border:1px solid #c4a574;background:#2a241c;font-size:9px;color:#f3d7a0;display:flex;align-items:center;justify-content:center;cursor:pointer}
@@ -50,9 +51,9 @@ select{max-width:46vw}
     </select>
     <select id="boneSel"></select>
   </div>
-  <div class="slider-row"><label>X</label><input id="rx" type="range" min="-180" max="180" step="1" value="0"><span id="rxv">0°</span></div>
-  <div class="slider-row"><label>Y</label><input id="ry" type="range" min="-180" max="180" step="1" value="0"><span id="ryv">0°</span></div>
-  <div class="slider-row"><label>Z</label><input id="rz" type="range" min="-180" max="180" step="1" value="0"><span id="rzv">0°</span></div>
+  <div class="slider-row"><label>X</label><button type="button" class="step" data-axis="rx" data-d="-1">−</button><input id="rx" type="range" min="-180" max="180" step="1" value="0"><button type="button" class="step" data-axis="rx" data-d="1">+</button><span id="rxv">0°</span></div>
+  <div class="slider-row"><label>Y</label><button type="button" class="step" data-axis="ry" data-d="-1">−</button><input id="ry" type="range" min="-180" max="180" step="1" value="0"><button type="button" class="step" data-axis="ry" data-d="1">+</button><span id="ryv">0°</span></div>
+  <div class="slider-row"><label>Z</label><button type="button" class="step" data-axis="rz" data-d="-1">−</button><input id="rz" type="range" min="-180" max="180" step="1" value="0"><button type="button" class="step" data-axis="rz" data-d="1">+</button><span id="rzv">0°</span></div>
   <div class="slider-row"><label>t</label><input id="timeline" type="range" min="0" max="1000" step="1" value="0"><span id="tVal">0.00s</span></div>
   <div class="row">
     <label>Dur</label>
@@ -129,7 +130,7 @@ const grid = new THREE.GridHelper(8, 16, 0x444444, 0x2a2a2a);
 scene.add(grid);
 
 const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.05, 200);
-camera.position.set(0, 1.5, 5.5);
+camera.position.set(0, 1.15, 7.8);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
@@ -360,6 +361,20 @@ async function load() {
   });
 });
 
+document.querySelectorAll('button.step').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    if (playing) return;
+    const id = btn.dataset.axis;
+    const d = Number(btn.dataset.d);
+    const el = document.getElementById(id);
+    let v = Number(el.value) + d;
+    v = Math.max(-180, Math.min(180, v));
+    el.value = String(v);
+    document.getElementById(id + 'v').textContent = v + '°';
+    readSlidersToPose();
+  });
+});
+
 document.getElementById('boneSel').addEventListener('change', () => {
   syncSlidersFromPose();
 });
@@ -496,7 +511,7 @@ const stopDrag = () => { dragging = false; };
 renderer.domElement.addEventListener('pointerup', stopDrag);
 renderer.domElement.addEventListener('pointercancel', stopDrag);
 renderer.domElement.addEventListener('wheel', (e) => {
-  camera.position.z = Math.max(2, Math.min(14, camera.position.z + e.deltaY * 0.006));
+  camera.position.z = Math.max(2.5, Math.min(18, camera.position.z + e.deltaY * 0.008));
 });
 
 addEventListener('resize', () => {
@@ -517,7 +532,7 @@ function animate() {
     applyPose(currentPose);
     syncSlidersFromPose();
   }
-  camera.lookAt(0, TARGET_HEIGHT * 0.45, 0);
+  camera.lookAt(0, TARGET_HEIGHT * 0.55, 0);
   renderer.render(scene, camera);
 }
 animate();
