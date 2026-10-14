@@ -15,8 +15,12 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 button,select{border:1px solid #c4a574;border-radius:8px;background:#211d17ed;color:#f3d7a0;padding:8px 10px;font-weight:700;font-size:11px}
 button.on{background:#3a4a2a;border-color:#8fbf6a}
 button:disabled{opacity:.4}
-#status{position:fixed;z-index:6;left:8px;right:8px;top:calc(env(safe-area-inset-top)+42px);text-align:center;font-size:11px;line-height:1.3;color:#e8dfce;text-shadow:0 2px 5px #000;pointer-events:none;background:#101114bb;padding:6px 8px;border-radius:8px;border:1px solid #c4a57444}
-#panel{position:fixed;z-index:7;left:0;right:0;bottom:0;padding:8px 10px calc(env(safe-area-inset-bottom)+8px);background:linear-gradient(transparent,#101114ee 18%,#101114f5);display:flex;flex-direction:column;gap:7px;max-height:52%;overflow:auto}
+#mover{position:fixed;z-index:8;left:8px;right:8px;top:calc(env(safe-area-inset-top) + 40px);display:flex;flex-wrap:wrap;gap:5px;align-items:center;justify-content:center;background:#101114bb;padding:4px 6px;border-radius:8px;border:1px solid #c4a57444}
+#mover b{font-size:11px;color:#c4a574;margin-left:4px}
+#mover button{padding:5px 12px;font-size:15px;line-height:1;touch-action:manipulation}
+#mover span{font-size:10px;color:#ddd;min-width:64px;text-align:center}
+#status{position:fixed;z-index:6;left:8px;right:8px;top:calc(env(safe-area-inset-top) + 84px);text-align:center;font-size:11px;line-height:1.3;color:#e8dfce;text-shadow:0 2px 5px #000;pointer-events:none;background:#101114bb;padding:6px 8px;border-radius:8px;border:1px solid #c4a57444}
+#panel{position:fixed;z-index:7;left:0;right:0;bottom:0;padding:8px 10px calc(env(safe-area-inset-bottom) + 8px);background:linear-gradient(transparent,#101114ee 18%,#101114f5);display:flex;flex-direction:column;gap:7px;max-height:52%;overflow:auto}
 .row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center}
 .row label{font-size:10px;color:#c4a574;min-width:14px}
 .slider-row{display:flex;align-items:center;gap:4px;width:100%;max-width:440px;margin:0 auto}
@@ -38,6 +42,14 @@ select{max-width:46vw}
     <button id="back" type="button">JUEGO</button>
     <button id="toLab" type="button">LAB ENEMIGO</button>
   </div>
+</div>
+<div id="mover" aria-label="Mover el modelo">
+  <b>MODELO</b>
+  <b>X</b><button type="button" data-mv="x" data-d="-1">−</button><button type="button" data-mv="x" data-d="1">+</button>
+  <b>Y</b><button type="button" data-mv="y" data-d="-1">−</button><button type="button" data-mv="y" data-d="1">+</button>
+  <b>Z</b><button type="button" data-mv="z" data-d="-1">−</button><button type="button" data-mv="z" data-d="1">+</button>
+  <button type="button" id="mvReset" title="Volver a la posición inicial">↺</button>
+  <span id="mvPos"></span>
 </div>
 <div id="status">Cargando modelo…</div>
 <div id="panel">
@@ -274,35 +286,77 @@ function sampleClip(clip, t) {
 
 function getClip() { return clips[clipName]; }
 
+// La línea de tiempo avanza de a FRAME segundos (un fotograma): cada fotograma que visitas queda con su key automática.
+const FRAME = 0.05;
+const timelineEl = document.getElementById('timeline');
+const frameCount = (clip) => Math.max(1, Math.round(clip.duration / FRAME));
+
 function currentTime() {
-  const clip = getClip();
-  return (Number(document.getElementById('timeline').value) / 1000) * clip.duration;
+  return +(Number(timelineEl.value) * FRAME).toFixed(2);   // sin restos de coma flotante (0.15, no 0.15000000000000002)
 }
 
 function setTimelineFromT(t) {
+  const n = frameCount(getClip());
+  const f = Math.max(0, Math.min(n, Math.round(t / FRAME)));
+  timelineEl.max = String(n);
+  timelineEl.step = '1';
+  timelineEl.value = String(f);
+  document.getElementById('tVal').textContent = (f * FRAME).toFixed(2) + 's';
+}
+
+// Key del fotograma actual: si no existe la crea con la pose que se ve; con commit=true la sobrescribe con la pose actual.
+const keyAt = (clip, t) => clip.keys.find((k) => Math.abs(k.t - t) < FRAME / 2);
+function autoKey(commit) {
   const clip = getClip();
-  const v = clip.duration > 0 ? Math.round((t / clip.duration) * 1000) : 0;
-  document.getElementById('timeline').value = String(Math.max(0, Math.min(1000, v)));
-  document.getElementById('tVal').textContent = t.toFixed(2) + 's';
+  const t = currentTime();
+  let k = keyAt(clip, t);
+  const created = !k;
+  if (created) {
+    k = { t, pose: {} };
+    clip.keys.push(k);
+  }
+  if (created || commit) k.pose = JSON.parse(JSON.stringify(currentPose));
+  k.t = t;
+  clip.keys.sort((a, b) => a.t - b.t);
+  return created;
+}
+
+// Pasa un clip a la rejilla de FRAME (una key por fotograma, tomando la pose interpolada) para poder editar cada fotograma.
+function bakeClip(src) {
+  const keys = src.keys || [];
+  const duration = Math.max(FRAME * 4, Math.round((src.duration || 1) / FRAME) * FRAME);
+  const clip = { name: src.name || '', duration: +duration.toFixed(2), keys: [] };
+  if (keys.length <= 1) {
+    clip.keys = keys.length ? JSON.parse(JSON.stringify(keys)) : [{ t: 0, pose: {} }];
+    return clip;
+  }
+  const n = Math.round(duration / FRAME);
+  for (let f = 0; f <= n; f++) {
+    clip.keys.push({ t: +(f * FRAME).toFixed(2), pose: JSON.parse(JSON.stringify(sampleClip(src, f * FRAME))) });
+  }
+  return clip;
 }
 
 function refreshKeysBar() {
   const bar = document.getElementById('keysBar');
   bar.innerHTML = '';
   const clip = getClip();
+  const cur = currentTime();
   const keys = clip.keys.slice().sort((a, b) => a.t - b.t);
-  keys.forEach((k, idx) => {
+  keys.forEach((k) => {
     const d = document.createElement('button');
     d.type = 'button';
-    d.className = 'keyDot';
-    d.textContent = String(idx + 1);
+    d.className = 'keyDot' + (Math.abs(k.t - cur) < FRAME / 2 ? ' on' : '');
+    d.textContent = String(Math.round(k.t / FRAME));
     d.title = k.t.toFixed(2) + 's · ' + Object.keys(k.pose).length + ' huesos';
     d.addEventListener('click', () => {
+      if (playing) return;
       setTimelineFromT(k.t);
       currentPose = JSON.parse(JSON.stringify(k.pose));
       applyPose(currentPose);
       syncSlidersFromPose();
-      statusEl.textContent = 'Key @ ' + k.t.toFixed(2) + 's · ' + Object.keys(k.pose).length + ' huesos';
+      refreshKeysBar();
+      statusEl.textContent = 'Fotograma ' + Math.round(k.t / FRAME) + ' · ' + k.t.toFixed(2) + 's · ' + Object.keys(k.pose).length + ' huesos';
     });
     bar.appendChild(d);
   });
@@ -327,6 +381,8 @@ function readSlidersToPose() {
     z: rad(Number(document.getElementById('rz').value)),
   };
   applyPose(currentPose);
+  autoKey(true);   // mover un hueso ya guarda el fotograma actual: no hace falta pulsar + KEY
+  refreshKeysBar();
 }
 
 function fitModel(model) {
@@ -362,8 +418,9 @@ async function load() {
   fitModel(model);
   modelRoot = new THREE.Group();
   modelRoot.add(model);
-  modelRoot.position.y = 0.55;
+  modelRoot.position.set(MV_HOME.x, MV_HOME.y, MV_HOME.z);
   scene.add(modelRoot);
+  showMv();
   bones = collectBones(modelRoot);
   captureRest();
   ensureBoneHelper();
@@ -379,11 +436,41 @@ async function load() {
   for (const c of Object.values(clips)) {
     if (!c.keys.length) c.keys.push({ t: 0, pose: {} });
   }
+  setTimelineFromT(0);
   refreshKeysBar();
   applyPose({});
   statusEl.textContent =
-    'Stop-motion listo · ' + Object.keys(bones).length + ' huesos · elige hueso, mueve sliders, + KEY';
+    'Stop-motion listo · ' + Object.keys(bones).length + ' huesos · elige hueso, mueve sliders; cada fotograma (0.05 s) se guarda solo';
 }
+
+// --- Mover el modelo (para encuadrarlo): − / + por eje, con repetición al mantener pulsado ---
+const MV_STEP = 0.1;
+const MV_HOME = { x: 0, y: 0.55, z: 0 };
+function showMv() {
+  if (!modelRoot) return;
+  document.getElementById('mvPos').textContent = ['x', 'y', 'z'].map((a) => modelRoot.position[a].toFixed(1)).join(' · ');
+}
+function moveModel(axis, dir) {
+  if (!modelRoot) return;
+  modelRoot.position[axis] += dir * MV_STEP;
+  showMv();
+}
+function holdRepeat(btn, fn) {
+  let t1 = 0, t2 = 0;
+  const stop = () => { clearTimeout(t1); clearInterval(t2); };
+  btn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    fn();
+    t1 = setTimeout(() => { t2 = setInterval(fn, 70); }, 350);
+  });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) btn.addEventListener(ev, stop);
+}
+document.querySelectorAll('[data-mv]').forEach((b) => holdRepeat(b, () => moveModel(b.dataset.mv, Number(b.dataset.d))));
+document.getElementById('mvReset').addEventListener('click', () => {
+  if (!modelRoot) return;
+  modelRoot.position.set(MV_HOME.x, MV_HOME.y, MV_HOME.z);
+  showMv();
+});
 
 ['rx', 'ry', 'rz'].forEach((id) => {
   document.getElementById(id).addEventListener('input', () => {
@@ -399,8 +486,8 @@ document.querySelectorAll('button.step').forEach((btn) => {
     if (btn.dataset.time !== undefined) {
       const dir = Number(btn.dataset.time);
       const el = document.getElementById('timeline');
-      let v = Number(el.value) + dir * 20;
-      v = Math.max(0, Math.min(1000, v));
+      let v = Number(el.value) + dir;   // un fotograma (0.05 s) por toque
+      v = Math.max(0, Math.min(Number(el.max), v));
       el.value = String(v);
       el.dispatchEvent(new Event('input'));
       return;
@@ -422,14 +509,16 @@ document.getElementById('boneSel').addEventListener('change', () => {
   statusEl.textContent = 'Hueso: ' + document.getElementById('boneSel').value;
 });
 
-document.getElementById('timeline').addEventListener('input', () => {
+timelineEl.addEventListener('input', () => {
   if (playing) return;
   const t = currentTime();
   document.getElementById('tVal').textContent = t.toFixed(2) + 's';
-  const pose = sampleClip(getClip(), t);
-  currentPose = pose;
+  currentPose = sampleClip(getClip(), t);
   applyPose(currentPose);
   syncSlidersFromPose();
+  const created = autoKey(false);   // visitar un fotograma sin key lo crea con la pose interpolada
+  refreshKeysBar();
+  statusEl.textContent = 'Fotograma ' + Math.round(t / FRAME) + '/' + frameCount(getClip()) + ' · ' + t.toFixed(2) + 's' + (created ? ' · key nueva' : '');
 });
 
 document.getElementById('dur').addEventListener('input', () => {
@@ -478,6 +567,9 @@ document.getElementById('btnDel').addEventListener('click', () => {
   const before = clip.keys.length;
   clip.keys = clip.keys.filter((k) => Math.abs(k.t - t) > 0.03);
   if (!clip.keys.length) clip.keys.push({ t: 0, pose: {} });
+  currentPose = sampleClip(clip, t);   // sin su key, el fotograma vuelve a la pose interpolada entre sus vecinas
+  applyPose(currentPose);
+  syncSlidersFromPose();
   refreshKeysBar();
   statusEl.textContent =
     before === clip.keys.length ? 'No había key cerca' : 'Key borrada · quedan ' + clip.keys.length;
@@ -514,7 +606,7 @@ document.getElementById('btnImport').addEventListener('click', () => {
 // Mete los clips de un JSON (el que exporta este editor o el ejemplo) y, si se pide, deja uno seleccionado.
 function importClips(data, pick) {
   if (!data || !data.clips) throw new Error('El JSON no trae "clips"');
-  for (const [k, v] of Object.entries(data.clips)) clips[k] = v;
+  for (const [k, v] of Object.entries(data.clips)) clips[k] = bakeClip(v);   // una key por fotograma de 0.05 s
   const sel = document.getElementById('clipSel');
   for (const k of Object.keys(clips)) {
     if (![...sel.options].some((o) => o.value === k)) {
