@@ -22,7 +22,10 @@ button.on{background:#3a4a2a;border-color:#8fbf6a}
 <body>
 <div id="top">
   <strong>LABORATORIO · ENEMIGO</strong>
-  <button id="back" type="button">VOLVER AL JUEGO</button>
+  <div style="display:flex;gap:6px;pointer-events:auto">
+    <button id="toAnim" type="button">STOP-MOTION</button>
+    <button id="back" type="button">VOLVER AL JUEGO</button>
+  </div>
 </div>
 <div id="status">Preparando decodificador meshopt…</div>
 <div id="controls">
@@ -254,6 +257,9 @@ document.getElementById('reset').addEventListener('click', () => {
 });
 document.getElementById('back').addEventListener('click', () => {
   location.href = './index.html';
+});
+document.getElementById('toAnim').addEventListener('click', () => {
+  location.href = './anim-lab.html';
 });
 
 renderer.domElement.addEventListener('pointerdown', (e) => {
