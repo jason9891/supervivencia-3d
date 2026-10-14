@@ -68,6 +68,7 @@ select{max-width:46vw}
     <button id="btnResetPose" type="button">REST</button>
     <button id="btnExport" type="button">EXPORT JSON</button>
     <button id="btnImport" type="button">IMPORT</button>
+    <button id="btnExample" type="button">EJEMPLO CAMINAR</button>
     <input id="fileIn" type="file" accept="application/json,.json" hidden>
   </div>
 </div>
@@ -510,28 +511,41 @@ document.getElementById('btnExport').addEventListener('click', () => {
 document.getElementById('btnImport').addEventListener('click', () => {
   document.getElementById('fileIn').click();
 });
+// Mete los clips de un JSON (el que exporta este editor o el ejemplo) y, si se pide, deja uno seleccionado.
+function importClips(data, pick) {
+  if (!data || !data.clips) throw new Error('El JSON no trae "clips"');
+  for (const [k, v] of Object.entries(data.clips)) clips[k] = v;
+  const sel = document.getElementById('clipSel');
+  for (const k of Object.keys(clips)) {
+    if (![...sel.options].some((o) => o.value === k)) {
+      const o = document.createElement('option');
+      o.value = k;
+      o.textContent = 'Clip: ' + k;
+      sel.appendChild(o);
+    }
+  }
+  if (pick && clips[pick]) sel.value = pick;
+  sel.dispatchEvent(new Event('change'));
+  statusEl.textContent = 'Importado · clips: ' + Object.keys(clips).join(', ');
+}
 document.getElementById('fileIn').addEventListener('change', async (ev) => {
   const f = ev.target.files?.[0];
   if (!f) return;
   try {
-    const text = await f.text();
-    const data = JSON.parse(text);
-    if (data.clips) {
-      for (const [k, v] of Object.entries(data.clips)) clips[k] = v;
-      const sel = document.getElementById('clipSel');
-      for (const k of Object.keys(clips)) {
-        if (![...sel.options].some((o) => o.value === k)) {
-          const o = document.createElement('option');
-          o.value = k;
-          o.textContent = 'Clip: ' + k;
-          sel.appendChild(o);
-        }
-      }
-      document.getElementById('clipSel').dispatchEvent(new Event('change'));
-      statusEl.textContent = 'Importado · clips: ' + Object.keys(clips).join(', ');
-    }
+    importClips(JSON.parse(await f.text()));
   } catch (e) {
     showErr('Import falló: ' + (e.message || e));
+  }
+});
+// Un toque: carga el ciclo de caminata de ejemplo (assets/anims/enemy-walk-example.json) para editarlo.
+document.getElementById('btnExample').addEventListener('click', async () => {
+  try {
+    const res = await fetch('./assets/anims/enemy-walk-example.json', { cache: 'no-cache' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    importClips(await res.json(), 'walk');
+    statusEl.textContent = 'Ejemplo de caminar cargado · 4 poses + cierre · ▶ PLAY para verlo, toca una key (círculo) para editarla';
+  } catch (e) {
+    showErr('No se pudo cargar el ejemplo: ' + (e.message || e));
   }
 });
 
