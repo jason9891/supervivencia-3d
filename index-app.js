@@ -14,33 +14,35 @@ const errorBox = document.getElementById('error');
 addEventListener('error', e => { errorBox.style.display = 'block'; errorBox.textContent = 'Error: ' + (e.message || ''); });
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x12161c);
-scene.fog = new THREE.Fog(0x12161c, 30, 160);
+// Día claro: pueblo en calma hasta el primer monstruo
+scene.background = new THREE.Color(0x7eb6e0);
+scene.fog = new THREE.Fog(0xb8d4ea, 55, 200);
 const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 280);
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.3;
+renderer.toneMappingExposure = 1.45;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-scene.add(new THREE.HemisphereLight(0x8aa0b8, 0x2a2218, 1.0));
-const keyLight = new THREE.DirectionalLight(0xffe8c8, 2.0);
-keyLight.position.set(20, 28, 10);
+scene.add(new THREE.HemisphereLight(0xc8e4ff, 0x8a9a6a, 1.15));
+const keyLight = new THREE.DirectionalLight(0xfff2d6, 2.6);
+keyLight.position.set(35, 48, 18);
 keyLight.castShadow = true;
 keyLight.shadow.mapSize.set(1024, 1024);
 keyLight.shadow.camera.near = 2;
-keyLight.shadow.camera.far = 120;
-keyLight.shadow.camera.left = -55;
-keyLight.shadow.camera.right = 55;
-keyLight.shadow.camera.top = 55;
-keyLight.shadow.camera.bottom = -55;
+keyLight.shadow.camera.far = 140;
+keyLight.shadow.camera.left = -60;
+keyLight.shadow.camera.right = 60;
+keyLight.shadow.camera.top = 60;
+keyLight.shadow.camera.bottom = -60;
 keyLight.shadow.bias = -0.001;
 scene.add(keyLight);
-scene.add(new THREE.DirectionalLight(0x9a4535, 1.1).translateX(8).translateY(8).translateZ(-6));
+scene.add(new THREE.DirectionalLight(0xffe0b0, 0.85).translateX(-12).translateY(18).translateZ(8));
+scene.add(new THREE.AmbientLight(0xffffff, 0.35));
 
 const mapData = buildMap1(scene);
 let pageRead = false, hasKey = false, leverPulled = false, gateClosed = false, foodTaken = false;
@@ -73,7 +75,6 @@ function showStoryPage() {
   if (mapData.pageMesh) mapData.pageMesh.visible = false;
 }
 
-// --- Enemigo del mapa (establo): sigue, ataca, tiene vida y muere ---
 let enemyRt = null;
 let playerHitArmed = false;
 createEnemyRuntime({
@@ -83,7 +84,6 @@ createEnemyRuntime({
   onHint: (t) => { document.getElementById('hint').textContent = t; },
 }).then(async (rt) => {
   enemyRt = rt;
-  // Dentro del establo, quieto hasta cruzar la puerta
   await rt.spawn('soldado', 30, 52);
 }).catch((e) => console.warn('enemy runtime', e));
 
@@ -332,7 +332,7 @@ function animate() {
   if (!mapOverview) jumpQueued = false;
   resolveWallCollisions(player);
   if (enemyRt && enemyRt.resolveAgainstPlayer) enemyRt.resolveAgainstPlayer(player);
-  resolveWallCollisions(player); // re-aplicar paredes tras empuje del monstruo
+  resolveWallCollisions(player);
   resolveGround(player);
 
   if (!gateClosed && player.x > 30 && player.x < 40 && player.z > 64 && player.z < 72) {
