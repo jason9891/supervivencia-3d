@@ -26,7 +26,7 @@ export const SHIELD_MODEL = { rodela: 'Shield_Round', escudo: 'Shield_Heater', t
 // compresión meshopt y material mate). `rot` (rad, XYZ) y `pos` (m) se aplican al modelo antes de ponerlo en la mano;
 // `metal`/`rough` sustituyen al material. Se afinan a ojo en equipment-lab.html (panel AJUSTAR ARMA → COPIAR VALORES).
 export const MODEL_FIX = {
-  Espada_del_veterano: { rot: [Math.PI / 2, 0, 0], pos: [0, 0, 0.35], scale: 0.9, metal: 0.7, rough: 0.4 },
+  Espada_del_veterano: { rot: [1.606, -0.052, -0.105], pos: [0, 0, 0.3], scale: 0.9, metal: 0.7, rough: 0.4 },   // afinada a ojo en equipment-lab
 };
 const MESHOPT_URL = 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/meshopt_decoder.module.js';
 const SHIELD_BACK_X = { Shield_Round: 0.07, Shield_Heater: 0.06, Shield_Heater_2: 0.04 }; // lado del asa (x máximo) de cada escudo
