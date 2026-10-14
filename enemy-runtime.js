@@ -1,5 +1,5 @@
 // enemy-runtime.js — monstruo GLB + IA + anim.
-// Activa solo al cruzar la puerta del establo; mira hacia donde camina; no atraviesa paredes.
+// Activa solo al cruzar la puerta del establo; mira hacia el jugador; no atraviesa paredes.
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/meshopt_decoder.module.js';
@@ -10,10 +10,9 @@ import {
 
 const ENEMY_URL = './assets/characters/tripo_rigging_a71e42e9-2739-425b-a16c-3aa7dba627a6_meshopt.glb';
 const TARGET_HEIGHT = 1.85;
-// 0 = Mixamo mira +Z como el facing del juego. Si va de espaldas, usar Math.PI.
-const FACE_OFFSET = 0;
+// modelo mira -Z respecto al facing del juego
+const FACE_OFFSET = Math.PI;
 
-// Hueco sur del establo (plaza → establo)
 const STABLE_DOOR = { minX: 44.5, maxX: 55.5, minZ: 42.0, maxZ: 48.5 };
 
 function inDoor(x, z) {
@@ -191,10 +190,15 @@ export async function createEnemyRuntime(opts) {
       unit.lastState = 'idle';
       return;
     }
-    if (e.state === 'windup') {
-      if (unit.lastState !== 'windup') anim.attack();
+    if (e.state === 'windup' || e.state === 'recover') {
+      if (unit.lastState !== 'windup' && e.state === 'windup') anim.attack();
+      else if (anim.mode === 'idle' || anim.mode === 'walk') anim.attack();
     } else if (e.state === 'chase') {
-      anim.setMode('walk');
+      if (anim.mode && String(anim.mode).startsWith('attack')) {
+        // deja terminar el combo
+      } else {
+        anim.setMode('walk');
+      }
     } else if (e.state === 'hurt') {
       anim.setMode('hurt');
     } else {
@@ -238,7 +242,6 @@ export async function createEnemyRuntime(opts) {
         continue;
       }
 
-      const prevX = e.x, prevZ = e.z;
       const ev = stepEnemy(e, player, onPlat, dt);
       for (const x of ev) {
         if (x.type === 'enemyStrike') {
@@ -252,12 +255,10 @@ export async function createEnemyRuntime(opts) {
         }
       }
 
-      const mdx = e.x - prevX, mdz = e.z - prevZ;
-      if (mdx * mdx + mdz * mdz > 1e-6) {
-        e.facing = Math.atan2(mdx, mdz);
-      } else if (!e.dead) {
+      // Siempre mirar al jugador
+      if (!e.dead) {
         const dx = player.x - e.x, dz = player.z - e.z;
-        if (Math.hypot(dx, dz) > 0.1) e.facing = Math.atan2(dx, dz);
+        if (Math.hypot(dx, dz) > 0.05) e.facing = Math.atan2(dx, dz);
       }
 
       const fixed = resolveWalls(e.x, e.z, e.radius || 0.45, walls);
