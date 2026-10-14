@@ -331,6 +331,8 @@ function animate() {
   if (lockFacing !== null) player.facing = lockFacing; else if (backNow) player.facing = keepFacing;
   if (!mapOverview) jumpQueued = false;
   resolveWallCollisions(player);
+  if (enemyRt && enemyRt.resolveAgainstPlayer) enemyRt.resolveAgainstPlayer(player);
+  resolveWallCollisions(player); // re-aplicar paredes tras empuje del monstruo
   resolveGround(player);
 
   if (!gateClosed && player.x > 30 && player.x < 40 && player.z > 64 && player.z < 72) {
