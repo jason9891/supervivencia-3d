@@ -54,7 +54,7 @@ select{max-width:46vw}
   <div class="slider-row"><label>X</label><button type="button" class="step" data-axis="rx" data-d="-1">−</button><input id="rx" type="range" min="-180" max="180" step="1" value="0"><button type="button" class="step" data-axis="rx" data-d="1">+</button><span id="rxv">0°</span></div>
   <div class="slider-row"><label>Y</label><button type="button" class="step" data-axis="ry" data-d="-1">−</button><input id="ry" type="range" min="-180" max="180" step="1" value="0"><button type="button" class="step" data-axis="ry" data-d="1">+</button><span id="ryv">0°</span></div>
   <div class="slider-row"><label>Z</label><button type="button" class="step" data-axis="rz" data-d="-1">−</button><input id="rz" type="range" min="-180" max="180" step="1" value="0"><button type="button" class="step" data-axis="rz" data-d="1">+</button><span id="rzv">0°</span></div>
-  <div class="slider-row"><label>t</label><input id="timeline" type="range" min="0" max="1000" step="1" value="0"><span id="tVal">0.00s</span></div>
+  <div class="slider-row"><label>t</label><button type="button" class="step" data-time="-1">−</button><input id="timeline" type="range" min="0" max="1000" step="1" value="0"><button type="button" class="step" data-time="1">+</button><span id="tVal">0.00s</span></div>
   <div class="row">
     <label>Dur</label>
     <input id="dur" type="range" min="20" max="300" step="5" value="100" style="width:120px;accent-color:#c4a574">
@@ -130,7 +130,7 @@ const grid = new THREE.GridHelper(8, 16, 0x444444, 0x2a2a2a);
 scene.add(grid);
 
 const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.05, 200);
-camera.position.set(0, 1.15, 7.8);
+camera.position.set(0, 1.85, 8.2);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
@@ -141,6 +141,7 @@ document.body.appendChild(renderer.domElement);
 
 const clock = new THREE.Clock();
 let modelRoot = null;
+let boneHelper = null;
 let skinned = [];
 let bones = {};
 let rest = new Map();
@@ -206,6 +207,33 @@ function captureRest() {
   for (const b of Object.values(bones)) rest.set(b, b.quaternion.clone());
 }
 
+function ensureBoneHelper() {
+  if (boneHelper) return;
+  boneHelper = new THREE.Group();
+  const axes = new THREE.AxesHelper(0.28);
+  boneHelper.add(axes);
+  const ball = new THREE.Mesh(
+    new THREE.SphereGeometry(0.045, 12, 12),
+    new THREE.MeshBasicMaterial({ color: 0xffcc44, depth: 0.9, transparent: true })
+  );
+  boneHelper.add(ball);
+  scene.add(boneHelper);
+}
+
+function updateBoneHelper() {
+  if (!boneHelper) return;
+  const key = document.getElementById('boneSel')?.value;
+  const b = key && bones[key];
+  if (!b) {
+    boneHelper.visible = false;
+    return;
+  }
+  boneHelper.visible = true;
+  b.updateWorldMatrix(true, false);
+  b.getWorldPosition(boneHelper.position);
+  b.getWorldQuaternion(boneHelper.quaternion);
+}
+
 function applyPose(pose) {
   for (const [b, q] of rest) b.quaternion.copy(q);
   for (const [key, eul] of Object.entries(pose || {})) {
@@ -217,6 +245,7 @@ function applyPose(pose) {
   }
   modelRoot?.updateMatrixWorld(true);
   for (const m of skinned) if (m.skeleton) m.skeleton.update();
+  updateBoneHelper();
 }
 
 function sampleClip(clip, t) {
@@ -332,9 +361,11 @@ async function load() {
   fitModel(model);
   modelRoot = new THREE.Group();
   modelRoot.add(model);
+  modelRoot.position.y = 0.55;
   scene.add(modelRoot);
   bones = collectBones(modelRoot);
   captureRest();
+  ensureBoneHelper();
   const sel = document.getElementById('boneSel');
   sel.innerHTML = '';
   for (const k of BONE_ORDER) {
@@ -364,6 +395,15 @@ async function load() {
 document.querySelectorAll('button.step').forEach((btn) => {
   btn.addEventListener('click', () => {
     if (playing) return;
+    if (btn.dataset.time !== undefined) {
+      const dir = Number(btn.dataset.time);
+      const el = document.getElementById('timeline');
+      let v = Number(el.value) + dir * 20;
+      v = Math.max(0, Math.min(1000, v));
+      el.value = String(v);
+      el.dispatchEvent(new Event('input'));
+      return;
+    }
     const id = btn.dataset.axis;
     const d = Number(btn.dataset.d);
     const el = document.getElementById(id);
@@ -377,6 +417,8 @@ document.querySelectorAll('button.step').forEach((btn) => {
 
 document.getElementById('boneSel').addEventListener('change', () => {
   syncSlidersFromPose();
+  updateBoneHelper();
+  statusEl.textContent = 'Hueso: ' + document.getElementById('boneSel').value;
 });
 
 document.getElementById('timeline').addEventListener('input', () => {
@@ -532,7 +574,8 @@ function animate() {
     applyPose(currentPose);
     syncSlidersFromPose();
   }
-  camera.lookAt(0, TARGET_HEIGHT * 0.55, 0);
+  updateBoneHelper();
+  camera.lookAt(0, TARGET_HEIGHT * 0.72 + 0.55, 0);
   renderer.render(scene, camera);
 }
 animate();
