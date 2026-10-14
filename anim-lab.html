@@ -1,1 +1,99 @@
-PLACEHOLDER
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101114">
+<title>Stop-Motion · Animación</title>
+<style>
+*{box-sizing:border-box;-webkit-user-select:none;user-select:none}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101114;color:#f1e6d2;font-family:system-ui,sans-serif}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+#top{position:fixed;z-index:5;top:env(safe-area-inset-top);left:0;right:0;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;pointer-events:none}
+#top strong{font-size:11px;letter-spacing:.08em;text-shadow:0 2px 5px #000}
+#top button{pointer-events:auto}
+button,select{border:1px solid #c4a574;border-radius:8px;background:#211d17ed;color:#f3d7a0;padding:8px 10px;font-weight:700;font-size:11px}
+button.on{background:#3a4a2a;border-color:#8fbf6a}
+button:disabled{opacity:.4}
+#mover{position:fixed;z-index:8;left:8px;right:8px;top:calc(env(safe-area-inset-top) + 40px);display:flex;flex-wrap:wrap;gap:5px;align-items:center;justify-content:center;background:#101114bb;padding:4px 6px;border-radius:8px;border:1px solid #c4a57444}
+#mover b{font-size:11px;color:#c4a574;margin-left:4px}
+#mover button{padding:5px 12px;font-size:15px;line-height:1;touch-action:manipulation}
+#mover span{font-size:10px;color:#ddd;min-width:64px;text-align:center}
+#status{position:fixed;z-index:6;left:8px;right:8px;top:calc(env(safe-area-inset-top) + 84px);text-align:center;font-size:11px;line-height:1.3;color:#e8dfce;text-shadow:0 2px 5px #000;pointer-events:none;background:#101114bb;padding:6px 8px;border-radius:8px;border:1px solid #c4a57444}
+#panel{position:fixed;z-index:7;left:0;right:0;bottom:0;padding:8px 10px calc(env(safe-area-inset-bottom) + 8px);background:linear-gradient(transparent,#101114ee 18%,#101114f5);display:flex;flex-direction:column;gap:7px;max-height:52%;overflow:auto}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center}
+.row label{font-size:10px;color:#c4a574;min-width:14px}
+.slider-row{display:flex;align-items:center;gap:4px;width:100%;max-width:440px;margin:0 auto}
+.slider-row input[type=range]{flex:1;accent-color:#c4a574;min-width:0}
+.slider-row span{font-size:10px;width:34px;text-align:right;color:#ddd}
+.slider-row .step{padding:6px 9px;min-width:34px;font-size:14px;line-height:1}
+#timeline{width:100%;max-width:480px;margin:0 auto;accent-color:#8fbf6a}
+#keysBar{display:flex;gap:4px;justify-content:center;flex-wrap:wrap;min-height:22px}
+.keyDot{width:18px;height:18px;border-radius:50%;border:1px solid #c4a574;background:#2a241c;font-size:9px;color:#f3d7a0;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.keyDot.on{background:#5a7a3a;border-color:#8fbf6a}
+#err{position:fixed;z-index:10;left:10px;right:10px;top:40%;padding:12px;background:#401b1b;color:#fff;white-space:pre-wrap;display:none;max-height:30%;overflow:auto}
+select{max-width:46vw}
+#toolsExtra{display:flex;flex-wrap:wrap;gap:5px;justify-content:center}
+#toolsExtra button{font-size:10px;padding:7px 9px}
+</style>
+</head>
+<body>
+<div id="top">
+  <strong>STOP-MOTION · ANIM</strong>
+  <div style="display:flex;gap:6px;pointer-events:auto">
+    <button id="back" type="button">JUEGO</button>
+    <button id="toLab" type="button">LAB ENEMIGO</button>
+  </div>
+</div>
+<div id="mover" aria-label="Mover el modelo">
+  <b>MODELO</b>
+  <b>X</b><button type="button" data-mv="x" data-d="-1">−</button><button type="button" data-mv="x" data-d="1">+</button>
+  <b>Y</b><button type="button" data-mv="y" data-d="-1">−</button><button type="button" data-mv="y" data-d="1">+</button>
+  <b>Z</b><button type="button" data-mv="z" data-d="-1">−</button><button type="button" data-mv="z" data-d="1">+</button>
+  <button type="button" id="mvReset" title="Volver a la posición inicial">↺</button>
+  <span id="mvPos"></span>
+</div>
+<div id="status">Cargando modelo…</div>
+<div id="panel">
+  <div class="row">
+    <select id="clipSel">
+      <option value="idle">Clip: Idle</option>
+      <option value="walk">Clip: Walk</option>
+      <option value="run">Clip: Run</option>
+      <option value="attack">Clip: Attack</option>
+      <option value="death">Clip: Death</option>
+    </select>
+    <select id="boneSel"></select>
+  </div>
+  <div class="row" id="toolsExtra">
+    <button type="button" id="skelOn" class="on">ESQUELETO</button>
+    <button type="button" id="genIdle">GEN IDLE</button>
+    <button type="button" id="genWalk">GEN WALK</button>
+    <button type="button" id="genAttack">GEN ATTACK</button>
+  </div>
+  <div class="slider-row"><label>X</label><button type="button" class="step" data-axis="rx" data-d="-1">−</button><input id="rx" type="range" min="-180" max="180" step="1" value="0"><button type="button" class="step" data-axis="rx" data-d="1">+</button><span id="rxv">0°</span></div>
+  <div class="slider-row"><label>Y</label><button type="button" class="step" data-axis="ry" data-d="-1">−</button><input id="ry" type="range" min="-180" max="180" step="1" value="0"><button type="button" class="step" data-axis="ry" data-d="1">+</button><span id="ryv">0°</span></div>
+  <div class="slider-row"><label>Z</label><button type="button" class="step" data-axis="rz" data-d="-1">−</button><input id="rz" type="range" min="-180" max="180" step="1" value="0"><button type="button" class="step" data-axis="rz" data-d="1">+</button><span id="rzv">0°</span></div>
+  <div class="slider-row"><label>t</label><button type="button" class="step" data-time="-1">−</button><input id="timeline" type="range" min="0" max="1000" step="1" value="0"><button type="button" class="step" data-time="1">+</button><span id="tVal">0.00s</span></div>
+  <div class="row">
+    <label>Dur</label>
+    <input id="dur" type="range" min="20" max="300" step="5" value="100" style="width:120px;accent-color:#c4a574">
+    <span id="durVal">1.00s</span>
+  </div>
+  <div id="keysBar"></div>
+  <div class="row">
+    <button id="btnKey" type="button">+ KEY</button>
+    <button id="btnDel" type="button">BORRAR KEY</button>
+    <button id="btnPlay" type="button">▶ PLAY</button>
+    <button id="btnResetPose" type="button">REST</button>
+    <button id="btnExport" type="button">EXPORT JSON</button>
+    <button id="btnImport" type="button">IMPORT</button>
+    <button id="btnExample" type="button">EJEMPLO CAMINAR</button>
+    <input id="fileIn" type="file" accept="application/json,.json" hidden>
+  </div>
+</div>
+<div id="err"></div>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+<script type="module" src="./anim-lab-app.js"></script>
+</body>
+</html>
