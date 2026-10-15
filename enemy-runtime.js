@@ -93,6 +93,17 @@ function resolveWalls(x, z, radius, walls) {
   return { x: px, z: pz };
 }
 
+// Combo de 3 golpes (garra D → garra I → doble garra). Tiempos = fases de mixamo-procedural (0.48/0.48/0.72 s).
+export const COMBO = [
+  { at: 0.26, mult: 0.7, reach: 1.0 },
+  { at: 0.74, mult: 0.7, reach: 1.0 },
+  { at: 1.42, mult: 1.6, reach: 1.25 },   // golpe fuerte final
+];
+export const COMBO_END = 1.68;
+export const COMBO_PAUSE = 1.1;           // respiro tras el 3.er golpe antes de repetir
+export const RUN_DIST = 3.5;              // más lejos que esto corre; cerca camina
+export const RUN_SPEED = 5.2, WALK_SPEED = 2.2;
+
 export async function createEnemyRuntime(opts) {
   const { scene, camera, player } = opts;
   const getGroundY = opts.getGroundY || (() => 0);
@@ -189,17 +200,11 @@ export async function createEnemyRuntime(opts) {
       unit.lastState = 'idle';
       return;
     }
-    const inAttack = anim.mode && String(anim.mode).startsWith('attack');
-    if (e.state === 'windup') {
-      if (unit.lastState !== 'windup') anim.attack();
-      else if (!inAttack) anim.attack();
-    } else if (e.state === 'recover') {
-      if (!inAttack) anim.setMode('walk');
-    } else if (e.state === 'chase') {
-      if (!inAttack) anim.setMode('walk');
-    } else {
-      if (!inAttack) anim.setMode('idle');
-    }
+    if (unit.combo) { unit.lastState = e.state; return; }   // el combo maneja la animación
+    const far = Math.hypot(player.x - e.x, player.z - e.z) > RUN_DIST;
+    if (e.state === 'chase') anim.setMode(far ? 'run' : 'walk');
+    else if (e.state === 'recover') anim.setMode('walk');
+    else anim.setMode('idle');
     unit.lastState = e.state;
   }
 
@@ -238,22 +243,44 @@ export async function createEnemyRuntime(opts) {
         continue;
       }
 
-      const prevX = e.x, prevZ = e.z;
-      const ev = stepEnemy(e, player, onPlat, dt);
-      // Si aún está en animación de combo, no avanzar (evita levitar sin pasos)
-      if (unit.anim && unit.anim.mode && String(unit.anim.mode).startsWith('attack') && e.state === 'chase') {
-        e.x = prevX;
-        e.z = prevZ;
+      if (e.dead) unit.combo = null;
+      const strikes = [];
+      if (unit.combo) {
+        const c = unit.combo;
+        c.t += dt;
+        e.t = 0;                       // mantiene 'windup': stepEnemy no dispara su golpe único
+        e.state = 'windup';
+        e.facing = Math.atan2(player.x - e.x, player.z - e.z);
+        const dist = Math.hypot(player.x - e.x, player.z - e.z);
+        if (c.i < COMBO.length && c.t >= COMBO[c.i].at) { strikes.push(COMBO[c.i]); c.i++; }
+        if (c.i < COMBO.length && dist > e.def.reach * 1.8) {   // el jugador huyó: corta el combo
+          unit.combo = null; e.state = 'chase'; e.t = 0;
+          if (unit.anim) unit.anim.setMode('run');
+        } else if (c.t >= COMBO_END) {
+          unit.combo = null; e.state = 'recover'; e.t = -(COMBO_PAUSE - e.def.recover);
+          if (unit.anim) unit.anim.setMode('idle');
+        }
+      } else {
+        const d0 = Math.hypot(player.x - e.x, player.z - e.z);
+        e.def.speed = d0 > RUN_DIST ? RUN_SPEED : WALK_SPEED;
+        stepEnemy(e, player, onPlat, dt);   // sus eventos de golpe único se ignoran: los golpes vienen del combo
+        if (e.state === 'windup' && !e.dead) {
+          unit.combo = { t: 0, i: 0 };
+          if (unit.anim) { unit.anim.setMode('idle'); unit.anim.attack(); }
+        }
       }
+      const ev = strikes.map((st) => ({ type: 'enemyStrike', enemy: e, st }));
       for (const x of ev) {
-        if (x.type === 'enemyStrike') {
-          const r = resolveEnemyStrike(e, player, pstats);
-          if (r) {
-            events.push({ type: 'playerHurt', result: r, enemy: e });
-            if (r.killed) onHint('Has ca\u00eddo...');
-            else if (r.blocked) onHint('Bloqueaste el golpe');
-            else onHint('\u00a1Te golpe\u00f3 el monstruo! (-' + r.damage + ')');
-          }
+        const baseDmg = e.def.dmg, baseReach = e.def.reach;
+        e.def.dmg = baseDmg * x.st.mult;
+        e.def.reach = baseReach * x.st.reach;
+        const r = resolveEnemyStrike(e, player, pstats);
+        e.def.dmg = baseDmg; e.def.reach = baseReach;
+        if (r) {
+          events.push({ type: 'playerHurt', result: r, enemy: e });
+          if (r.killed) onHint('Has ca\u00eddo...');
+          else if (r.blocked) onHint('Bloqueaste el golpe');
+          else onHint('\u00a1Te golpe\u00f3 el monstruo! (-' + r.damage + ')');
         }
       }
 
