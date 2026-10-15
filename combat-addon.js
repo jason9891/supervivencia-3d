@@ -257,6 +257,16 @@ export function createCombatAddon({ THREE, scene, camera, player, onSwing, onAct
     return r.started;
   }
 
+  // Un enemigo golpeó al jugador (result: de resolveEnemyStrike): número flotante, aviso y animación de reacción.
+  function receiveHit(res) {
+    const txt = res.blocked ? 'bloqueado -' + res.damage : res.guardBroken ? '¡guardia rota! -' + res.damage : '-' + res.damage;
+    pop(txt, res.killed ? 'kill' : '', player.x, (player.y || 0) + 1.9, player.z);
+    if (res.killed) showToast('Has caído · RESTABLECER en el inventario');
+    emit({ type: 'hurt', blocked: res.blocked, guardBroken: res.guardBroken, killed: res.killed });
+    if (panelOpen) renderPanel();
+  }
+  function popAt(text, cls, x, y, z) { pop(text, cls, x, y, z); }
+
   // Beber una poción (teclas 1/2/3 o botón de la página). Devuelve { ok, msg }.
   function drink(kind) {
     const r = B.usePotion(bench, kind);
@@ -312,5 +322,5 @@ export function createCombatAddon({ THREE, scene, camera, player, onSwing, onAct
     if (toastT > 0) { toastT -= dt; if (toastT <= 0) toast.style.opacity = '0'; }
   }
 
-  return { pressAttack, setBlock, drink, toast: showToast, update, give, bench, inventory: inv, setPanel, get panelOpen() { return panelOpen; } };
+  return { pressAttack, setBlock, drink, toast: showToast, update, give, receiveHit, popAt, bench, inventory: inv, setPanel, get panelOpen() { return panelOpen; } };
 }

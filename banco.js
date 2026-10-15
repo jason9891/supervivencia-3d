@@ -77,10 +77,10 @@ export function placeDummy(b, kind, x, z, y = 0) {
     stats: { defense: d.defense, blockFrac: 0 },
     sinceHit: 99, deadT: 0, hurtT: 0,
   });
-  b.dummies = [f];
+  b.dummies = [f, ...b.dummies.filter(d => d.ai)];   // los enemigos con IA (arena.js) se quedan
   return f;
 }
-export function clearDummies(b) { b.dummies = []; }
+export function clearDummies(b) { b.dummies = b.dummies.filter(d => d.ai); }
 
 // --- Jugador ------------------------------------------------------------------
 export function syncPlayer(b, p) {
@@ -116,6 +116,7 @@ export function restore(b) {
 }
 
 function revive(d) {
+  if (d.ai) Object.assign(d, { state: 'idle', t: 0, downed: false, attack: null });
   Object.assign(d, { hp: d.maxHp, dead: false, hitstun: 0, deadT: 0, sinceHit: 99, hurtT: 0, x: d.spawn.x, z: d.spawn.z });
 }
 
@@ -145,6 +146,7 @@ export function update(b, dt) {
     if (att.combo) { b.stats.combos++; out.push({ type: 'combo', name: att.combo.name, mult: att.combo.mult }); }
   }
   for (const d of b.dummies) {
+    if (d.ai) continue;   // los enemigos con IA llevan su propio reloj (arena.js)
     if (d.hurtT > 0) d.hurtT = Math.max(0, d.hurtT - dt);
     if (d.hitstun > 0) d.hitstun = Math.max(0, d.hitstun - dt);
     if (d.dead) {
