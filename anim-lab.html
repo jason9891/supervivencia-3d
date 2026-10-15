@@ -15,11 +15,12 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 button,select{border:1px solid #c4a574;border-radius:8px;background:#211d17ed;color:#f3d7a0;padding:8px 10px;font-weight:700;font-size:11px}
 button.on{background:#3a4a2a;border-color:#8fbf6a}
 button:disabled{opacity:.4}
-#mover{position:fixed;z-index:8;left:8px;right:8px;top:calc(env(safe-area-inset-top) + 40px);display:flex;flex-wrap:wrap;gap:5px;align-items:center;justify-content:center;background:#101114bb;padding:4px 6px;border-radius:8px;border:1px solid #c4a57444}
+#hud{position:fixed;z-index:8;left:8px;right:8px;top:calc(env(safe-area-inset-top) + 40px);display:flex;flex-direction:column;gap:5px;pointer-events:none}
+#mover{display:flex;flex-wrap:wrap;gap:4px;align-items:center;justify-content:center;background:#101114bb;padding:3px 6px;border-radius:8px;border:1px solid #c4a57444;pointer-events:auto}
 #mover b{font-size:11px;color:#c4a574;margin-left:4px}
-#mover button{padding:5px 12px;font-size:15px;line-height:1;touch-action:manipulation}
+#mover button{padding:4px 10px;font-size:14px;line-height:1;touch-action:manipulation}
 #mover span{font-size:10px;color:#ddd;min-width:64px;text-align:center}
-#status{position:fixed;z-index:6;left:8px;right:8px;top:calc(env(safe-area-inset-top) + 84px);text-align:center;font-size:11px;line-height:1.3;color:#e8dfce;text-shadow:0 2px 5px #000;pointer-events:none;background:#101114bb;padding:6px 8px;border-radius:8px;border:1px solid #c4a57444}
+#status{text-align:center;font-size:11px;line-height:1.3;color:#e8dfce;text-shadow:0 2px 5px #000;pointer-events:none;background:#101114bb;padding:6px 8px;border-radius:8px;border:1px solid #c4a57444}
 #panel{position:fixed;z-index:7;left:0;right:0;bottom:0;padding:8px 10px calc(env(safe-area-inset-bottom) + 8px);background:linear-gradient(transparent,#101114ee 18%,#101114f5);display:flex;flex-direction:column;gap:7px;max-height:52%;overflow:auto}
 .row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center}
 .row label{font-size:10px;color:#c4a574;min-width:14px}
@@ -31,6 +32,10 @@ button:disabled{opacity:.4}
 #keysBar{display:flex;gap:4px;justify-content:center;flex-wrap:wrap;min-height:22px}
 .keyDot{width:18px;height:18px;border-radius:50%;border:1px solid #c4a574;background:#2a241c;font-size:9px;color:#f3d7a0;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .keyDot.on{background:#5a7a3a;border-color:#8fbf6a}
+#rigPanel{width:100%;max-width:460px;margin:0 auto;border:1px solid #c4a57455;border-radius:8px;padding:6px;display:flex;flex-direction:column;gap:6px;background:#17140f}
+#rigPanel[hidden]{display:none}
+#rigPanel h4{margin:0;font-size:10px;letter-spacing:.06em;color:#c4a574;text-align:center}
+#rigPanel .hint{font-size:10px;color:#bdb29c;text-align:center;line-height:1.3}
 #err{position:fixed;z-index:10;left:10px;right:10px;top:40%;padding:12px;background:#401b1b;color:#fff;white-space:pre-wrap;display:none;max-height:30%;overflow:auto}
 select{max-width:46vw}
 #toolsExtra{display:flex;flex-wrap:wrap;gap:5px;justify-content:center}
@@ -45,6 +50,7 @@ select{max-width:46vw}
     <button id="toLab" type="button">LAB ENEMIGO</button>
   </div>
 </div>
+<div id="hud">
 <div id="mover" aria-label="Mover el modelo">
   <b>MODELO</b>
   <b>X</b><button type="button" data-mv="x" data-d="-1">−</button><button type="button" data-mv="x" data-d="1">+</button>
@@ -54,6 +60,7 @@ select{max-width:46vw}
   <span id="mvPos"></span>
 </div>
 <div id="status">Cargando modelo…</div>
+</div>
 <div id="panel">
   <div class="row">
     <select id="clipSel">
@@ -74,11 +81,30 @@ select{max-width:46vw}
   <div class="slider-row"><label>X</label><button type="button" class="step" data-axis="rx" data-d="-1">−</button><input id="rx" type="range" min="-180" max="180" step="1" value="0"><button type="button" class="step" data-axis="rx" data-d="1">+</button><span id="rxv">0°</span></div>
   <div class="slider-row"><label>Y</label><button type="button" class="step" data-axis="ry" data-d="-1">−</button><input id="ry" type="range" min="-180" max="180" step="1" value="0"><button type="button" class="step" data-axis="ry" data-d="1">+</button><span id="ryv">0°</span></div>
   <div class="slider-row"><label>Z</label><button type="button" class="step" data-axis="rz" data-d="-1">−</button><input id="rz" type="range" min="-180" max="180" step="1" value="0"><button type="button" class="step" data-axis="rz" data-d="1">+</button><span id="rzv">0°</span></div>
+  <div id="posRows" hidden>
+    <div class="slider-row"><label>PX</label><button type="button" class="step" data-axis="px" data-d="-1">−</button><input id="px" type="range" min="-300" max="300" step="1" value="0"><button type="button" class="step" data-axis="px" data-d="1">+</button><span id="pxv">0</span></div>
+    <div class="slider-row"><label>PY</label><button type="button" class="step" data-axis="py" data-d="-1">−</button><input id="py" type="range" min="-300" max="300" step="1" value="0"><button type="button" class="step" data-axis="py" data-d="1">+</button><span id="pyv">0</span></div>
+    <div class="slider-row"><label>PZ</label><button type="button" class="step" data-axis="pz" data-d="-1">−</button><input id="pz" type="range" min="-300" max="300" step="1" value="0"><button type="button" class="step" data-axis="pz" data-d="1">+</button><span id="pzv">0</span></div>
+  </div>
   <div class="slider-row"><label>t</label><button type="button" class="step" data-time="-1">−</button><input id="timeline" type="range" min="0" max="1000" step="1" value="0"><button type="button" class="step" data-time="1">+</button><span id="tVal">0.00s</span></div>
   <div class="row">
     <label>Dur</label>
     <input id="dur" type="range" min="20" max="300" step="5" value="100" style="width:120px;accent-color:#c4a574">
     <span id="durVal">1.00s</span>
+  </div>
+  <div id="rigPanel" hidden>
+    <h4>ESTRUCTURA · PIVOTE DE <span id="rigBone">—</span></h4>
+    <div class="hint">Mueve el punto de giro del hueso elegido arriba. La malla en reposo no cambia; los huesos hijos se quedan donde estaban.</div>
+    <div class="slider-row"><label>X</label><button type="button" class="step" data-off="0" data-d="-1">−</button><input id="ox" type="range" min="-100" max="100" step="1" value="0"><button type="button" class="step" data-off="0" data-d="1">+</button><span id="oxv">0</span></div>
+    <div class="slider-row"><label>Y</label><button type="button" class="step" data-off="1" data-d="-1">−</button><input id="oy" type="range" min="-100" max="100" step="1" value="0"><button type="button" class="step" data-off="1" data-d="1">+</button><span id="oyv">0</span></div>
+    <div class="slider-row"><label>Z</label><button type="button" class="step" data-off="2" data-d="-1">−</button><input id="oz" type="range" min="-100" max="100" step="1" value="0"><button type="button" class="step" data-off="2" data-d="1">+</button><span id="ozv">0</span></div>
+    <div class="row"><button id="rigResetBone" type="button">RESET PIVOTE</button><button id="rigResetAll" type="button">RESET TODO</button></div>
+    <h4>MANDÍBULA (hueso propio «jaw»)</h4>
+    <div class="row"><button id="jawOn" type="button" class="on">MANDÍBULA: ON</button><button id="jawZone" type="button">VER ZONA</button></div>
+    <div class="hint">Elige «jaw» en la lista de huesos y gira Z: negativo abre la boca, positivo la cierra. La zona magenta es lo que sigue a la mandíbula.</div>
+    <div class="slider-row"><label>Boca</label><input id="jPlane" type="range" min="400" max="600" step="1" value="507"><span id="jPlaneV"></span></div>
+    <div class="slider-row"><label>Inicio</label><input id="jStart" type="range" min="150" max="400" step="1" value="275"><span id="jStartV"></span></div>
+    <div class="slider-row"><label>Ancho</label><input id="jHalf" type="range" min="40" max="250" step="1" value="140"><span id="jHalfV"></span></div>
   </div>
   <div id="keysBar"></div>
   <div class="row">
@@ -88,7 +114,8 @@ select{max-width:46vw}
     <button id="btnResetPose" type="button">REST</button>
     <button id="btnExport" type="button">EXPORT JSON</button>
     <button id="btnImport" type="button">IMPORT</button>
-    <button id="btnExample" type="button">EJEMPLO CAMINAR</button>
+    <button id="btnExample" type="button">CAMINATA REALISTA</button>
+    <button id="btnRig" type="button">ESTRUCTURA</button>
     <input id="fileIn" type="file" accept="application/json,.json" hidden>
   </div>
 </div>
