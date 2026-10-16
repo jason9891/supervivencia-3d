@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diagnóstico de carga</title>
+</head>
+<body style="background:#101114;color:#d8d2c4;font:13px/1.55 monospace;padding:14px;margin:0">
+<h3 style="margin:0 0 10px">Diagnóstico de carga</h3>
+<pre id="o" style="white-space:pre-wrap;word-break:break-word;margin:0">Revisando…</pre>
+<script>
+const o = document.getElementById('o');
+const log = (s) => { o.textContent += '\n' + s; };
+o.textContent = '';
+
+(async () => {
+  const files = ['map1.js', 'props-medieval.js', 'natural-ramp.js', 'map-ramps.js', 'modulo2.js'];
+  const dirs = ['./', './js/', './src/', './scripts/', './maps/'];
+  const where = {};
+
+  log('1) ¿Dónde está cada archivo?');
+  for (const f of files) {
+    const ok = [];
+    for (const d of dirs) {
+      try {
+        const r = await fetch(d + f, { cache: 'no-store' });
+        if (r.ok) ok.push(d + f + ' (' + (await r.text()).length + ' bytes)');
+      } catch (e) {}
+    }
+    where[f] = ok;
+    log((ok.length ? 'OK     ' : 'FALTA  ') + f + (ok.length ? '  ->  ' + ok.join(', ') : ''));
+  }
+  if (!where['map1.js'].length) { log('\nNo encuentro map1.js en las carpetas habituales. Dime en qué carpeta está.'); return; }
+
+  const base = where['map1.js'][0].replace(/map1\.js.*$/, '');
+  log('\n(los archivos deben estar todos en ' + base + ')');
+
+  // reutiliza el importmap de tu index.html para que "three" se resuelva igual que en el juego
+  try {
+    const html = await (await fetch('index.html', { cache: 'no-store' })).text();
+    const m = html.match(/<script[^>]*type=["']importmap["'][^>]*>([\s\S]*?)<\/script>/i);
+    if (m) {
+      const s = document.createElement('script'); s.type = 'importmap'; s.textContent = m[1]; document.head.appendChild(s);
+      log('importmap de index.html: encontrado');
+    } else log('importmap de index.html: NO encontrado (puede que "three" no resuelva aquí)');
+  } catch (e) { log('no pude leer index.html: ' + e.message); }
+
+  log('\n2) Importar cada módulo por separado');
+  for (const f of ['props-medieval.js', 'natural-ramp.js', 'map-ramps.js', 'modulo2.js', 'map1.js']) {
+    try {
+      await import(new URL(base + f, location.href).href);
+      log('OK     ' + f);
+    } catch (e) { log('ERROR  ' + f + ': ' + e.message); }
+  }
+
+  log('\n3) Construir el mapa en una escena de prueba');
+  try {
+    const T = await import('three');
+    const m = await import(new URL(base + 'map1.js', location.href).href);
+    m.buildMap1(new T.Scene());
+    log('OK     buildMap1 se ejecutó sin errores');
+  } catch (e) {
+    log('ERROR  ' + e.message);
+    log((e.stack || '').split('\n').slice(0, 6).join('\n'));
+  }
+  log('\nFin. Toma una captura de esta pantalla.');
+})();
+</script>
+</body>
+</html>
