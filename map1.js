@@ -1,7 +1,8 @@
 // map1.js — El Regreso
 // Paredes naranja tldraw 1:1 + Módulo 2 (oficina 2 ambientes).
 // +X este · +Z norte · Y altura.
-// v2: rampa natural (natural-ramp.js) + materiales y props medievales oscuros (props-medieval.js).
+// v3: rampa natural (natural-ramp.js), materiales y props medievales (props-medieval.js),
+//     muros con altura (ya no bloquean en el piso 2), pisos sin solape, reja del corredor y techo del establo.
 
 import * as THREE from 'three';
 import { clearRamps, addRamp, sampleRampY, getSlopeAt, buildRampMesh, RAMPS } from './map-ramps.js';
@@ -49,12 +50,22 @@ let LEVER_POS = new THREE.Vector3(84, LEVEL1_Y + 11, 67);
 let FOOD_POS = new THREE.Vector3(28, LEVEL1_Y + 0.45, 52);
 
 const PLAYER_R = 0.45;
+const PLAYER_H = 1.8;
 const WALL_H = 5.0;
+
+// reja del corredor: cruza todo el ancho (z 64.4-70.8) y cae cuando el jugador ya la pasó
+const GATE_X = 34;
+const GATE_H = 4.3;
+const GATE_TRIGGER_X = 36.5;
+let _mapData = null, _sawWest = false, _gatePassed = false, _gateAnim = null;
 
 export const WALLS = [];
 export const PLATFORMS = [];
 
-function addWall(minX, maxX, minZ, maxZ) { WALLS.push({ minX, maxX, minZ, maxZ }); }
+// minY/maxY: altura del muro. Sin ellos (4 argumentos) bloquea a cualquier altura, como antes.
+function addWall(minX, maxX, minZ, maxZ, minY = -Infinity, maxY = Infinity) {
+  WALLS.push({ minX, maxX, minZ, maxZ, minY, maxY });
+}
 function addPlatform(minX, maxX, minZ, maxZ, y) { PLATFORMS.push({ minX, maxX, minZ, maxZ, y }); }
 
 export function getGroundHeight(x, z, fromY = Infinity) {
@@ -81,7 +92,13 @@ export function resolveGround(player) {
 }
 
 export function resolveWallCollisions(player, radius = PLAYER_R) {
+  checkGateTrigger(player);
+  const py = player.y;
   for (const w of WALLS) {
+    if (py !== undefined) {
+      if (py >= w.maxY - 0.3) continue;          // el jugador va por encima del muro (piso 2, azotea)
+      if (py + PLAYER_H <= w.minY) continue;     // el jugador va por debajo
+    }
     const nx = Math.max(w.minX, Math.min(player.x, w.maxX));
     const nz = Math.max(w.minZ, Math.min(player.z, w.maxZ));
     const dx = player.x - nx, dz = player.z - nz;
@@ -107,20 +124,52 @@ export function distanceToKey(x, y, z) { return Math.hypot(x - KEY_POS.x, y - KE
 export function distanceToLever(x, y, z) { return Math.hypot(x - LEVER_POS.x, y - LEVER_POS.y, z - LEVER_POS.z); }
 export function distanceToFood(x, y, z) { return Math.hypot(x - FOOD_POS.x, y - FOOD_POS.y, z - FOOD_POS.z); }
 
-// Parpadeo de antorchas: bucle propio (una sola vez). Si prefieres llamarlo desde tu bucle principal,
-// quita esto y llama updateTorches(segundos) en cada frame.
-let _torchLoop = false;
-function startTorchLoop() {
-  if (_torchLoop) return;
-  _torchLoop = true;
-  const tick = (ms) => { updateTorches(ms * 0.001); requestAnimationFrame(tick); };
+// Bucle propio (una sola vez): parpadeo de antorchas y caída de la reja.
+let _loop = false;
+function startMapLoop() {
+  if (_loop) return;
+  _loop = true;
+  let last = 0;
+  const tick = (ms) => {
+    const t = ms * 0.001, dt = Math.min(0.05, t - last);
+    last = t;
+    updateTorches(t);
+    updateGate(dt);
+    requestAnimationFrame(tick);
+  };
   requestAnimationFrame(tick);
+}
+
+function checkGateTrigger(player) {
+  if (!_mapData || _gatePassed) return;
+  if (player.z < 63.6 || player.z > 71.6 || (player.y !== undefined && player.y > LEVEL1_Y + 2)) return;
+  if (player.x < GATE_X - 1.5) _sawWest = true;                       // viene de la rampa
+  else if (_sawWest && player.x > GATE_TRIGGER_X) { _gatePassed = true; dropGate(); }
+}
+
+function dropGate() {
+  const g = _mapData && _mapData.gate;
+  if (!g || g.userData.closed) return;
+  g.userData.closed = true;
+  _gateAnim = { t: 0 };
+}
+
+function updateGate(dt) {
+  if (!_gateAnim || !_mapData) return;
+  _gateAnim.t = Math.min(1, _gateAnim.t + dt / 0.6);
+  const e = _gateAnim.t * _gateAnim.t;
+  _mapData.gate.position.y = LEVEL1_Y + GATE_H * (1 - e);
+  if (_gateAnim.t >= 1) {
+    addWall(GATE_X - 0.4, GATE_X + 0.4, 64.4, 70.8, LEVEL1_Y, LEVEL1_Y + GATE_H);
+    _gateAnim = null;
+  }
 }
 
 export function buildMap1(scene) {
   WALLS.length = 0;
   PLATFORMS.length = 0;
   clearRamps();
+  _sawWest = false; _gatePassed = false; _gateAnim = null;
 
   const mat = (c, r = 0.85, metal = 0.05) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: metal });
   const M = createMedievalMaterials();
@@ -140,7 +189,7 @@ export function buildMap1(scene) {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     scene.add(mesh);
-    if (solid) addWall(x - w / 2, x + w / 2, z - d / 2, z + d / 2);
+    if (solid) addWall(x - w / 2, x + w / 2, z - d / 2, z + d / 2, y - h / 2, y + h / 2);
     return mesh;
   }
 
@@ -162,8 +211,14 @@ export function buildMap1(scene) {
     box(w, WALL_H, d, orangeW, cx, LEVEL1_Y + WALL_H / 2, cz, true);
   }
 
-  pad(90, 72, LEVEL1_Y, 45, 36, dirt);
-  pad(90, 10, LEVEL1_Y, 45, 67, stone);
+  // Pisos del nivel 1: cada zona tiene su propia losa y ninguna se solapa (antes parpadeaban)
+  pad(13.5, 6, LEVEL1_Y, 6.75, 69, stone);        // descanso al final de la rampa  (x 0-13.5,  z 66-72)
+  pad(54, 9, LEVEL1_Y, 40.5, 67.5, stone);        // corredor                       (x 13.5-67.5, z 63-72)
+  pad(54, 63, LEVEL1_Y, 40.5, 31.5, dirt);        // plaza                          (x 13.5-67.5, z 0-63)
+  pad(22.5, 9.6, LEVEL1_Y, 78.75, 58.2, dirt);    // patio                          (x 67.5-90,  z 53.4-63)
+  pad(5.5, 9, LEVEL1_Y, 77.5, 67.5, stone);       // paso entre las torres          (x 74.75-80.25, z 63-72)
+  // Muralla: el nivel 1 es una meseta, este muro la apoya desde el terreno hasta la plaza
+  box(0.8, 6.8, 63.1, M.wall, 13.5, LEVEL1_Y - 3.4, 31.55, true);
 
   pad(13.5, 9, LEVEL0_Y, 6.75, 4.5, grass);
   const rampDef = {
@@ -174,7 +229,6 @@ export function buildMap1(scene) {
   };
   addRamp(rampDef);                                              // la física no cambia
   buildNaturalRamp(scene, rampDef, { detail: RAMP_DETAIL });     // ladera de pasto, sendero, rocas
-  pad(22, 8, LEVEL1_Y, 12, 67, stone);
 
   wallBox(13.1, 13.9, 0.0, 63.1);
   wallBox(13.5, 36.0, 62.9, 63.6);
@@ -191,12 +245,27 @@ export function buildMap1(scene) {
   wallBox(80.4, 81.1, 62.9, 72.0);
   wallBox(80.5, 89.8, 62.9, 63.5);
   wallBox(13.3, 89.9, 0.25, 1.25);
+  wallBox(0, 67.3, 71.6, 72.4);                      // borde norte: descanso y corredor
 
-  const gateLeft = box(2.5, 4.2, 0.4, iron, 32, LEVEL1_Y + 2.0, 67.5, false);
-  const gateRight = box(2.5, 4.2, 0.4, iron, 37, LEVEL1_Y + 2.0, 67.5, false);
-  const gate = gateLeft;
+  // Reja del corredor: marco de piedra con ranura arriba; la reja cuelga oculta en la ranura y cae al cruzar la línea de disparo
+  box(0.8, 8.6, 0.8, M.wall, GATE_X, LEVEL1_Y + 4.3, 64.0, true);
+  box(0.8, 8.6, 0.8, M.wall, GATE_X, LEVEL1_Y + 4.3, 71.2, true);
+  box(0.6, GATE_H, 6.4, M.wall, GATE_X, LEVEL1_Y + GATE_H + GATE_H / 2, 67.6, false);
+  const gate = new THREE.Group();
+  const gbox = (w, h, d, y, z) => {
+    const geo = new THREE.BoxGeometry(w, h, d);
+    worldUV(geo, w, h, d, iron);
+    const m = new THREE.Mesh(geo, iron);
+    m.position.set(0, y, z); m.castShadow = true; gate.add(m);
+  };
+  for (let i = 0; i < 9; i++) gbox(0.12, GATE_H, 0.12, GATE_H / 2, 64.7 + i * 0.725);
+  gbox(0.14, 0.15, 6.4, 0.4, 67.6);
+  gbox(0.14, 0.15, 6.4, 3.2, 67.6);
+  gate.position.set(GATE_X, LEVEL1_Y + GATE_H, 0);     // arriba, oculta en la ranura
   gate.name = 'mainGate';
-  gate.userData = { mate: gateRight, closed: false };
+  gate.userData = { closed: false };
+  scene.add(gate);
+  const gateLeft = gate, gateRight = gate;
 
   const foodMesh = box(0.5, 0.25, 0.4, mat(0xc4a060), FOOD_POS.x, FOOD_POS.y, FOOD_POS.z);
 
@@ -225,11 +294,38 @@ export function buildMap1(scene) {
   towerDoor.userData = { locked: true };
 
   /* ---- props medievales de prueba en el establo (x 14-35, z 46-62) ---- */
-  const chest1 = placeProp(scene, buildChest(M), 20, LEVEL1_Y, 59, 0.3, addWall);
-  placeProp(scene, buildTable(M), 26, LEVEL1_Y, 58, 0, addWall);
-  placeProp(scene, buildChair(M), 26, LEVEL1_Y, 56.8, Math.PI, addWall);
+  const addSolid = (a, b, c, d) => addWall(a, b, c, d, LEVEL1_Y, LEVEL1_Y + 2);
+  const chest1 = placeProp(scene, buildChest(M), 20, LEVEL1_Y, 59, 0.3, addSolid);
+  placeProp(scene, buildTable(M), 26, LEVEL1_Y, 58, 0, addSolid);
+  placeProp(scene, buildChair(M), 26, LEVEL1_Y, 56.8, Math.PI, addSolid);
   placeProp(scene, buildTorch(M), 13.95, LEVEL1_Y + 2.4, 55, Math.PI / 2);   // sobre la cara este del muro oeste
-  startTorchLoop();
+
+  /* ---- techo del establo: dos aguas con cumbrera a lo largo de X ---- */
+  {
+    const x0 = 13.1, x1 = 54.5, z0 = 44.5, z1 = 64.0, y0 = LEVEL1_Y + WALL_H, rise = 2.6;
+    const zc = (z0 + z1) / 2, half = (z1 - z0) / 2;
+    const slope = Math.atan2(rise, half), slen = Math.hypot(half, rise) + 0.3;
+    for (const s of [-1, 1]) {
+      const geo = new THREE.BoxGeometry(x1 - x0, 0.25, slen);
+      worldUV(geo, x1 - x0, 0.25, slen, wood);
+      const m = new THREE.Mesh(geo, wood);
+      m.position.set((x0 + x1) / 2, y0 + rise / 2 + 0.12, zc + (s * half) / 2);
+      m.rotation.x = s * slope;
+      m.castShadow = m.receiveShadow = true;
+      scene.add(m);
+    }
+    box(x1 - x0, 0.3, 0.35, wood, (x0 + x1) / 2, y0 + rise + 0.15, zc, false);
+    const tri = new THREE.Shape();
+    tri.moveTo(-half, 0); tri.lineTo(half, 0); tri.lineTo(0, rise); tri.closePath();
+    for (const gx of [x0, x1 - 0.6]) {
+      const g = new THREE.Mesh(new THREE.ExtrudeGeometry(tri, { depth: 0.6, bevelEnabled: false }), dark);
+      g.rotation.y = Math.PI / 2;
+      g.position.set(gx, y0, zc);
+      g.castShadow = g.receiveShadow = true;
+      scene.add(g);
+    }
+  }
+  startMapLoop();
 
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), mat(0x3d5c38, 1));
   ground.rotation.x = -Math.PI / 2;
@@ -237,7 +333,7 @@ export function buildMap1(scene) {
   ground.receiveShadow = true;
   scene.add(ground);
 
-  return {
+  const result = {
     gate, gateLeft, gateRight, portcullis,
     pageMesh: mod.pageMesh, keyMesh: mod.keyMesh, foodMesh, leverArm, towerDoor,
     hallDoor: null, herbs: [], creature: null,
@@ -246,14 +342,15 @@ export function buildMap1(scene) {
     spawn: { ...SPAWN },
     mod2: mod,
   };
+  _mapData = result;
+  return result;
 }
 
+// La reja ya se cierra sola al cruzar la línea de disparo (checkGateTrigger). Si tu juego sigue llamando a esta
+// función al tocar la reja, se ignora hasta que el jugador la haya pasado.
 export function closePassageGate(mapData) {
-  if (!mapData?.gate || mapData.gate.userData.closed) return;
-  mapData.gate.userData.closed = true;
-  addWall(33.5, 35.5, 66.5, 68.5);
-  if (mapData.gateLeft) mapData.gateLeft.position.x = 34;
-  if (mapData.gateRight) mapData.gateRight.position.x = 35.5;
+  if (!_gatePassed) return;
+  dropGate();
 }
 
 export function tryUnlockTowerDoor(mapData, hasKey) {
