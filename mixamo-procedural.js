@@ -106,6 +106,66 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
   let dead = false;
   let deathT = 0;
 
+  // ---- clips horneados (assets/anims/monster-*.json): mismo formato que anim-lab (Euler XYZ sobre el reposo + traslación de cadera)
+  const clips = {};
+  const parentInv = new Map();
+  let jawBone = null;
+  let clipT = 0, clipRate = 1;
+  let blendFrom = null, blendT = 0;
+  const BLEND = 0.14;
+  const qa = new THREE.Quaternion(), qb = new THREE.Quaternion(), eC = new THREE.Euler(), vC = new THREE.Vector3();
+  function parentInvOf(b) {
+    let inv = parentInv.get(b);
+    if (inv === undefined) {
+      inv = null;
+      if (b.parent) { root.updateMatrixWorld(true); inv = b.parent.getWorldQuaternion(new THREE.Quaternion()).invert(); }
+      parentInv.set(b, inv);
+    }
+    return inv;
+  }
+  function compileClip(c) {
+    const keys = c.keys.slice().sort((a, b) => a.t - b.t).map((k) => {
+      const q = {}, p = {};
+      for (const [name, e] of Object.entries(k.pose)) {
+        q[name] = new THREE.Quaternion().setFromEuler(eC.set(e.x || 0, e.y || 0, e.z || 0, 'XYZ'));
+        if (e.px || e.py || e.pz) p[name] = [e.px || 0, e.py || 0, e.pz || 0];
+      }
+      return { t: k.t, q, p };
+    });
+    return { name: c.name, duration: c.duration, hit: c.hit, chain: c.chain, speed: c.speed, keys };
+  }
+  // Cuando hay clips, cualquier cambio de animación se funde desde la pose en pantalla (sin saltos).
+  function beginBlend() {
+    if (!blendFrom) blendFrom = new Map();
+    for (const [b] of rest) blendFrom.set(b, { q: b.quaternion.clone(), p: b.position.clone() });
+    blendT = BLEND;
+  }
+  function poseClip(c, t, loop) {
+    const ks = c.keys; let i = 0;
+    const T = loop ? ((t % c.duration) + c.duration) % c.duration : Math.min(t, ks[ks.length - 1].t);
+    while (i < ks.length - 2 && ks[i + 1].t <= T) i++;
+    const a = ks[i], b = ks[Math.min(i + 1, ks.length - 1)];
+    const u = b.t > a.t ? Math.min(1, Math.max(0, (T - a.t) / (b.t - a.t))) : 0;
+    for (const name of Object.keys(a.q)) {
+      const bone = name === 'jaw' ? jawBone : bones[name];
+      if (!bone || !rest.has(bone)) continue;
+      qa.copy(a.q[name]); qb.copy(b.q[name] || a.q[name]); qa.slerp(qb, u);
+      bone.quaternion.copy(rest.get(bone).quat).multiply(qa);
+      const pa = a.p[name], pb = b.p[name] || pa;
+      if (pa) {
+        vC.set(pa[0] + (pb[0] - pa[0]) * u, pa[1] + (pb[1] - pa[1]) * u, pa[2] + (pb[2] - pa[2]) * u);
+        const inv = parentInvOf(bone); if (inv) vC.applyQuaternion(inv);
+        bone.position.copy(rest.get(bone).pos).add(vC);
+      }
+    }
+  }
+  function finishBlend(dt) {
+    if (!blendFrom || blendT <= 0) return;
+    blendT = Math.max(0, blendT - dt);
+    const u = 1 - blendT / BLEND, e = u * u * (3 - 2 * u);
+    for (const [b, f] of blendFrom) { b.quaternion.slerpQuaternions(f.q, b.quaternion, e); b.position.lerpVectors(f.p, b.position, e); }
+  }
+
   const qDelta = new THREE.Quaternion();
   const eTmp = new THREE.Euler();
 
@@ -119,9 +179,11 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
 
   function setMode(next) {
     if (dead) return;
-    if (next === 'attack') { attackPhase = 1; attackT = 0; return; }
+    if (next === 'attack') { attackPhase = 1; attackT = 0; if (clips.attack1) beginBlend(); return; }
     if (next === 'dead' || next === 'death') { die(); return; }
-    mode = next || 'idle';
+    const m = next || 'idle';
+    if (clips.walk && (m !== mode || attackPhase > 0)) { beginBlend(); if (m !== mode) clipT = 0; }
+    mode = m;
     attackPhase = 0;
   }
 
@@ -143,6 +205,15 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
   function update(dt) {
     if (boneCount < 4) return;
     time += dt;
+    if (clips.attack1 && attackPhase > 0 && !dead) {
+      attackT += dt;
+      const c = clips['attack' + attackPhase];
+      const lim = attackPhase < 3 ? c.chain : c.duration;
+      if (attackT >= lim) {
+        beginBlend(); attackT = 0;
+        if (attackPhase < 3) attackPhase += 1; else { attackPhase = 0; clipT = 0; }
+      }
+    }
     restoreRest(rest);
 
     if (dead) {
@@ -193,6 +264,20 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
       return;
     }
 
+    if (clips.attack1 && attackPhase > 0) {
+      poseClip(clips['attack' + attackPhase], attackT, false);
+      finishBlend(dt);
+      flushSkeleton();
+      return;
+    }
+    const bakedClip = mode === 'walk' ? clips.walk : mode === 'run' ? clips.run : null;
+    if (bakedClip && attackPhase === 0) {
+      clipT += dt * clipRate;
+      poseClip(bakedClip, clipT, true);
+      finishBlend(dt);
+      flushSkeleton();
+      return;
+    }
     if (attackPhase > 0) {
       attackT += dt;
       const hitDur = attackPhase === 3 ? 0.72 : 0.48;
@@ -245,6 +330,7 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
     }
 
     if (mode === 'idle' || mode === 'hurt') {
+      if (jawBone) applyLocalRot(jawBone, 0, 0, -0.08 + Math.sin(time * 1.2) * 0.03);
       const b = Math.sin(time * 1.7) * 0.04;
       const hurt = mode === 'hurt' ? 0.15 : 0;
       applyLocalRot(bones.spine, 0.02 + b * 0.3 + hurt, 0, 0);
@@ -305,10 +391,25 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
     setMode,
     attack() {
       if (dead) return;
-      if (attackPhase === 0) { attackPhase = 1; attackT = 0; }
+      if (attackPhase === 0) { attackPhase = 1; attackT = 0; if (clips.attack1) beginBlend(); }
     },
     die,
     update,
+    /** Carga clips horneados: { walk, run, attack1, attack2, attack3 } (objetos de clip del JSON). Lo que falte sigue siendo procedural. */
+    useClips(map) { for (const [k, c] of Object.entries(map || {})) if (c && c.keys && c.keys.length) clips[k] = compileClip(c); },
+    /** Hueso de mandíbula creado por RigEditor (hijo de Head): se mueve con la clave 'jaw' de los clips. */
+    attachJaw(bone) { jawBone = bone; if (bone) rest.set(bone, { pos: bone.position.clone(), quat: bone.quaternion.clone() }); },
+    setRate(r) { clipRate = r > 0 ? r : 1; },
+    get hasClips() { return !!(clips.walk || clips.run || clips.attack1); },
+    /** m/s del suelo que recorre el ciclo a rate 1 con el tamaño real del modelo (el GLB nativo mide ≈0.707). */
+    groundSpeed(name) { const c = clips[name]; return c && c.speed ? (c.speed / 2.69) * (height / 0.707) : 0; },
+    /** Calendario del combo: segundos (desde que arranca) en que cae cada golpe y duración total. */
+    attackTimeline() {
+      if (!clips.attack1) return { hits: [0.26, 0.74, 1.42], end: 1.68 };
+      let t0 = 0; const hits = [];
+      for (const k of ['attack1', 'attack2', 'attack3']) { const c = clips[k]; hits.push(t0 + c.hit); t0 += k === 'attack3' ? c.duration : c.chain; }
+      return { hits, end: t0 };
+    },
     isReady() { return boneCount >= 4 && skinned.length > 0; },
   };
 }

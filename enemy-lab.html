@@ -44,6 +44,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.m
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/meshopt_decoder.module.js';
 import { createMixamoProcedural } from './mixamo-procedural.js';
+import { equipMonster } from './monster-moves.js';
 
 const ENEMY_RIGGED = './assets/characters/tripo_rigging_a71e42e9-2739-425b-a16c-3aa7dba627a6_meshopt.glb';
 const ENEMY_MESH = './assets/characters/tripo_pbr_model_739224f1-e1dd-4aec-976a-084ab2e81a3d_meshopt.glb';
@@ -161,6 +162,10 @@ function setupModel(gltf, label) {
 
   procedural = createMixamoProcedural(THREE, model, { height: TARGET_HEIGHT });
   procedural.setMode('idle');
+  // clips realistas (caminata, carrera, 3 golpes) + mandíbula; si fallan, quedan las animaciones procedurales
+  equipMonster(procedural, model).then((ok) => {
+    statusEl.textContent += ok ? '\nClips realistas + mandíbula: OK' : '\nClips realistas: no cargaron (procedural)';
+  });
 
   camera.position.set(0, Math.max(1.2, TARGET_HEIGHT * 0.75), Math.max(4, TARGET_HEIGHT * 2.8));
   camera.lookAt(0, TARGET_HEIGHT * 0.5, 0);

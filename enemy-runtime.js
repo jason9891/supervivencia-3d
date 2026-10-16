@@ -4,6 +4,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.m
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/meshopt_decoder.module.js';
 import { createMixamoProcedural } from './mixamo-procedural.js';
+import { equipMonster } from './monster-moves.js';
 import {
   createEnemy, stepEnemy, resolveEnemyStrike, resolveHit, separate, ENEMIES,
 } from './combat.js';
@@ -93,7 +94,8 @@ function resolveWalls(x, z, radius, walls) {
   return { x: px, z: pz };
 }
 
-// Combo de 3 golpes (garra D → garra I → doble garra). Tiempos = fases de mixamo-procedural (0.48/0.48/0.72 s).
+// Combo de 3 golpes (zarpazo D → zarpazo I → golpe a dos manos). Los instantes de impacto salen de los clips (anim.attackTimeline());
+// estos son los de respaldo si no cargan los clips.
 export const COMBO = [
   { at: 0.26, mult: 0.7, reach: 1.0 },
   { at: 0.74, mult: 0.7, reach: 1.0 },
@@ -101,8 +103,9 @@ export const COMBO = [
 ];
 export const COMBO_END = 1.68;
 export const COMBO_PAUSE = 1.1;           // respiro tras el 3.er golpe antes de repetir
-export const RUN_DIST = 3.5;              // más lejos que esto corre; cerca camina
-export const RUN_SPEED = 5.2, WALK_SPEED = 2.2;
+export const RUN_DIST = 2.4;              // más lejos que esto corre; cerca avanza caminando
+export const RUN_RATE = 1.5, WALK_RATE = 3.0;   // velocidad de reproducción del ciclo (la del suelo sale del propio clip: pies sin deslizar)
+export const RUN_SPEED = 2.4, WALK_SPEED = 0.55;   // de respaldo (sin clips)
 
 export async function createEnemyRuntime(opts) {
   const { scene, camera, player } = opts;
@@ -171,6 +174,8 @@ export async function createEnemyRuntime(opts) {
 
     const anim = createMixamoProcedural(THREE, model, { height: TARGET_HEIGHT });
     anim.setMode('idle');
+    await equipMonster(anim, model);
+    anim.setMode('idle');
 
     const unit = {
       data, root, anim, hpBar: createHpBar(),
@@ -202,8 +207,8 @@ export async function createEnemyRuntime(opts) {
     }
     if (unit.combo) { unit.lastState = e.state; return; }   // el combo maneja la animación
     const far = Math.hypot(player.x - e.x, player.z - e.z) > RUN_DIST;
-    if (e.state === 'chase') anim.setMode(far ? 'run' : 'walk');
-    else if (e.state === 'recover') anim.setMode('walk');
+    if (e.state === 'chase') { anim.setMode(far ? 'run' : 'walk'); anim.setRate(far ? RUN_RATE : WALK_RATE); }
+    else if (e.state === 'recover') { anim.setMode('walk'); anim.setRate(WALK_RATE); }
     else anim.setMode('idle');
     unit.lastState = e.state;
   }
@@ -252,17 +257,19 @@ export async function createEnemyRuntime(opts) {
         e.state = 'windup';
         e.facing = Math.atan2(player.x - e.x, player.z - e.z);
         const dist = Math.hypot(player.x - e.x, player.z - e.z);
-        if (c.i < COMBO.length && c.t >= COMBO[c.i].at) { strikes.push(COMBO[c.i]); c.i++; }
+        const tl = unit.anim ? unit.anim.attackTimeline() : { hits: COMBO.map((k) => k.at), end: COMBO_END };
+        if (c.i < COMBO.length && c.t >= tl.hits[c.i]) { strikes.push(COMBO[c.i]); c.i++; }
         if (c.i < COMBO.length && dist > e.def.reach * 1.8) {   // el jugador huyó: corta el combo
           unit.combo = null; e.state = 'chase'; e.t = 0;
-          if (unit.anim) unit.anim.setMode('run');
-        } else if (c.t >= COMBO_END) {
+          if (unit.anim) { unit.anim.setMode('run'); unit.anim.setRate(RUN_RATE); }
+        } else if (c.t >= tl.end) {
           unit.combo = null; e.state = 'recover'; e.t = -(COMBO_PAUSE - e.def.recover);
           if (unit.anim) unit.anim.setMode('idle');
         }
       } else {
         const d0 = Math.hypot(player.x - e.x, player.z - e.z);
-        e.def.speed = d0 > RUN_DIST ? RUN_SPEED : WALK_SPEED;
+        const an = unit.anim, far0 = d0 > RUN_DIST;
+        e.def.speed = an && an.hasClips ? an.groundSpeed(far0 ? 'run' : 'walk') * (far0 ? RUN_RATE : WALK_RATE) : (far0 ? RUN_SPEED : WALK_SPEED);
         stepEnemy(e, player, onPlat, dt);   // sus eventos de golpe único se ignoran: los golpes vienen del combo
         if (e.state === 'windup' && !e.dead) {
           unit.combo = { t: 0, i: 0 };
