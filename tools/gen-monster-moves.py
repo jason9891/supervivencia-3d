@@ -150,7 +150,7 @@ def run_clip():
             sw = np.cos(th + np.pi * off * 2 + np.pi)
             sg = SIDE[s]
             hand[s] = np.array([0.04 + 0.12 * sw, -0.12 + 0.045 * max(0.0, sw) , sg * (0.15 - 0.02 * sw)])
-        jaw = -0.30 + 0.12 * np.sin(4 * np.pi * (ph - 0.2))            # jadeo: la boca abierta marca el ritmo
+        jaw = -0.17 + 0.06 * np.sin(4 * np.pi * (ph - 0.2))            # jadeo: la boca abierta marca el ritmo
         return {'d_hips': d, 'torso': torso(yaw, roll, lean, (1.0, 0.3, -0.5, -0.8), (0.0, 0.3, 0.55, 0.8), head_lean=-lean * 0.5, head_yaw=-0.1 * yaw), 'hand': hand, 'ank': ank, 'jaw': jaw}
     speed = (2 * gw.S) / (gw.STANCE * T) * SCALE
     return bake('run', T, frame, True, {'speed': round(float(speed), 2)}, fr=0.025)
@@ -163,14 +163,14 @@ def swipe_frame(side, T, hit):
     sg = SIDE[side]; other = 'Left' if side == 'Right' else 'Right'
     ta = hit - 0.2                        # fin de la anticipación; el latigazo dura 0.2 s (≥4 fotogramas, sin saltos de pose)
     rec = hit + 0.12
-    wind = np.array([-0.09, 0.12, 0.22 * sg]); mid = np.array([0.17, 0.09, 0.05 * sg]); strike = np.array([0.27, -0.09, -0.12 * sg]); over = np.array([0.22, -0.13, -0.17 * sg])
+    wind = np.array([-0.06, 0.08, 0.21 * sg]); mid = np.array([0.15, 0.06, 0.08 * sg]); strike = np.array([0.25, -0.10, -0.06 * sg]); over = np.array([0.21, -0.14, -0.09 * sg])
     hand_t = track([(0, REST_H * [1, 1, sg]), (ta, wind, 'sm'), (hit - 0.1, mid, 'in'), (hit, strike, 'out'), (hit + 0.07, over, 'out'), (T, REST_H * [1, 1, sg], 'sm')])
     off_t = track([(0, REST_H * [1, 1, SIDE[other]]), (ta, np.array([0.02, -0.07, 0.17 * SIDE[other]]), 'sm'), (hit, np.array([0.08, -0.12, 0.15 * SIDE[other]]), 'sm'), (T, REST_H * [1, 1, SIDE[other]], 'sm')])
-    yaw_t = track([(0, 0.0), (ta, -0.55 * sg, 'sm'), (hit, 0.45 * sg, 'in'), (hit + 0.12, 0.5 * sg, 'out'), (T, 0.0, 'sm')])   # +yaw gira a la izquierda
-    lean_t = track([(0, 0.0), (ta, -0.12, 'sm'), (hit, 0.42, 'in'), (hit + 0.12, 0.38, 'out'), (T, 0.0, 'sm')])
-    hip_t = track([(0, [0, 0, 0]), (ta, [-0.012, -0.018, 0.0], 'sm'), (hit, [0.045, -0.028, -0.01 * sg], 'in'), (hit + 0.12, [0.042, -0.026, 0], 'out'), (T, [0, 0, 0], 'sm')])
-    jaw_t = track([(0, -0.10), (ta, -0.30, 'sm'), (hit, -0.62, 'in'), (hit + 0.12, -0.55, 'out'), (T, -0.10, 'sm')])
-    head_t = track([(0, 0.0), (ta, 0.10, 'sm'), (hit, -0.22, 'in'), (hit + 0.12, -0.18, 'out'), (T, 0.0, 'sm')])
+    yaw_t = track([(0, 0.0), (ta, -0.38 * sg, 'sm'), (hit, 0.30 * sg, 'in'), (hit + 0.12, 0.34 * sg, 'out'), (T, 0.0, 'sm')])   # +yaw gira a la izquierda
+    lean_t = track([(0, 0.0), (ta, -0.08, 'sm'), (hit, 0.28, 'in'), (hit + 0.12, 0.25, 'out'), (T, 0.0, 'sm')])
+    hip_t = track([(0, [0, 0, 0]), (ta, [-0.012, -0.018, 0.0], 'sm'), (hit, [0.03, -0.02, -0.01 * sg], 'in'), (hit + 0.12, [0.028, -0.018, 0], 'out'), (T, [0, 0, 0], 'sm')])
+    jaw_t = track([(0, -0.10), (ta, -0.20, 'sm'), (hit, -0.34, 'in'), (hit + 0.12, -0.30, 'out'), (T, -0.10, 'sm')])
+    head_t = track([(0, 0.0), (ta, 0.06, 'sm'), (hit, -0.14, 'in'), (hit + 0.12, -0.11, 'out'), (T, 0.0, 'sm')])
     def pole(s, t):
         o = np.array([-0.5, -0.85, 0.0]); k = float(sm(t / max(ta, 1e-6))) * (1 - float(sm((t - hit - 0.1) / max(1e-6, T - hit - 0.1))))
         return apole[s] * (1 - k) + o * k
@@ -189,15 +189,15 @@ def swipe_frame(side, T, hit):
 def slam_frame(T, hit):
     """Golpe a dos manos desde arriba: carga con la espalda arqueada y rugido, embestida y martillazo."""
     ta = hit - 0.28
-    up = np.array([-0.03, 0.25, 0.13]); down = np.array([0.27, -0.13, 0.07]); low = np.array([0.24, -0.17, 0.09]); gather = np.array([0.0, 0.05, 0.16])
+    up = np.array([-0.02, 0.21, 0.13]); down = np.array([0.25, -0.11, 0.08]); low = np.array([0.22, -0.15, 0.10]); gather = np.array([0.0, 0.05, 0.16])
     def hand(s):
         sg = SIDE[s]
         return track([(0, REST_H * [1, 1, sg]), (hit * 0.3, gather * [1, 1, sg], 'sm'), (ta, up * [1, 1, sg], 'sm'), (hit - 0.16, up * [1, 1, sg] + [0.06, -0.03, 0], 'sm'), (hit, down * [1, 1, sg], 'out'), (hit + 0.10, low * [1, 1, sg], 'out'), (T, REST_H * [1, 1, sg], 'sm')])
     ht = {s: hand(s) for s in ('Left', 'Right')}
-    lean_t = track([(0, 0.0), (ta, -0.32, 'sm'), (hit - 0.16, -0.36, 'sm'), (hit, 0.62, 'in'), (hit + 0.12, 0.58, 'out'), (T, 0.0, 'sm')])
-    hip_t = track([(0, [0, 0, 0]), (ta, [-0.02, 0.012, 0], 'sm'), (hit - 0.16, [-0.02, 0.014, 0], 'sm'), (hit, [0.075, -0.045, 0], 'in'), (hit + 0.12, [0.07, -0.042, 0], 'out'), (T, [0, 0, 0], 'sm')])
-    jaw_t = track([(0, -0.10), (ta * 0.5, -0.35, 'sm'), (ta, -0.85, 'sm'), (hit - 0.16, -0.9, 'sm'), (hit, -0.55, 'in'), (hit + 0.15, -0.3, 'out'), (T, -0.10, 'sm')])
-    head_t = track([(0, 0.0), (ta, 0.28, 'sm'), (hit - 0.16, 0.30, 'sm'), (hit, -0.30, 'in'), (hit + 0.12, -0.25, 'out'), (T, 0.0, 'sm')])
+    lean_t = track([(0, 0.0), (ta, -0.22, 'sm'), (hit - 0.16, -0.25, 'sm'), (hit, 0.42, 'in'), (hit + 0.12, 0.39, 'out'), (T, 0.0, 'sm')])
+    hip_t = track([(0, [0, 0, 0]), (ta, [-0.02, 0.012, 0], 'sm'), (hit - 0.16, [-0.02, 0.014, 0], 'sm'), (hit, [0.05, -0.03, 0], 'in'), (hit + 0.12, [0.047, -0.028, 0], 'out'), (T, [0, 0, 0], 'sm')])
+    jaw_t = track([(0, -0.10), (ta * 0.5, -0.20, 'sm'), (ta, -0.50, 'sm'), (hit - 0.16, -0.52, 'sm'), (hit, -0.32, 'in'), (hit + 0.15, -0.2, 'out'), (T, -0.10, 'sm')])
+    head_t = track([(0, 0.0), (ta, 0.18, 'sm'), (hit - 0.16, 0.20, 'sm'), (hit, -0.20, 'in'), (hit + 0.12, -0.16, 'out'), (T, 0.0, 'sm')])
     kp = lambda t: float(sm(t / max(ta, 1e-6))) * (1 - float(sm((t - hit - 0.12) / max(1e-6, T - hit - 0.12))))
     def frame(t, ph):
         lean = float(lean_t(t))
@@ -215,6 +215,32 @@ def attack_clips():
         fr = slam_frame(T, hit) if name == 'attack3' else swipe_frame('Right' if name == 'attack1' else 'Left', T, hit)
         out[name] = bake(name, T, fr, False, {'hit': hit, 'chain': round(T if name == 'attack3' else hit + 0.24, 3), 'speed': 0.0}, fr=0.025)   # 40 fotogramas/s: los latigazos son rápidos
     return out
+
+# ======================================================= MUERTE
+def death_clip():
+    """Golpe de gracia: sacudida hacia atrás con rugido, las rodillas ceden (cadera baja con los pies clavados), el cuerpo se desploma y queda inerte.
+    El vuelco lateral lo hace la raíz en el juego (enemy-runtime) a lo largo de los mismos 1.35 s."""
+    T = 1.35
+    hit_t, buck, slump = 0.30, 0.85, 1.25
+    lean_t = track([(0, 0.0), (0.12, -0.34, 'out'), (hit_t, -0.30, 'sm'), (buck, 0.30, 'in'), (slump, 0.55, 'out'), (T, 0.55, 'sm')])
+    yaw_t = track([(0, 0.0), (0.12, 0.26, 'out'), (buck, -0.18, 'sm'), (T, -0.22, 'sm')])
+    roll_t = track([(0, 0.0), (0.2, 0.08, 'sm'), (buck, -0.10, 'sm'), (T, -0.22, 'sm')])
+    hip_t = track([(0, [0, 0, 0]), (0.12, [-0.025, 0.006, 0], 'out'), (hit_t, [-0.03, -0.01, 0], 'sm'), (buck, [-0.035, -0.095, 0.01], 'in'), (slump, [0.0, -0.125, 0.015], 'out'), (T, [0.0, -0.13, 0.015], 'sm')])
+    jaw_t = track([(0, -0.10), (0.12, -0.45, 'out'), (hit_t + 0.1, -0.40, 'sm'), (buck, -0.22, 'sm'), (slump, -0.34, 'sm'), (T, -0.36, 'sm')])
+    head_t = track([(0, 0.0), (0.12, 0.30, 'out'), (hit_t, 0.20, 'sm'), (buck, -0.30, 'in'), (T, -0.45, 'sm')])
+    def arm(s):
+        sg = SIDE[s]
+        return track([(0, REST_H * [1, 1, sg]), (0.12, np.array([-0.07, 0.10, 0.22 * sg]), 'out'), (hit_t + 0.1, np.array([-0.04, 0.05, 0.23 * sg]), 'sm'),
+                      (buck, np.array([0.06, -0.20, 0.13 * sg]), 'sm'), (T, np.array([0.04, -0.24, 0.12 * sg]), 'sm')])
+    at = {s: arm(s) for s in ('Left', 'Right')}
+    kp = lambda t: float(sm(t / 0.2))
+    def frame(t, ph):
+        step = float(sm((t - 0.05) / 0.3)) * (1 - float(sm((t - 0.5) / 0.3)))
+        ank = {'Left': (np.array([-0.025 * step, 0.0, 0.0]), 0.0), 'Right': (np.array([0.02 * step, 0.0, 0.0]), 0.0)}   # un pie se arrastra al recular
+        return {'d_hips': hip_t(t), 'torso': torso(float(yaw_t(t)), float(roll_t(t)), float(lean_t(t)), (0.5, 0.5, 0.7, 0.9), (0.1, 0.3, 0.55, 0.85), head_lean=float(head_t(t))),
+                'hand': {s: at[s](t) for s in at}, 'ank': ank, 'jaw': float(jaw_t(t)),
+                'pole': {s_: apole[s_] * (1 - kp(t)) + np.array([-0.5, -0.85, 0.0]) * kp(t) for s_ in ('Left', 'Right')}}
+    return bake('death', T, frame, False, {'speed': 0.0}, fr=0.025)
 
 def check(clip, label):
     """Comprobaciones numéricas: saltos de Euler entre fotogramas y pies/manos con el FK real del editor."""
@@ -238,4 +264,6 @@ if __name__ == '__main__':
     atk = attack_clips()
     for k, c in atk.items(): check(c, k)
     json.dump({'version': 2, 'rig': 'mixamo', 'note': 'Golpes realistas del monstruo (zarpazo D, zarpazo I, golpe a dos manos). ' + note, 'clips': atk}, open('assets/anims/monster-attack.json', 'w'), separators=(',', ':'))
+    death = death_clip(); check(death, 'death')
+    json.dump({'version': 2, 'rig': 'mixamo', 'note': 'Muerte realista del monstruo. ' + note, 'clips': {'death': death}}, open('assets/anims/monster-death.json', 'w'), separators=(',', ':'))
     print('run speed', run['speed'], 'm/s')

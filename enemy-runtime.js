@@ -312,7 +312,7 @@ export async function createEnemyRuntime(opts) {
         const t = Math.min(1, e.deadT / 1.35);
         const ease = t * t * (3 - 2 * t);
         unit.root.rotation.z = ease * 1.35;
-        unit.root.position.y = e.y - ease * 0.2;
+        unit.root.position.y = e.y - ease * (unit.anim && unit.anim.hasDeathClip ? 0.03 : 0.2);   // con clip, la cadera ya baja sola
       }
 
       syncAnim(unit);

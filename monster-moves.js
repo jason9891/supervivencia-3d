@@ -9,8 +9,8 @@ let cache = null;
 export function loadMonsterClips(base = BASE) {
   if (!cache) {
     const get = (f) => fetch(base + f).then((r) => { if (!r.ok) throw new Error(f + ' ' + r.status); return r.json(); });
-    cache = Promise.all([get('monster-walk.json'), get('monster-run.json'), get('monster-attack.json')]).then(([w, r, a]) => {
-      const out = { ...a.clips, ...r.clips, walk: { ...w.clips.walk, speed: WALK_SPEED_MS } };
+    cache = Promise.all([get('monster-walk.json'), get('monster-run.json'), get('monster-attack.json'), get('monster-death.json').catch(() => ({ clips: {} }))]).then(([w, r, a, d]) => {
+      const out = { ...a.clips, ...r.clips, ...d.clips, walk: { ...w.clips.walk, speed: WALK_SPEED_MS } };
       return out;
     }).catch((e) => { cache = null; throw e; });
   }

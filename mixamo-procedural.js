@@ -189,6 +189,7 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
 
   function die() {
     if (dead) return;
+    if (clips.death) beginBlend();
     dead = true;
     deathT = 0;
     attackPhase = 0;
@@ -216,6 +217,13 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
     }
     restoreRest(rest);
 
+    if (dead && clips.death) {
+      deathT += dt;
+      poseClip(clips.death, deathT, false);   // se queda en la última pose
+      finishBlend(dt);
+      flushSkeleton();
+      return;
+    }
     if (dead) {
       deathT += dt;
       const total = 1.35;
@@ -401,6 +409,7 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
     attachJaw(bone) { jawBone = bone; if (bone) rest.set(bone, { pos: bone.position.clone(), quat: bone.quaternion.clone() }); },
     setRate(r) { clipRate = r > 0 ? r : 1; },
     get hasClips() { return !!(clips.walk || clips.run || clips.attack1); },
+    get hasDeathClip() { return !!clips.death; },
     /** m/s del suelo que recorre el ciclo a rate 1 con el tamaño real del modelo (el GLB nativo mide ≈0.707). */
     groundSpeed(name) { const c = clips[name]; return c && c.speed ? (c.speed / 2.69) * (height / 0.707) : 0; },
     /** Calendario del combo: segundos (desde que arranca) en que cae cada golpe y duración total. */
