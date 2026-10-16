@@ -452,7 +452,7 @@ function animate() {
     if (procedural) procedural.update(dt);
     if (modelRoot) {   // vuelco del cuerpo al morir (mismo que en el juego: z = de espaldas/bruces, x = de costado)
       modelRoot.rotation.set(0, targetY, 0);
-      if (procedural && procedural.isDead) {
+      if (procedural && procedural.isDead && !procedural.deathBaked) {
         const t = procedural.deathProgress, ease = t * t * (3 - 2 * t), tl = procedural.deathTilt;
         if (tl.axis === 'x') modelRoot.rotateX(ease * tl.angle); else modelRoot.rotateZ(ease * tl.angle);
       }

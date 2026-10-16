@@ -6,7 +6,7 @@ brazos, torsión/inclinación del tronco repartida por la columna, hueso de mand
   · attack1: zarpazo derecho (anticipación → latigazo cruzando el cuerpo → remate → recuperación).
   · attack2: zarpazo izquierdo (espejo).
   · attack3: golpe a dos manos desde arriba (carga con rugido, embestida, impacto).
-  · death*: 5 muertes (espalda, bruces, costado D/I, rodillas) con `tilt` para el vuelco de la raíz.
+  (las muertes las genera tools/gen-monster-death.py con suelo y gravedad)
 Cada clip lleva `hit` (segundo en que cae el golpe) y `speed` (m/s de suelo a rate 1 en el juego, escala 2.69) para sincronizar IA y animación.
 Uso: python3 tools/gen-monster-moves.py   (necesita numpy; ejecutar desde la raíz del repo)"""
 import json, sys, importlib.util
@@ -47,6 +47,10 @@ def push_out(tgt, a, b, r):
     if n < 1e-6: d, n = np.array([0.0, -1.0, 0.0]), 1.0
     return c + d / n * r
 
+n0leg = {}
+for s_ in gw.LEG:
+    dl = gw.t0[s_][0] + gw.t0[s_][1]; dl = dl / np.linalg.norm(dl); n0leg[s_] = np.cross(dl, gw.pole0[s_]); n0leg[s_] /= np.linalg.norm(n0leg[s_])
+
 def sm(t): t = min(1.0, max(0.0, t)); return t * t * (3 - 2 * t)
 EASE = {'sm': sm, 'in': lambda t: min(1.0, max(0.0, t)) ** 2.4, 'out': lambda t: 1 - (1 - min(1.0, max(0.0, t))) ** 2.4}
 
@@ -65,10 +69,14 @@ def compose(frame):
     relativa a la articulación del hombro en el MODELO (se le aplica la rotación del tórax)}, ank{Left,Right → (offset tobillo, cabeceo)}, jaw.
     → pose Euler de los 20 huesos + 'jaw'."""
     d_hips, T = frame['d_hips'], frame['torso']
-    Rwd = {G(n): T[k] for k, n in (('hips', 'Hips'), ('spine', 'Spine'), ('spine1', 'Spine1'), ('spine2', 'Spine2'), ('neck', 'Neck'), ('head', 'Head'))}
+    tilted = 'tilt' in frame
+    Rt, cpiv = frame['tilt'] if tilted else (np.eye(3), np.zeros(3))      # caída rígida del cuerpo alrededor de un pivote en el suelo
+    lift = np.array([0.0, frame.get('lift', 0.0), 0.0])                   # elevación para no atravesar el suelo
+    W = lambda p: cpiv + Rt @ (p - cpiv) + lift
+    Rwd = {G(n): Rt @ T[k] for k, n in (('hips', 'Hips'), ('spine', 'Spine'), ('spine1', 'Spine1'), ('spine2', 'Spine2'), ('neck', 'Neck'), ('head', 'Head'))}
     Rdes = {i: Rwd[i] @ Rrest[i] for i in Rwd}
     P = {}
-    P[G('Hips')] = Prest[G('Hips')] + d_hips
+    P[G('Hips')] = W(Prest[G('Hips')] + d_hips)
     for ch in ('Spine', 'Spine1', 'Spine2'):
         i = G(ch); P[i] = P[par[i]] + Rdes[par[i]] @ TL[i]
     Rs = Rdes[G('Spine2')]
@@ -82,6 +90,8 @@ def compose(frame):
         P[sh] = P[G('Spine2')] + Rdes[G('Spine2')] @ TL[sh]
         ids = ARM[s]; Pa = P[sh] + Rdes[sh] @ TL[ids[0]]
         tgt = Pa + Rwd[G('Spine2')] @ frame['hand'][s]
+        hw = frame.get('hand_world', {}).get(s)
+        if hw is not None: tgt = (1 - hw[1]) * tgt + hw[1] * hw[0]          # la mano cae hacia un punto del mundo (apoyo en el suelo / colgando)
         tgt = push_out(tgt, head_a, head_b, HEAD_R + CLAW_MARGIN)
         l1, l2 = np.linalg.norm(a0[s][0]), np.linalg.norm(a0[s][1])
         pl = frame.get('pole', {}).get(s, apole[s])
@@ -97,16 +107,25 @@ def compose(frame):
     for s in ('Left', 'Right'):
         ids = gw.LEG[s]; dA, pitch = frame['ank'][s]
         Hj = P[Hips] + Rdes[Hips] @ TL[ids[0]]
-        Atar = gw.ANK0[s] + dA
-        K = ik3(Hj, Atar, np.linalg.norm(gw.t0[s][0]), np.linalg.norm(gw.t0[s][1]), gw.pole0[s])
-        Rdes[ids[0]] = rot_from_to(gw.t0[s][0], K - Hj) @ Rrest[ids[0]]
-        Rdes[ids[1]] = rot_from_to(gw.t0[s][1], Atar - K) @ Rrest[ids[1]]
-        Rdes[ids[2]] = Rz(pitch) @ Rrest[ids[2]]
+        Atar = W(gw.ANK0[s] + dA)
+        fw = frame.get('foot_world', {}).get(s)
+        if fw is not None: Atar = (1 - fw[1]) * Atar + fw[1] * fw[0]
+        pole_l = Rt @ gw.pole0[s]
+        K = ik3(Hj, Atar, np.linalg.norm(gw.t0[s][0]), np.linalg.norm(gw.t0[s][1]), pole_l)
+        if tilted:   # torsión determinista (como en los brazos): el plano de la rodilla sigue a la pierna
+            dhl = (Atar - Hj) / np.linalg.norm(Atar - Hj); nl = np.cross(dhl, pole_l); nl /= np.linalg.norm(nl)
+            F0t, F0s = frame3(gw.t0[s][0], n0leg[s]), frame3(gw.t0[s][1], n0leg[s])
+            Rdes[ids[0]] = frame3(K - Hj, nl) @ F0t.T @ Rrest[ids[0]]
+            Rdes[ids[1]] = frame3(Atar - K, nl) @ F0s.T @ Rrest[ids[1]]
+        else:
+            Rdes[ids[0]] = rot_from_to(gw.t0[s][0], K - Hj) @ Rrest[ids[0]]
+            Rdes[ids[1]] = rot_from_to(gw.t0[s][1], Atar - K) @ Rrest[ids[1]]
+        Rdes[ids[2]] = Rt @ Rz(pitch) @ Rrest[ids[2]]
     out = {}
     for key, nm in KEYS.items():
         i = G(nm); Rpar = Rdes[par[i]] if par[i] in Rdes else Rrest[par[i]]
         x, y, z = euler_xyz(RL[i].T @ Rpar.T @ Rdes[i]); out[key] = {'x': round(float(x), 4), 'y': round(float(y), 4), 'z': round(float(z), 4)}
-    h = out['hips']; h['px'], h['py'], h['pz'] = (round(float(v), 4) for v in d_hips)
+    h = out['hips']; h['px'], h['py'], h['pz'] = (round(float(v), 4) for v in (P[Hips] - Prest[Hips]))
     out['jaw'] = {'x': 0, 'y': 0, 'z': round(float(frame['jaw']), 4)}
     return out
 
@@ -234,87 +253,6 @@ def attack_clips():
         out[name] = bake(name, T, fr, False, {'hit': hit, 'chain': round(T if name == 'attack3' else hit + 0.24, 3), 'speed': 0.0}, fr=0.025)   # 40 fotogramas/s: los latigazos son rápidos
     return out
 
-# ======================================================= MUERTES
-DEATH_T = 1.35   # = duración del vuelco de la raíz en el juego
-POLE_DOWN = np.array([-0.5, -0.85, 0.0])
-
-def _death(name, tilt, lean, yaw, roll, hip, jaw, head, arm, foot):
-    """Ensambla un clip de muerte. `tilt` = {axis, angle}: cómo vuelca la raíz del modelo en el juego (z = cae de espaldas/de frente, x = de lado)."""
-    kp = lambda t: float(sm(t / 0.2))
-    def frame(t, ph):
-        lt, rt_ = foot(t)
-        return {'d_hips': hip(t), 'torso': torso(float(yaw(t)), float(roll(t)), float(lean(t)), (0.5, 0.5, 0.7, 0.9), (0.1, 0.3, 0.55, 0.85), head_lean=float(head(t))),
-                'hand': {s: arm(s)(t) for s in ('Left', 'Right')}, 'ank': {'Left': (lt, 0.0), 'Right': (rt_, 0.0)}, 'jaw': float(jaw(t)),
-                'pole': {s_: apole[s_] * (1 - kp(t)) + POLE_DOWN * kp(t) for s_ in ('Left', 'Right')}}
-    return bake(name, DEATH_T, frame, False, {'speed': 0.0, 'tilt': tilt}, fr=0.025)
-
-def _drag(a, b):
-    """Pies: uno se arrastra al recular/avanzar (a, b = desplazamientos en x del izquierdo y del derecho)."""
-    def f(t):
-        step = float(sm((t - 0.05) / 0.3)) * (1 - float(sm((t - 0.5) / 0.3)))
-        return np.array([a * step, 0.0, 0.0]), np.array([b * step, 0.0, 0.0])
-    return f
-
-def _arms(keys_by_side):
-    return lambda s: track([(t, np.array(v) * [1, 1, SIDE[s] if mirror else 1], e) for t, v, e, mirror in keys_by_side])
-
-def death_back():
-    """Impacto de frente: sacudida hacia atrás con rugido, rodillas ceden y cae de espaldas."""
-    T = DEATH_T; hit_t, buck, slump = 0.30, 0.85, 1.25
-    arm = lambda s: track([(0, REST_H * [1, 1, SIDE[s]]), (0.12, np.array([-0.07, 0.10, 0.22 * SIDE[s]]), 'out'), (hit_t + 0.1, np.array([-0.04, 0.05, 0.23 * SIDE[s]]), 'sm'),
-                           (buck, np.array([0.06, -0.20, 0.13 * SIDE[s]]), 'sm'), (T, np.array([0.04, -0.24, 0.12 * SIDE[s]]), 'sm')])
-    return _death('death', {'axis': 'z', 'angle': 1.35},
-        track([(0, 0.0), (0.12, -0.34, 'out'), (hit_t, -0.30, 'sm'), (buck, 0.30, 'in'), (slump, 0.55, 'out'), (T, 0.55, 'sm')]),
-        track([(0, 0.0), (0.12, 0.26, 'out'), (buck, -0.18, 'sm'), (T, -0.22, 'sm')]),
-        track([(0, 0.0), (0.2, 0.08, 'sm'), (buck, -0.10, 'sm'), (T, -0.22, 'sm')]),
-        track([(0, [0, 0, 0]), (0.12, [-0.025, 0.006, 0], 'out'), (hit_t, [-0.03, -0.01, 0], 'sm'), (buck, [-0.035, -0.095, 0.01], 'in'), (slump, [0.0, -0.125, 0.015], 'out'), (T, [0.0, -0.13, 0.015], 'sm')]),
-        track([(0, -0.10), (0.12, -0.45, 'out'), (hit_t + 0.1, -0.40, 'sm'), (buck, -0.22, 'sm'), (slump, -0.34, 'sm'), (T, -0.36, 'sm')]),
-        track([(0, 0.0), (0.12, 0.30, 'out'), (hit_t, 0.20, 'sm'), (buck, -0.30, 'in'), (T, -0.45, 'sm')]), arm, _drag(-0.025, 0.02))
-
-def death_front():
-    """Golpe por la espalda / empujón: se encorva hacia delante, las manos intentan frenar la caída y cae de bruces."""
-    T = DEATH_T
-    arm = lambda s: track([(0, REST_H * [1, 1, SIDE[s]]), (0.14, np.array([0.02, 0.0, 0.26 * SIDE[s]]), 'out'), (0.5, np.array([0.17, -0.17, 0.12 * SIDE[s]]), 'in'),
-                           (0.9, np.array([0.20, -0.22, 0.14 * SIDE[s]]), 'out'), (T, np.array([0.18, -0.23, 0.15 * SIDE[s]]), 'sm')])
-    return _death('deathFront', {'axis': 'z', 'angle': -1.25},
-        track([(0, 0.0), (0.14, 0.12, 'out'), (0.5, 0.40, 'in'), (0.95, 0.85, 'in'), (T, 0.95, 'out')]),
-        track([(0, 0.0), (0.14, -0.20, 'out'), (0.6, 0.12, 'sm'), (T, 0.15, 'sm')]),
-        track([(0, 0.0), (0.3, -0.06, 'sm'), (T, 0.10, 'sm')]),
-        track([(0, [0, 0, 0]), (0.14, [0.012, 0.004, 0], 'out'), (0.5, [0.03, -0.05, 0], 'in'), (0.95, [0.05, -0.12, 0], 'in'), (T, [0.05, -0.13, 0], 'sm')]),
-        track([(0, -0.10), (0.14, -0.40, 'out'), (0.6, -0.20, 'sm'), (T, -0.14, 'sm')]),
-        track([(0, 0.0), (0.14, 0.18, 'out'), (0.6, -0.20, 'sm'), (T, -0.38, 'sm')]), arm, _drag(0.03, -0.02))
-
-def death_side(sg):
-    """Se tambalea y se derrumba de costado (sg=+1 sobre su derecha, −1 sobre su izquierda); un brazo intenta apoyarse."""
-    T = DEATH_T; nm = 'deathSideR' if sg > 0 else 'deathSideL'
-    def arm(s):
-        k = SIDE[s]
-        if k == sg:   # el brazo del lado que cae se estira para apoyarse
-            return track([(0, REST_H * [1, 1, k]), (0.2, np.array([0.02, -0.02, 0.27 * k]), 'out'), (0.6, np.array([0.04, -0.18, 0.22 * k]), 'in'), (T, np.array([0.03, -0.20, 0.20 * k]), 'sm')])
-        return track([(0, REST_H * [1, 1, k]), (0.2, np.array([-0.04, 0.10, 0.20 * k]), 'out'), (0.7, np.array([0.02, -0.12, 0.14 * k]), 'sm'), (T, np.array([0.03, -0.22, 0.12 * k]), 'sm')])
-    return _death(nm, {'axis': 'x', 'angle': 1.28 * sg},
-        track([(0, 0.0), (0.2, -0.12, 'out'), (0.7, 0.20, 'sm'), (T, 0.32, 'sm')]),
-        track([(0, 0.0), (0.2, -0.22 * sg, 'out'), (0.8, 0.15 * sg, 'sm'), (T, 0.22 * sg, 'sm')]),
-        track([(0, 0.0), (0.25, -0.12 * sg, 'sm'), (0.8, 0.45 * sg, 'in'), (T, 0.52 * sg, 'out')]),
-        track([(0, [0, 0, 0]), (0.2, [-0.015, 0.0, -0.01 * sg], 'out'), (0.8, [0.0, -0.10, 0.045 * sg], 'in'), (T, [0.0, -0.125, 0.05 * sg], 'sm')]),
-        track([(0, -0.10), (0.2, -0.40, 'out'), (0.8, -0.24, 'sm'), (T, -0.30, 'sm')]),
-        track([(0, 0.0), (0.2, 0.22, 'out'), (0.8, -0.20, 'sm'), (T, -0.32, 'sm')]), arm, _drag(0.0, 0.0))
-
-def death_kneel():
-    """Cae de rodillas, se queda un instante erguido y se desploma hacia delante (vuelco corto)."""
-    T = DEATH_T
-    arm = lambda s: track([(0, REST_H * [1, 1, SIDE[s]]), (0.2, np.array([-0.02, 0.06, 0.22 * SIDE[s]]), 'out'), (0.65, np.array([0.05, -0.22, 0.14 * SIDE[s]]), 'sm'), (T, np.array([0.09, -0.24, 0.13 * SIDE[s]]), 'sm')])
-    return _death('deathKneel', {'axis': 'z', 'angle': -0.62},
-        track([(0, 0.0), (0.2, -0.10, 'out'), (0.65, 0.10, 'sm'), (0.95, 0.20, 'sm'), (T, 0.62, 'in')]),
-        track([(0, 0.0), (0.2, 0.12, 'out'), (T, 0.0, 'sm')]),
-        track([(0, 0.0), (0.4, 0.05, 'sm'), (T, -0.05, 'sm')]),
-        track([(0, [0, 0, 0]), (0.2, [-0.01, 0.0, 0], 'out'), (0.65, [-0.01, -0.12, 0], 'in'), (0.95, [0.0, -0.135, 0], 'out'), (T, [0.035, -0.14, 0], 'sm')]),
-        track([(0, -0.10), (0.2, -0.38, 'out'), (0.65, -0.20, 'sm'), (T, -0.30, 'sm')]),
-        track([(0, 0.0), (0.2, 0.14, 'out'), (0.65, -0.10, 'sm'), (0.95, -0.12, 'sm'), (T, -0.50, 'in')]), arm, _drag(0.0, 0.0))
-
-def death_clips():
-    return {c['name']: c for c in (death_back(), death_front(), death_side(1), death_side(-1), death_kneel())}
-
 def check(clip, label):
     """Comprobaciones numéricas: saltos de Euler entre fotogramas y pies/manos con el FK real del editor."""
     keys = clip['keys']; worst = 0.0; wk = None
@@ -346,7 +284,4 @@ if __name__ == '__main__':
     atk = attack_clips()
     for k, c in atk.items(): check(c, k)
     json.dump({'version': 2, 'rig': 'mixamo', 'note': 'Golpes realistas del monstruo (zarpazo D, zarpazo I, golpe a dos manos). ' + note, 'clips': atk}, open('assets/anims/monster-attack.json', 'w'), separators=(',', ':'))
-    deaths = death_clips()
-    for k, c in deaths.items(): check(c, k)
-    json.dump({'version': 2, 'rig': 'mixamo', 'note': 'Muertes realistas del monstruo (de espaldas, de bruces, de costado D/I, de rodillas); `tilt` = vuelco de la raíz en el juego. ' + note, 'clips': deaths}, open('assets/anims/monster-death.json', 'w'), separators=(',', ':'))
     print('run speed', run['speed'], 'm/s')

@@ -22,13 +22,17 @@ ok(atk.attack3.duration > atk.attack1.duration && atk.attack3.hit > atk.attack1.
 const jawMin = (c) => Math.min(...c.keys.map((k) => k.pose.jaw.z));
 ok(jawMin(atk.attack3) < -0.4 && jawMin(atk.attack1) < -0.25 && jawMin(run) < -0.15, 'mandíbula abierta al rugir, golpear y correr');
 ok(jawMin(atk.attack3) > -0.7 && jawMin(atk.attack1) > -0.5 && jawMin(run) > -0.35 && jawMin(death) > -0.6, 'sin exagerar: la mandíbula no se abre de más');
-ok(Math.abs(death.duration - 1.35) < 1e-6, 'la muerte dura lo mismo que el vuelco de la raíz (1.35 s)');
-ok(death.keys.at(-1).pose.hips.py < -0.1, 'al morir la cadera baja (rodillas ceden)');
-// variantes de muerte: 5 clips, cada uno con su vuelco de raíz; caen hacia lados distintos
+// muertes con suelo y gravedad (tools/gen-monster-death.py): la caída va dentro del clip y el suelo se comprueba en el generador
 for (const k of ['death', 'deathFront', 'deathSideR', 'deathSideL', 'deathKneel']) {
-  const c = deaths[k]; ok(c, k + ' existe'); ok(['x', 'z'].includes(c.tilt.axis) && Math.abs(c.tilt.angle) > 0.5, k + ': vuelco de raíz definido');
-  ok(c.keys.at(-1).pose.hips.py < -0.1, k + ': la cadera baja');
+  const c = deaths[k]; ok(c, k + ' existe'); ok(c.baked === true && c.tilt.angle === 0, k + ': caída horneada (la raíz no vuelca)');
+  ok(c.duration >= 1.8, k + ': dura lo suficiente para caer y reposar');
+  const hy = c.keys.at(-1).pose.hips.py; ok(hy > -0.3 && hy < 0.2, k + ': cadera final razonable (' + hy + ')');
+  // quietud al final: los últimos fotogramas no cambian (cuerpo en reposo sobre el suelo)
+  const a = c.keys.at(-1).pose, z = c.keys.at(-6).pose;
+  ok(Math.abs(a.hips.py - z.hips.py) < 0.01 && Math.abs(a.spine.x - z.spine.x) < 0.05, k + ': termina quieto');
 }
-ok(deaths.death.tilt.angle > 0 && deaths.deathFront.tilt.angle < 0, 'espalda y bruces vuelcan en sentidos contrarios');
-ok(deaths.deathSideR.tilt.axis === 'x' && deaths.deathSideR.tilt.angle * deaths.deathSideL.tilt.angle < 0, 'lado D y lado I vuelcan en sentidos contrarios');
+ok(deaths.deathFront.keys.at(-1).pose.jaw.z > -0.1, 'de bruces el hocico toca el suelo y la mandíbula se CIERRA');
+ok(deaths.death.keys.at(-1).pose.jaw.z < -0.3, 'de espaldas la mandíbula cae abierta');
+const arm0 = (c) => { const p = c.keys[0].pose, q = c.keys.at(-1).pose; return Math.abs(q.leftArm.x - p.leftArm.x) + Math.abs(q.leftArm.y - p.leftArm.y) + Math.abs(q.leftArm.z - p.leftArm.z); };
+ok(Object.values(deaths).every((c) => arm0(c) > 0.3), 'los brazos acaban en otra posición: cuelgan, no se quedan como al caminar');
 console.log('monster-moves: ' + n + ' comprobaciones\nTODAS LAS PRUEBAS PASARON');

@@ -321,9 +321,13 @@ export async function createEnemyRuntime(opts) {
       if (e.dead) {
         const t = Math.min(1, e.deadT / 1.35);
         const ease = t * t * (3 - 2 * t);
-        const tl = unit.anim && unit.anim.isDead ? unit.anim.deathTilt : { axis: 'z', angle: 1.35 };   // vuelco según la variante de muerte
-        if (tl.axis === 'x') unit.root.rotateX(ease * tl.angle); else unit.root.rotateZ(ease * tl.angle);
-        unit.root.position.y = e.y - ease * (unit.anim && unit.anim.hasDeathClip ? 0.03 : 0.2);   // con clip, la cadera ya baja sola
+        if (unit.anim && unit.anim.isDead && unit.anim.deathBaked) {
+          // la caída ya está en el clip (apoyada en el suelo): la raíz no gira ni se hunde
+        } else {
+          const tl = unit.anim && unit.anim.isDead ? unit.anim.deathTilt : { axis: 'z', angle: 1.35 };   // respaldo: vuelco de la raíz
+          if (tl.axis === 'x') unit.root.rotateX(ease * tl.angle); else unit.root.rotateZ(ease * tl.angle);
+          unit.root.position.y = e.y - ease * (unit.anim && unit.anim.hasDeathClip ? 0.03 : 0.2);
+        }
       }
 
       syncAnim(unit);
