@@ -102,6 +102,7 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
   let mode = 'idle';
   let time = 0;
   let attackPhase = 0;
+  let single = false;   // attack(n): reproduce solo el golpe n
   let attackT = 0;
   let dead = false;
   let deathT = 0;
@@ -179,7 +180,7 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
 
   function setMode(next) {
     if (dead) return;
-    if (next === 'attack') { attackPhase = 1; attackT = 0; if (clips.attack1) beginBlend(); return; }
+    if (next === 'attack') { attackPhase = 1; attackT = 0; single = false; if (clips.attack1) beginBlend(); return; }
     if (next === 'dead' || next === 'death') { die(); return; }
     const m = next || 'idle';
     if (clips.walk && (m !== mode || attackPhase > 0)) { beginBlend(); if (m !== mode) clipT = 0; }
@@ -209,10 +210,10 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
     if (clips.attack1 && attackPhase > 0 && !dead) {
       attackT += dt;
       const c = clips['attack' + attackPhase];
-      const lim = attackPhase < 3 ? c.chain : c.duration;
+      const lim = attackPhase < 3 && !single ? c.chain : c.duration;
       if (attackT >= lim) {
         beginBlend(); attackT = 0;
-        if (attackPhase < 3) attackPhase += 1; else { attackPhase = 0; clipT = 0; }
+        if (attackPhase < 3 && !single) attackPhase += 1; else { attackPhase = 0; clipT = 0; single = false; }
       }
     }
     restoreRest(rest);
@@ -397,11 +398,14 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
     },
     get isDead() { return dead; },
     setMode,
-    attack() {
+    attack(n) {
       if (dead) return;
-      if (attackPhase === 0) { attackPhase = 1; attackT = 0; if (clips.attack1) beginBlend(); }
+      if (clips.attack1 && n >= 1 && n <= 3) { attackPhase = n; attackT = 0; single = true; beginBlend(); return; }   // golpe suelto
+      if (attackPhase === 0) { single = false; attackPhase = 1; attackT = 0; if (clips.attack1) beginBlend(); }
     },
     die,
+    /** Se levanta tras morir (vuelve a idle con fundido). */
+    revive() { if (!dead) return; dead = false; deathT = 0; attackPhase = 0; single = false; mode = 'idle'; if (clips.walk) beginBlend(); },
     update,
     /** Carga clips horneados: { walk, run, attack1, attack2, attack3 } (objetos de clip del JSON). Lo que falte sigue siendo procedural. */
     useClips(map) { for (const [k, c] of Object.entries(map || {})) if (c && c.keys && c.keys.length) clips[k] = compileClip(c); },

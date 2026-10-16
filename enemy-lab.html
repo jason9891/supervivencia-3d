@@ -16,6 +16,11 @@ button{border:1px solid #c4a574;border-radius:9px;background:#211d17ed;color:#f3
 button.on{background:#3a4a2a;border-color:#8fbf6a}
 #status{position:fixed;z-index:6;left:10px;right:10px;top:calc(env(safe-area-inset-top)+48px);text-align:center;font-size:12px;line-height:1.35;color:#e8dfce;text-shadow:0 2px 5px #000;pointer-events:none;background:#101114cc;padding:8px 10px;border-radius:8px;border:1px solid #c4a57455}
 #controls{position:fixed;z-index:5;left:0;right:0;bottom:calc(env(safe-area-inset-bottom)+12px);display:flex;justify-content:center;flex-wrap:wrap;gap:7px;padding:0 10px}
+#pad{position:fixed;z-index:6;left:10px;bottom:calc(env(safe-area-inset-bottom)+120px);display:none;grid-template-columns:repeat(3,52px);grid-template-rows:repeat(2,52px);gap:6px}
+#pad button{padding:0;font-size:20px}
+#act{position:fixed;z-index:6;right:10px;bottom:calc(env(safe-area-inset-bottom)+120px);display:none;flex-direction:column;gap:8px}
+#act button{width:92px;height:52px}
+.row{display:flex;justify-content:center;flex-wrap:wrap;gap:7px;width:100%}
 #err{position:fixed;z-index:10;left:10px;right:10px;top:40%;padding:12px;background:#401b1b;color:#fff;white-space:pre-wrap;display:none;max-height:35%;overflow:auto}
 </style>
 </head>
@@ -28,14 +33,32 @@ button.on{background:#3a4a2a;border-color:#8fbf6a}
   </div>
 </div>
 <div id="status">Preparando decodificador meshopt…</div>
+<div id="pad">
+  <span></span><button data-pad="up" type="button">▲</button><span></span>
+  <button data-pad="left" type="button">◀</button><button data-pad="down" type="button">▼</button><button data-pad="right" type="button">▶</button>
+</div>
+<div id="act">
+  <button id="pAttack" type="button">ATACAR</button>
+  <button id="pRevive" type="button">REVIVIR</button>
+</div>
 <div id="controls">
-  <button data-mode="idle" type="button" class="on">IDLE</button>
-  <button data-mode="walk" type="button">WALK</button>
-  <button data-mode="run" type="button">RUN</button>
-  <button data-mode="attack" type="button">ATTACK</button>
-  <button data-angle="0" type="button">FRENTE</button>
-  <button data-angle="1.5708" type="button">PERFIL</button>
-  <button id="reset" type="button">REINICIAR</button>
+  <div class="row" id="rowClips">
+    <button data-mode="idle" type="button" class="on">IDLE</button>
+    <button data-mode="walk" type="button">WALK</button>
+    <button data-mode="run" type="button">RUN</button>
+    <button data-hit="1" type="button">GOLPE 1</button>
+    <button data-hit="2" type="button">GOLPE 2</button>
+    <button data-hit="3" type="button">GOLPE 3</button>
+    <button data-mode="attack" type="button">COMBO</button>
+    <button data-mode="dead" type="button">MUERTE</button>
+    <button data-mode="revive" type="button">REVIVIR</button>
+  </div>
+  <div class="row">
+    <button data-angle="0" type="button">FRENTE</button>
+    <button data-angle="1.5708" type="button">PERFIL</button>
+    <button id="reset" type="button">REINICIAR</button>
+    <button id="arenaBtn" type="button">ARENA (IA)</button>
+  </div>
 </div>
 <div id="err"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
@@ -45,6 +68,8 @@ import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/
 import { MeshoptDecoder } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/meshopt_decoder.module.js';
 import { createMixamoProcedural } from './mixamo-procedural.js';
 import { equipMonster } from './monster-moves.js';
+import { createEnemyRuntime } from './enemy-runtime.js';
+import { createFighter } from './combat.js';
 
 const ENEMY_RIGGED = './assets/characters/tripo_rigging_a71e42e9-2739-425b-a16c-3aa7dba627a6_meshopt.glb';
 const ENEMY_MESH = './assets/characters/tripo_pbr_model_739224f1-e1dd-4aec-976a-084ab2e81a3d_meshopt.glb';
@@ -238,16 +263,107 @@ function setMode(mode) {
     return;
   }
   if (mode === 'attack') procedural.attack();
-  else procedural.setMode(mode);
+  else if (mode === 'dead') procedural.die();
+  else if (mode === 'revive') { procedural.revive(); mode = 'idle'; procedural.setMode('idle'); }
+  else { procedural.setRate(1); procedural.setMode(mode); }
   document.querySelectorAll('[data-mode]').forEach((b) => {
     b.classList.toggle('on', b.dataset.mode === mode);
   });
   statusEl.textContent =
     'Modo: ' + mode.toUpperCase() +
+    (procedural.hasClips ? ' · clips realistas' : ' · procedural') +
     ' · map=' + procedural.boneCount +
-    ' · skelBones=' + procedural.skeletonBoneCount +
     ' · skin=' + procedural.skinnedCount;
 }
+function hit(n) {
+  if (!procedural) return;
+  procedural.revive();
+  procedural.setMode('idle');
+  procedural.attack(n);
+  document.querySelectorAll('[data-mode]').forEach((b) => b.classList.remove('on'));
+  statusEl.textContent = 'GOLPE ' + n + (procedural.hasClips ? '' : ' (sin clips: reproduce el combo procedural)');
+}
+document.querySelectorAll('[data-hit]').forEach((b) => b.addEventListener('click', () => hit(Number(b.dataset.hit))));
+
+// ---------------- ARENA: el monstruo real del juego (IA, correr, combo, muerte) contra un jugador que mueves tú, sin tocar el mapa
+const ARENA_C = { x: 50, z: 45 };   // dentro de la puerta del establo → la IA se activa sola
+let arena = null, arenaOn = false, arenaMsg = '';
+const keys = new Set(), padKeys = new Set();
+const viewerCam = { y: 0, z: 0 };
+async function toggleArena() {
+  if (arenaOn) { setArena(false); return; }
+  if (!arena) {
+    statusEl.textContent = 'Cargando arena…';
+    const player = createFighter({ hp: 100 });
+    player.x = ARENA_C.x; player.z = ARENA_C.z - 2; player.facing = 0;
+    const marker = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 1.0, 6, 10), new THREE.MeshStandardMaterial({ color: 0x4fb3d9, roughness: 0.6 }));
+    body.position.y = 0.8; body.castShadow = true;
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.4), new THREE.MeshStandardMaterial({ color: 0xffe08a }));
+    nose.position.set(0, 1.1, 0.3);
+    marker.add(body, nose); scene.add(marker);
+    const big = new THREE.Mesh(new THREE.CircleGeometry(45, 64), new THREE.MeshStandardMaterial({ color: 0x2b2f33, roughness: 0.95 }));
+    big.rotation.x = -Math.PI / 2; big.position.set(ARENA_C.x, -0.02, ARENA_C.z); big.receiveShadow = true; scene.add(big);
+    const rt = await createEnemyRuntime({ scene, camera, player, getGroundY: () => 0, walls: [], onHint: (t) => { arenaMsg = t; } });
+    await rt.spawn('soldado', ARENA_C.x, ARENA_C.z + 5);
+    arena = { player, marker, big, rt, cd: 0, flash: 0 };
+  }
+  setArena(true);
+}
+function setArena(on) {
+  arenaOn = on;
+  document.getElementById('arenaBtn').classList.toggle('on', on);
+  document.getElementById('rowClips').style.display = on ? 'none' : 'flex';
+  document.getElementById('pad').style.display = on ? 'grid' : 'none';
+  document.getElementById('act').style.display = on ? 'flex' : 'none';
+  if (modelRoot) modelRoot.visible = !on;
+  floor.visible = !on;
+  if (arena) { arena.marker.visible = on; arena.big.visible = on; for (const u of arena.rt.units) { u.root.visible = on; u.hpBar.el.style.display = on ? u.hpBar.el.style.display : 'none'; } }
+  if (on) { viewerCam.y = camera.position.y; viewerCam.z = camera.position.z; statusEl.textContent = 'ARENA: muévete con ◀▲▼▶ / WASD, ataca con ATACAR / J. El monstruo se activa solo.'; }
+  else { camera.position.set(0, viewerCam.y || 1.5, viewerCam.z || 5.5); statusEl.textContent = 'Visor de animaciones'; }
+}
+function arenaRevive() {
+  const a = arena; if (!a) return;
+  a.player.hp = a.player.maxHp; a.player.dead = false; a.player.hitstun = 0;
+  a.player.x = ARENA_C.x; a.player.z = ARENA_C.z - 2; a.rt.revive(); arenaMsg = 'Reiniciado';
+}
+function arenaStep(dt) {
+  const a = arena, p = a.player;
+  let mx = 0, mz = 0;
+  const on = (k) => keys.has(k) || padKeys.has(k);
+  if (on('w') || on('arrowup') || on('up')) mz += 1;
+  if (on('s') || on('arrowdown') || on('down')) mz -= 1;
+  if (on('a') || on('arrowleft') || on('left')) mx += 1;       // la cámara mira hacia +z: la izquierda de la pantalla es +x
+  if (on('d') || on('arrowright') || on('right')) mx -= 1;
+  if (!p.dead && (mx || mz)) {
+    const l = Math.hypot(mx, mz); p.x += (mx / l) * 2.8 * dt; p.z += (mz / l) * 2.8 * dt; p.facing = Math.atan2(mx, mz);
+  }
+  a.cd = Math.max(0, a.cd - dt); a.flash = Math.max(0, a.flash - dt);
+  const events = a.rt.update(dt);
+  for (const ev of events) if (ev.type === 'playerHurt') a.flash = 0.25;
+  a.rt.resolveAgainstPlayer(p);
+  a.marker.position.set(p.x, 0, p.z); a.marker.rotation.y = p.facing;
+  a.marker.rotation.x = p.dead ? -1.4 : 0;
+  a.marker.children[0].material.color.setHex(a.flash > 0 ? 0xff5a4d : 0x4fb3d9);
+  const u = a.rt.units[0]; const e = u && u.data;
+  statusEl.textContent = 'Vida ' + p.hp + '/' + p.maxHp + (p.dead ? ' · HAS CAÍDO' : '') + (e ? ' · Monstruo ' + e.hp + '/' + e.maxHp + ' · ' + (e.dead ? 'muerto' : (u.combo ? 'COMBO golpe ' + Math.min(3, u.combo.i + 1) : e.state)) : '') + (arenaMsg ? ' · ' + arenaMsg : '');
+  camera.position.set(p.x, 3.2, p.z - 5.8); camera.lookAt(p.x, 0.9, p.z + 1.2);
+}
+function arenaAttack() {
+  const a = arena; if (!a || a.cd > 0 || a.player.dead) return;
+  a.cd = 0.45;
+  const hits = a.rt.tryPlayerHit({ reach: 2.2, dmg: 14 });
+  arenaMsg = hits.length ? 'Le diste (-' + hits[0].result.damage + ')' : 'Fallaste';
+}
+document.getElementById('arenaBtn').addEventListener('click', () => toggleArena().catch((e) => showErr('arena: ' + (e.message || e))));
+document.getElementById('pAttack').addEventListener('click', arenaAttack);
+document.getElementById('pRevive').addEventListener('click', arenaRevive);
+document.querySelectorAll('[data-pad]').forEach((b) => {
+  const k = b.dataset.pad;
+  b.addEventListener('pointerdown', (e) => { padKeys.add(k); b.setPointerCapture(e.pointerId); });
+  const up = () => padKeys.delete(k);
+  b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
+});
 
 document.querySelectorAll('[data-mode]').forEach((b) => {
   b.addEventListener('click', () => setMode(b.dataset.mode));
@@ -268,6 +384,7 @@ document.getElementById('toAnim').addEventListener('click', () => {
 });
 
 renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (arenaOn) return;
   dragging = true;
   lastX = e.clientX;
   lastY = e.clientY;
@@ -290,11 +407,23 @@ renderer.domElement.addEventListener('wheel', (e) => {
 
 addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
+  if (arenaOn) {
+    keys.add(k);
+    if (k === 'j' || k === ' ') arenaAttack();
+    if (k === 'r') arenaRevive();
+    return;
+  }
   if (k === '1') setMode('idle');
   if (k === '2') setMode('walk');
   if (k === '3') setMode('run');
   if (k === '4' || k === ' ') setMode('attack');
+  if (k === '5') hit(1);
+  if (k === '6') hit(2);
+  if (k === '7') hit(3);
+  if (k === '8') setMode('dead');
+  if (k === '9') setMode('revive');
 });
+addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
@@ -306,8 +435,11 @@ addEventListener('resize', () => {
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
-  if (procedural) procedural.update(dt);
-  camera.lookAt(0, TARGET_HEIGHT * 0.5, 0);
+  if (arenaOn && arena) arenaStep(dt);
+  else {
+    if (procedural) procedural.update(dt);
+    camera.lookAt(0, TARGET_HEIGHT * 0.5, 0);
+  }
   renderer.render(scene, camera);
 }
 animate();

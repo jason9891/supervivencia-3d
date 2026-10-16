@@ -397,8 +397,20 @@ export async function createEnemyRuntime(opts) {
     }
   }
 
+  /** Levanta a todos los monstruos en su punto de aparición (laboratorio / pruebas). */
+  function revive() {
+    for (const unit of units) {
+      const e = unit.data;
+      e.hp = e.maxHp; e.dead = false; e.deadT = 0; e.state = activated ? 'chase' : 'idle'; e.t = 0; e.hitstun = 0;
+      e.x = e.spawn.x; e.z = e.spawn.z; unit.combo = null; unit.lastState = 'idle';
+      unit.root.rotation.z = 0;
+      if (unit.anim) { unit.anim.revive(); unit.anim.setMode('idle'); }
+    }
+  }
+
   return {
     spawn,
+    revive,
     update,
     tryPlayerHit,
     resolveAgainstPlayer,
