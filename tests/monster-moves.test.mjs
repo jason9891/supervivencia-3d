@@ -2,9 +2,9 @@
 import fs from 'node:fs';
 let n = 0; const ok = (c, m) => { if (!c) { console.error('FALLA: ' + m); process.exit(1); } n++; };
 const load = (f) => JSON.parse(fs.readFileSync(new URL('../assets/anims/' + f, import.meta.url)));
-const death = load('monster-death.json').clips.death, walk = load('monster-walk.json').clips.walk, run = load('monster-run.json').clips.run, atk = load('monster-attack.json').clips;
+const deaths = load('monster-death.json').clips, death = deaths.death, walk = load('monster-walk.json').clips.walk, run = load('monster-run.json').clips.run, atk = load('monster-attack.json').clips;
 const BONES = ['hips','spine','spine1','spine2','neck','head','leftShoulder','leftArm','leftForeArm','leftHand','rightShoulder','rightArm','rightForeArm','rightHand','leftUpLeg','leftLeg','leftFoot','rightUpLeg','rightLeg','rightFoot','jaw'];
-for (const [name, c] of Object.entries({ walk, run, death, ...atk })) {
+for (const [name, c] of Object.entries({ walk, run, ...deaths, ...atk })) {
   ok(c.keys.length > 8 && c.keys[0].t === 0 && Math.abs(c.keys.at(-1).t - c.duration) < 1e-6, name + ': claves de 0 a duration');
   for (const k of c.keys) for (const b of BONES) {
     const e = k.pose[b]; ok(e && [e.x, e.y, e.z].every(Number.isFinite), name + ' t=' + k.t + ' ' + b + ': ángulos finitos');
@@ -24,4 +24,11 @@ ok(jawMin(atk.attack3) < -0.4 && jawMin(atk.attack1) < -0.25 && jawMin(run) < -0
 ok(jawMin(atk.attack3) > -0.7 && jawMin(atk.attack1) > -0.5 && jawMin(run) > -0.35 && jawMin(death) > -0.6, 'sin exagerar: la mandíbula no se abre de más');
 ok(Math.abs(death.duration - 1.35) < 1e-6, 'la muerte dura lo mismo que el vuelco de la raíz (1.35 s)');
 ok(death.keys.at(-1).pose.hips.py < -0.1, 'al morir la cadera baja (rodillas ceden)');
+// variantes de muerte: 5 clips, cada uno con su vuelco de raíz; caen hacia lados distintos
+for (const k of ['death', 'deathFront', 'deathSideR', 'deathSideL', 'deathKneel']) {
+  const c = deaths[k]; ok(c, k + ' existe'); ok(['x', 'z'].includes(c.tilt.axis) && Math.abs(c.tilt.angle) > 0.5, k + ': vuelco de raíz definido');
+  ok(c.keys.at(-1).pose.hips.py < -0.1, k + ': la cadera baja');
+}
+ok(deaths.death.tilt.angle > 0 && deaths.deathFront.tilt.angle < 0, 'espalda y bruces vuelcan en sentidos contrarios');
+ok(deaths.deathSideR.tilt.axis === 'x' && deaths.deathSideR.tilt.angle * deaths.deathSideL.tilt.angle < 0, 'lado D y lado I vuelcan en sentidos contrarios');
 console.log('monster-moves: ' + n + ' comprobaciones\nTODAS LAS PRUEBAS PASARON');

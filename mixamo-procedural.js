@@ -105,6 +105,7 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
   let single = false;   // attack(n): reproduce solo el golpe n
   let attackT = 0;
   let dead = false;
+  let deathClip = 'death';   // variante elegida al morir
   let deathT = 0;
 
   // ---- clips horneados (assets/anims/monster-*.json): mismo formato que anim-lab (Euler XYZ sobre el reposo + traslación de cadera)
@@ -133,7 +134,7 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
       }
       return { t: k.t, q, p };
     });
-    return { name: c.name, duration: c.duration, hit: c.hit, chain: c.chain, speed: c.speed, keys };
+    return { name: c.name, duration: c.duration, hit: c.hit, chain: c.chain, speed: c.speed, tilt: c.tilt, keys };
   }
   // Cuando hay clips, cualquier cambio de animación se funde desde la pose en pantalla (sin saltos).
   function beginBlend() {
@@ -188,9 +189,10 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
     attackPhase = 0;
   }
 
-  function die() {
+  function die(variant) {
     if (dead) return;
-    if (clips.death) beginBlend();
+    deathClip = variant && clips[variant] ? variant : 'death';
+    if (clips[deathClip]) beginBlend();
     dead = true;
     deathT = 0;
     attackPhase = 0;
@@ -218,9 +220,9 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
     }
     restoreRest(rest);
 
-    if (dead && clips.death) {
+    if (dead && clips[deathClip]) {
       deathT += dt;
-      poseClip(clips.death, deathT, false);   // se queda en la última pose
+      poseClip(clips[deathClip], deathT, false);   // se queda en la última pose
       finishBlend(dt);
       flushSkeleton();
       return;
@@ -414,6 +416,10 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
     setRate(r) { clipRate = r > 0 ? r : 1; },
     get hasClips() { return !!(clips.walk || clips.run || clips.attack1); },
     get hasDeathClip() { return !!clips.death; },
+    /** Variantes de muerte disponibles (nombres de clip) y el vuelco de la raíz que lleva la elegida: { axis:'z'|'x', angle } (rad). */
+    get deathVariants() { return Object.keys(clips).filter((k) => k.startsWith('death')); },
+    get deathTilt() { const c = clips[deathClip]; return c && c.tilt ? c.tilt : { axis: 'z', angle: 1.35 }; },
+    get deathProgress() { return dead ? Math.min(1, deathT / 1.35) : 0; },
     /** m/s del suelo que recorre el ciclo a rate 1 con el tamaño real del modelo (el GLB nativo mide ≈0.707). */
     groundSpeed(name) { const c = clips[name]; return c && c.speed ? (c.speed / 2.69) * (height / 0.707) : 0; },
     /** Calendario del combo: segundos (desde que arranca) en que cae cada golpe y duración total. */

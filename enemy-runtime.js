@@ -56,6 +56,15 @@ function createHpBar() {
   return { el, fill };
 }
 
+// Elige cómo muere: de espaldas (lo más común), de bruces, de costado (D/I) o de rodillas.
+const DEATH_PICKS = [['death', 0.35], ['deathFront', 0.25], ['deathSideR', 0.125], ['deathSideL', 0.125], ['deathKneel', 0.15]];
+export function pickDeath(rand = Math.random) {
+  let r = rand(), acc = 0;
+  for (const [name, w] of DEATH_PICKS) { acc += w; if (r < acc) return name; }
+  return 'death';
+}
+function killAnim(unit) { if (unit.anim && !unit.anim.isDead) unit.anim.die(pickDeath()); }
+
 function wrapAngle(a) {
   while (a > Math.PI) a -= 2 * Math.PI;
   while (a < -Math.PI) a += 2 * Math.PI;
@@ -197,7 +206,7 @@ export async function createEnemyRuntime(opts) {
     const anim = unit.anim;
     if (!anim) return;
     if (e.dead) {
-      if (!anim.isDead) anim.die();
+      killAnim(unit);
       return;
     }
     if (!activated) {
@@ -307,11 +316,13 @@ export async function createEnemyRuntime(opts) {
       unit.visYaw = wrapAngle(unit.visYaw + dYaw * Math.min(1, dt * 14));
       unit.root.rotation.y = unit.visYaw + FACE_OFFSET;
       unit.root.rotation.z = 0;
+      unit.root.rotation.x = 0;
 
       if (e.dead) {
         const t = Math.min(1, e.deadT / 1.35);
         const ease = t * t * (3 - 2 * t);
-        unit.root.rotation.z = ease * 1.35;
+        const tl = unit.anim && unit.anim.isDead ? unit.anim.deathTilt : { axis: 'z', angle: 1.35 };   // vuelco según la variante de muerte
+        if (tl.axis === 'x') unit.root.rotateX(ease * tl.angle); else unit.root.rotateZ(ease * tl.angle);
         unit.root.position.y = e.y - ease * (unit.anim && unit.anim.hasDeathClip ? 0.03 : 0.2);   // con clip, la cadera ya baja sola
       }
 
@@ -360,7 +371,7 @@ export async function createEnemyRuntime(opts) {
       );
       hits.push({ enemy: e, result: r });
       if (r.killed) {
-        if (unit.anim) unit.anim.die();
+        killAnim(unit);
         onHint((e.def.name || 'Enemigo') + ' derrotado');
       }
     }
@@ -403,7 +414,7 @@ export async function createEnemyRuntime(opts) {
       const e = unit.data;
       e.hp = e.maxHp; e.dead = false; e.deadT = 0; e.state = activated ? 'chase' : 'idle'; e.t = 0; e.hitstun = 0;
       e.x = e.spawn.x; e.z = e.spawn.z; unit.combo = null; unit.lastState = 'idle';
-      unit.root.rotation.z = 0;
+      unit.root.rotation.z = 0; unit.root.rotation.x = 0;
       if (unit.anim) { unit.anim.revive(); unit.anim.setMode('idle'); }
     }
   }

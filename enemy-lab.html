@@ -51,6 +51,11 @@ button.on{background:#3a4a2a;border-color:#8fbf6a}
     <button data-hit="3" type="button">GOLPE 3</button>
     <button data-mode="attack" type="button">COMBO</button>
     <button data-mode="dead" type="button">MUERTE</button>
+    <button data-death="death" type="button">↩ ESPALDA</button>
+    <button data-death="deathFront" type="button">↪ BRUCES</button>
+    <button data-death="deathSideR" type="button">LADO D</button>
+    <button data-death="deathSideL" type="button">LADO I</button>
+    <button data-death="deathKneel" type="button">RODILLAS</button>
     <button data-mode="revive" type="button">REVIVIR</button>
   </div>
   <div class="row">
@@ -68,7 +73,7 @@ import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/
 import { MeshoptDecoder } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/meshopt_decoder.module.js';
 import { createMixamoProcedural } from './mixamo-procedural.js';
 import { equipMonster } from './monster-moves.js';
-import { createEnemyRuntime } from './enemy-runtime.js';
+import { createEnemyRuntime, pickDeath } from './enemy-runtime.js';
 import { createFighter } from './combat.js';
 
 const ENEMY_RIGGED = './assets/characters/tripo_rigging_a71e42e9-2739-425b-a16c-3aa7dba627a6_meshopt.glb';
@@ -263,7 +268,7 @@ function setMode(mode) {
     return;
   }
   if (mode === 'attack') procedural.attack();
-  else if (mode === 'dead') procedural.die();
+  else if (mode === 'dead') { procedural.revive(); procedural.die(pickDeath()); }
   else if (mode === 'revive') { procedural.revive(); mode = 'idle'; procedural.setMode('idle'); }
   else { procedural.setRate(1); procedural.setMode(mode); }
   document.querySelectorAll('[data-mode]').forEach((b) => {
@@ -283,6 +288,13 @@ function hit(n) {
   document.querySelectorAll('[data-mode]').forEach((b) => b.classList.remove('on'));
   statusEl.textContent = 'GOLPE ' + n + (procedural.hasClips ? '' : ' (sin clips: reproduce el combo procedural)');
 }
+document.querySelectorAll('[data-death]').forEach((b) => b.addEventListener('click', () => {
+  if (!procedural) return;
+  procedural.revive();
+  procedural.die(b.dataset.death);
+  document.querySelectorAll('[data-mode]').forEach((x) => x.classList.remove('on'));
+  statusEl.textContent = 'MUERTE: ' + b.dataset.death + (procedural.deathVariants.includes(b.dataset.death) ? '' : ' (sin clip: muerte procedural)');
+}));
 document.querySelectorAll('[data-hit]').forEach((b) => b.addEventListener('click', () => hit(Number(b.dataset.hit))));
 
 // ---------------- ARENA: el monstruo real del juego (IA, correr, combo, muerte) contra un jugador que mueves tú, sin tocar el mapa
@@ -438,6 +450,13 @@ function animate() {
   if (arenaOn && arena) arenaStep(dt);
   else {
     if (procedural) procedural.update(dt);
+    if (modelRoot) {   // vuelco del cuerpo al morir (mismo que en el juego: z = de espaldas/bruces, x = de costado)
+      modelRoot.rotation.set(0, targetY, 0);
+      if (procedural && procedural.isDead) {
+        const t = procedural.deathProgress, ease = t * t * (3 - 2 * t), tl = procedural.deathTilt;
+        if (tl.axis === 'x') modelRoot.rotateX(ease * tl.angle); else modelRoot.rotateZ(ease * tl.angle);
+      }
+    }
     camera.lookAt(0, TARGET_HEIGHT * 0.5, 0);
   }
   renderer.render(scene, camera);
