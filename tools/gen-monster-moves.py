@@ -35,6 +35,17 @@ n0 = {}
 for s_ in ARM:
     dh0 = (a0[s_][0] + a0[s_][1]); dh0 = dh0 / np.linalg.norm(dh0); n0[s_] = np.cross(dh0, apole[s_]); n0[s_] /= np.linalg.norm(n0[s_])
 
+HEAD_TIP = np.array([0.095, -0.045, 0.0])     # del hueso Head al morro/mandíbula (mundo, reposo)
+HEAD_R = 0.09                                 # radio de la cabeza
+CLAW_MARGIN = 0.06                           # las garras sobresalen de la muñeca
+
+def push_out(tgt, a, b, r):
+    """Aleja `tgt` del segmento a-b hasta distancia r (la garra no atraviesa la cabeza ni el hocico)."""
+    ab = b - a; u = np.clip(((tgt - a) @ ab) / (ab @ ab), 0, 1); c = a + u * ab; d = tgt - c; n = np.linalg.norm(d)
+    if n >= r: return tgt
+    if n < 1e-6: d, n = np.array([0.0, -1.0, 0.0]), 1.0
+    return c + d / n * r
+
 def sm(t): t = min(1.0, max(0.0, t)); return t * t * (3 - 2 * t)
 EASE = {'sm': sm, 'in': lambda t: min(1.0, max(0.0, t)) ** 2.4, 'out': lambda t: 1 - (1 - min(1.0, max(0.0, t))) ** 2.4}
 
@@ -60,11 +71,17 @@ def compose(frame):
     for ch in ('Spine', 'Spine1', 'Spine2'):
         i = G(ch); P[i] = P[par[i]] + Rdes[par[i]] @ TL[i]
     Rs = Rdes[G('Spine2')]
+    P[G('Neck')] = P[G('Spine2')] + Rdes[G('Spine2')] @ TL[G('Neck')]
+    P[G('Head')] = P[G('Neck')] + Rdes[G('Neck')] @ TL[G('Head')]
+    Rh = Rdes[G('Head')]
+    head_a = P[G('Head')] + Rh @ (Rrest[G('Head')].T @ np.array([-0.02, 0.0, 0.0]))
+    head_b = P[G('Head')] + Rh @ (Rrest[G('Head')].T @ (HEAD_TIP + np.array([0.0, frame['jaw'] * 0.12, 0.0])))   # la boca abierta baja el mentón
     for s in ('Left', 'Right'):
         sh = G(s + 'Shoulder'); Rdes[sh] = Rwd[G('Spine2')] @ Rrest[sh]
         P[sh] = P[G('Spine2')] + Rdes[G('Spine2')] @ TL[sh]
         ids = ARM[s]; Pa = P[sh] + Rdes[sh] @ TL[ids[0]]
         tgt = Pa + Rwd[G('Spine2')] @ frame['hand'][s]
+        tgt = push_out(tgt, head_a, head_b, HEAD_R + CLAW_MARGIN)
         l1, l2 = np.linalg.norm(a0[s][0]), np.linalg.norm(a0[s][1])
         pl = frame.get('pole', {}).get(s, apole[s])
         pole = Rwd[G('Spine2')] @ (pl / np.linalg.norm(pl))
@@ -251,6 +268,15 @@ def check(clip, label):
                 d = abs(b['pose'][k][c] - a['pose'][k][c])
                 if d > worst: worst, wk = d, (a['t'], k, c)
     print(f'{label}: salto máx. de ángulo entre fotogramas {worst:.2f} rad en {wk}')
+    dmin = 9
+    for kf in keys:
+        Rw, Pw = gw.editor_fk(kf['pose'])
+        ha = Pw[G('Head')]; hb = ha + Rw[G('Head')] @ (Rrest[G('Head')].T @ (HEAD_TIP + np.array([0.0, kf['pose']['jaw']['z'] * 0.12, 0.0])))
+        for hand in ('LeftHand', 'RightHand'):
+            p0 = Pw[G(hand)]; fdir = Pw[G(hand)] - Pw[G(hand.replace('Hand', 'ForeArm'))]; fdir /= np.linalg.norm(fdir)
+            for q in (p0, p0 + fdir * 0.05, (p0 + Pw[G(hand.replace('Hand', 'ForeArm'))]) / 2):
+                ab = hb - ha; u = np.clip(((q - ha) @ ab) / (ab @ ab), 0, 1); dmin = min(dmin, np.linalg.norm(q - (ha + u * ab)))
+    print(f'{label}: distancia mínima garra/antebrazo–cabeza {dmin:.3f} (radio cabeza {HEAD_R})')
     miny = 9
     for kf in keys:
         Rw, Pw = gw.editor_fk(kf['pose'])
