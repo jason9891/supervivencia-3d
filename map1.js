@@ -1,14 +1,22 @@
 // map1.js — El Regreso
 // Paredes naranja tldraw 1:1 + Módulo 2 (oficina 2 ambientes).
 // +X este · +Z norte · Y altura.
+// v2: rampa natural (natural-ramp.js) + materiales y props medievales oscuros (props-medieval.js).
 
 import * as THREE from 'three';
 import { clearRamps, addRamp, sampleRampY, getSlopeAt, buildRampMesh, RAMPS } from './map-ramps.js';
 import { buildModule2, LEVEL2_Y as MOD2_L2, MOD2 } from './modulo2.js';
+import { createMedievalMaterials, worldUV, buildChest, buildTable, buildChair, buildTorch, placeProp, updateTorches } from './props-medieval.js';
+import { buildNaturalRamp } from './natural-ramp.js';
 
 export const MAP1_NAME = 'El Regreso';
 export const LEVEL0_Y = 0;
 export const LEVEL1_Y = 6;
+
+// true = paredes de piedra con musgo; false = conserva el naranja del diseño original
+const USE_STONE_WALLS = false;
+// 1 = escritorio, 0.5 = móvil (menos hierba y rocas en la rampa)
+const RAMP_DETAIL = 1;
 
 export const MAP = { minX: 0, maxX: 90, minZ: 0, maxZ: 72 };
 export const SPAWN = { x: 6.5, y: LEVEL0_Y, z: 3, facing: 0 };
@@ -99,22 +107,35 @@ export function distanceToKey(x, y, z) { return Math.hypot(x - KEY_POS.x, y - KE
 export function distanceToLever(x, y, z) { return Math.hypot(x - LEVER_POS.x, y - LEVER_POS.y, z - LEVER_POS.z); }
 export function distanceToFood(x, y, z) { return Math.hypot(x - FOOD_POS.x, y - FOOD_POS.y, z - FOOD_POS.z); }
 
+// Parpadeo de antorchas: bucle propio (una sola vez). Si prefieres llamarlo desde tu bucle principal,
+// quita esto y llama updateTorches(segundos) en cada frame.
+let _torchLoop = false;
+function startTorchLoop() {
+  if (_torchLoop) return;
+  _torchLoop = true;
+  const tick = (ms) => { updateTorches(ms * 0.001); requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+}
+
 export function buildMap1(scene) {
   WALLS.length = 0;
   PLATFORMS.length = 0;
   clearRamps();
 
   const mat = (c, r = 0.85, metal = 0.05) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: metal });
+  const M = createMedievalMaterials();
   const dirt = mat(0x5c5346);
-  const stone = mat(0x6e6a62);
+  const stone = M.stone;
   const grass = mat(0x3f6b3a);
-  const wood = mat(0x6b4a2b);
+  const wood = M.wood;
   const dark = mat(0x2c2822);
-  const iron = mat(0x4a4e52, 0.45, 0.55);
-  const orangeW = mat(0xb86a2b);
+  const iron = M.iron;
+  const orangeW = USE_STONE_WALLS ? M.wall : mat(0xb86a2b);
 
   function box(w, h, d, material, x, y, z, solid = false) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+    const geo = new THREE.BoxGeometry(w, h, d);
+    worldUV(geo, w, h, d, material);
+    const mesh = new THREE.Mesh(geo, material);
     mesh.position.set(x, y, z);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -124,7 +145,9 @@ export function buildMap1(scene) {
   }
 
   function pad(w, d, y, x, z, material) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.35, d), material);
+    const geo = new THREE.BoxGeometry(w, 0.35, d);
+    worldUV(geo, w, 0.35, d, material);
+    const mesh = new THREE.Mesh(geo, material);
     mesh.position.set(x, y - 0.15, z);
     mesh.receiveShadow = true;
     scene.add(mesh);
@@ -149,17 +172,8 @@ export function buildMap1(scene) {
     y0: LEVEL0_Y, y1: LEVEL1_Y,
     halfWidth: 5.5,
   };
-  addRamp(rampDef);
-  buildRampMesh(THREE, scene, rampDef, stone);
-  for (const side of [-1, 1]) {
-    const r = RAMPS[0];
-    const ox = r.px * (r.halfWidth + 0.35) * side;
-    const oz = r.pz * (r.halfWidth + 0.35) * side;
-    const g = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.65, r.len), dark);
-    g.position.set((r.sx + r.ex) / 2 + ox, (r.y0 + r.y1) / 2 + 0.2, (r.sz + r.ez) / 2 + oz);
-    g.rotation.y = Math.atan2(r.dx, r.dz);
-    g.castShadow = true; scene.add(g);
-  }
+  addRamp(rampDef);                                              // la física no cambia
+  buildNaturalRamp(scene, rampDef, { detail: RAMP_DETAIL });     // ladera de pasto, sendero, rocas
   pad(22, 8, LEVEL1_Y, 12, 67, stone);
 
   wallBox(13.1, 13.9, 0.0, 63.1);
@@ -210,6 +224,13 @@ export function buildMap1(scene) {
   const towerDoor = box(1.4, 2.3, 0.3, wood, 84, LEVEL1_Y + 11.5, 63.2, true);
   towerDoor.userData = { locked: true };
 
+  /* ---- props medievales de prueba en el establo (x 14-35, z 46-62) ---- */
+  const chest1 = placeProp(scene, buildChest(M), 20, LEVEL1_Y, 59, 0.3, addWall);
+  placeProp(scene, buildTable(M), 26, LEVEL1_Y, 58, 0, addWall);
+  placeProp(scene, buildChair(M), 26, LEVEL1_Y, 56.8, Math.PI, addWall);
+  placeProp(scene, buildTorch(M), 13.95, LEVEL1_Y + 2.4, 55, Math.PI / 2);   // sobre la cara este del muro oeste
+  startTorchLoop();
+
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), mat(0x3d5c38, 1));
   ground.rotation.x = -Math.PI / 2;
   ground.position.set(45, -0.8, 36);
@@ -220,6 +241,7 @@ export function buildMap1(scene) {
     gate, gateLeft, gateRight, portcullis,
     pageMesh: mod.pageMesh, keyMesh: mod.keyMesh, foodMesh, leverArm, towerDoor,
     hallDoor: null, herbs: [], creature: null,
+    chests: [chest1],
     pagePos: PAGE_POS.clone(), keyPos: KEY_POS.clone(), leverPos: LEVER_POS.clone(),
     spawn: { ...SPAWN },
     mod2: mod,
