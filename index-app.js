@@ -14,7 +14,6 @@ const errorBox = document.getElementById('error');
 addEventListener('error', e => { errorBox.style.display = 'block'; errorBox.textContent = 'Error: ' + (e.message || ''); });
 
 const scene = new THREE.Scene();
-// Día claro: pueblo en calma hasta el primer monstruo
 scene.background = new THREE.Color(0x7eb6e0);
 scene.fog = new THREE.Fog(0xb8d4ea, 55, 200);
 const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 280);
@@ -53,14 +52,94 @@ player.x = 6.5; player.z = 3; player.y = 0;
 player.checkpoint = { x: 6.5, z: 3 };
 player.facing = 0;
 
+// --- Boot + cinemática de intro ---
+const bootEl = document.getElementById('boot');
+const bootFill = document.getElementById('bootFill');
+const bootMsg = document.getElementById('bootMsg');
+const bootState = { hero: false, enemy: false, started: false };
+let introPlaying = true;
+let introT = 0;
+const INTRO_DUR = 5.6;
+function setBoot(pct, msg) {
+  if (bootFill) bootFill.style.width = Math.max(8, Math.min(100, pct)) + '%';
+  if (bootMsg && msg) bootMsg.textContent = msg;
+}
+function tryStartIntro() {
+  if (bootState.started) return;
+  if (!bootState.hero) return;
+  bootState.started = true;
+  setBoot(100, 'Listo');
+  document.body.classList.add('intro-lock');
+  setTimeout(() => {
+    if (bootEl) bootEl.classList.add('hide');
+    introT = 0;
+    introPlaying = true;
+    document.getElementById('hint').textContent = '…llegas a casa';
+  }, 450);
+}
+function easeInOut(t) {
+  t = Math.max(0, Math.min(1, t));
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+}
+function updateIntroCamera(dt) {
+  introT += dt;
+  const px = player.x, py = player.y, pz = player.z;
+  const fx = Math.sin(player.facing), fz = Math.cos(player.facing);
+  let cam = new THREE.Vector3();
+  let look = new THREE.Vector3(px, py + 1.0, pz);
+  if (introT < 1.4) {
+    const u = easeInOut(introT / 1.4);
+    cam.set(px + fx * 2.2, py + 0.15 + 0.9 * u, pz + fz * 2.2);
+    look.set(px, py + 0.4 + 1.0 * u, pz);
+    document.getElementById('hint').textContent = 'El regreso…';
+  } else if (introT < 2.6) {
+    const u = easeInOut((introT - 1.4) / 1.2);
+    cam.set(px + fx * (2.0 - 0.3 * u), py + 1.05 + 0.55 * u, pz + fz * (2.0 - 0.3 * u));
+    look.set(px, py + 1.4 + 0.35 * u, pz);
+    document.getElementById('hint').textContent = 'Todo parece en calma…';
+  } else if (introT < 4.6) {
+    const u = (introT - 2.6) / 2.0;
+    const ang = player.facing + u * Math.PI * 2;
+    const r = 2.8;
+    cam.set(px + Math.sin(ang) * r, py + 1.55, pz + Math.cos(ang) * r);
+    look.set(px, py + 1.45, pz);
+    document.getElementById('hint').textContent = 'El pueblo te espera';
+  } else if (introT < INTRO_DUR) {
+    const u = easeInOut((introT - 4.6) / (INTRO_DUR - 4.6));
+    const ang = player.facing;
+    const orbit = new THREE.Vector3(
+      px + Math.sin(ang) * 2.8,
+      py + 1.55,
+      pz + Math.cos(ang) * 2.8
+    );
+    const gameplay = new THREE.Vector3(
+      px - Math.sin(visYaw) * CAM_DIST,
+      py + CAM_HEIGHT,
+      pz - Math.cos(visYaw) * CAM_DIST
+    );
+    cam.lerpVectors(orbit, gameplay, u);
+    look.set(px, py + CAM_LOOK_Y, pz);
+  } else {
+    introPlaying = false;
+    document.body.classList.remove('intro-lock');
+    document.getElementById('hint').textContent = 'Avanza · algo no está bien…';
+    return false;
+  }
+  camera.position.copy(cam);
+  camera.lookAt(look);
+  return true;
+}
+setBoot(12, 'Cargando mapa…');
+document.body.classList.add('intro-lock');
+
 const statBox = document.getElementById('stat');
 let lastStat = '';
 function updateStat() {
   const zone = getCurrentZone(player.x, player.z) || 'exterior';
   let t = zone.toUpperCase();
-  if (hasKey) t += ' \u00b7 LLAVE';
-  if (pageRead) t += ' \u00b7 NOTAS';
-  if (leverPulled) t += ' \u00b7 PALANCA';
+  if (hasKey) t += ' · LLAVE';
+  if (pageRead) t += ' · NOTAS';
+  if (leverPulled) t += ' · PALANCA';
   if (t !== lastStat) { statBox.textContent = t; lastStat = t; }
 }
 
@@ -84,8 +163,16 @@ createEnemyRuntime({
   onHint: (t) => { document.getElementById('hint').textContent = t; },
 }).then(async (rt) => {
   enemyRt = rt;
+  setBoot(55, 'Colocando criaturas…');
   await rt.spawn('soldado', 30, 52);
-}).catch((e) => console.warn('enemy runtime', e));
+  bootState.enemy = true;
+  setBoot(70, 'Personaje…');
+  tryStartIntro();
+}).catch((e) => {
+  console.warn('enemy runtime', e);
+  bootState.enemy = true;
+  tryStartIntro();
+});
 
 const actor = new THREE.Group(); scene.add(actor);
 const mat = (c, r = 0.8) => new THREE.MeshStandardMaterial({ color: c, roughness: r });
@@ -146,15 +233,34 @@ function setupLocomotion(gltf, label) {
   if (ini) { ini.setEffectiveWeight(1); ini.play(); activeAction = ini; }
   actor.visible = false;
   locomotionActor.visible = true;
-  document.getElementById('hint').textContent = label + ' \u00b7 JOYSTICK v3';
+  document.getElementById('hint').textContent = label + ' · JOYSTICK v3';
 }
 loadHero(THREE, GLTFLoader)
-  .then(i => setupLocomotion({ scene: i.model, animations: i.clips }, i.source === 'hero' ? 'HUMANO' : 'MANIQU\u00cd'))
+  .then(i => {
+    setBoot(85, 'Animaciones del caballero…');
+    setupLocomotion({ scene: i.model, animations: i.clips }, i.source === 'hero' ? 'HUMANO' : 'MANIQUÍ');
+    bootState.hero = true;
+    setBoot(95, 'Preparando cinemática…');
+    tryStartIntro();
+  })
   .catch(() => {
-    gltfLoader.load('./assets/characters/animations/locomotion-collection-jordan-3d-person-animated.glb', g => setupLocomotion(g, 'RESPALDO'), undefined, () => {});
+    gltfLoader.load(
+      './assets/characters/animations/locomotion-collection-jordan-3d-person-animated.glb',
+      g => {
+        setupLocomotion(g, 'RESPALDO');
+        bootState.hero = true;
+        tryStartIntro();
+      },
+      undefined,
+      () => {
+        bootState.hero = true;
+        tryStartIntro();
+      }
+    );
   });
 
 function attack() {
+  if (introPlaying) return;
   if (!player.grounded) return;
   playerHitArmed = true;
   setTimeout(() => {
@@ -178,25 +284,24 @@ function attack() {
   const now = performance.now() / 1000;
   if (attacking && now < attackUntil - 0.2) return;
   attacking = true;
-  const dur = attackAction.getClip()?.duration || 0.8;
-  attackUntil = now + Math.min(1.4, Math.max(0.45, dur * 0.55 + 0.12));
-  attackAction.setLoop(THREE.LoopOnce, 1);
-  attackAction.clampWhenFinished = true;
-  const host = { get active() { return activeAction; }, set active(v) { activeAction = v; } };
-  switchAction(THREE, host, attackAction, { fade: 0.06, once: true, rate: 1.15 });
+  attackUntil = now + 0.85;
+  attackAction.reset();
+  attackAction.setEffectiveWeight(1);
+  attackAction.play();
+  if (activeAction && activeAction !== attackAction) activeAction.crossFadeTo(attackAction, 0.08, false);
+  activeAction = attackAction;
 }
-function toggleArm() { armed = !armed; document.getElementById('arm').classList.toggle('on', armed); }
+function toggleArm() { if (introPlaying) return; armed = !armed; document.getElementById('arm').classList.toggle('on', armed); }
 document.getElementById('atk').addEventListener('pointerdown', e => { e.preventDefault(); attack(); });
 document.getElementById('arm').addEventListener('pointerdown', e => { e.preventDefault(); toggleArm(); });
 
-const keys = {};
 const joy = { x: 0, y: 0, active: false };
 const joyBase = document.getElementById('joyBase');
 const joyKnob = document.getElementById('joyKnob');
 const JOY_R = 36;
 function setJoy(nx, ny) {
-  const len = Math.hypot(nx, ny);
-  const c = len > 1 ? 1 / len : 1;
+  const m = Math.hypot(nx, ny) || 1;
+  const c = Math.min(1, m);
   joy.x = nx * c;
   joy.y = ny * c;
   joyKnob.style.transform = `translate(${joy.x * JOY_R}px, ${-joy.y * JOY_R}px)`;
@@ -208,10 +313,9 @@ function resetJoy() {
 function joyFromEvent(e) {
   const r = joyBase.getBoundingClientRect();
   const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-  const dx = (e.clientX - cx) / (r.width / 2);
-  const dy = -(e.clientY - cy) / (r.height / 2);
-  setJoy(dx, dy);
+  setJoy((e.clientX - cx) / JOY_R, -(e.clientY - cy) / JOY_R);
 }
+const endJoy = () => resetJoy();
 joyBase.addEventListener('pointerdown', e => {
   e.preventDefault();
   joy.active = true;
@@ -222,35 +326,31 @@ joyBase.addEventListener('pointermove', e => {
   if (!joy.active) return;
   joyFromEvent(e);
 });
-const endJoy = () => resetJoy();
 joyBase.addEventListener('pointerup', endJoy);
 joyBase.addEventListener('pointercancel', endJoy);
 joyBase.addEventListener('lostpointercapture', endJoy);
 
-const runButton = document.getElementById('run');
 let runToggle = false;
 function setRunToggle(on) {
-  runToggle = !!on;
-  keys.run = runToggle;
-  runButton.classList.toggle('on', runToggle);
-  runButton.textContent = runToggle ? 'CORRIENDO' : 'CORRER';
+  runToggle = on;
+  document.getElementById('run').classList.toggle('on', on);
 }
+const runButton = document.getElementById('run');
 runButton.addEventListener('pointerdown', e => {
   e.preventDefault();
+  if (introPlaying) return;
   setRunToggle(!runToggle);
 });
-
+const keys = {};
 addEventListener('keydown', e => {
+  if (introPlaying) return;
   const k = e.key.toLowerCase();
   keys[k] = true;
-  if (k === ' ') { e.preventDefault(); jumpQueued = true; }
-  if (k === 'j') attack();
-  if (k === 'e' && !e.repeat) toggleArm();
   if (k === 'm' && !e.repeat) document.getElementById('mapView')?.dispatchEvent(new PointerEvent('pointerdown'));
 });
 addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 let jumpQueued = false;
-document.getElementById('jump').addEventListener('pointerdown', e => { e.preventDefault(); jumpQueued = true; });
+document.getElementById('jump').addEventListener('pointerdown', e => { e.preventDefault(); if (!introPlaying) jumpQueued = true; });
 
 const clock = new THREE.Clock();
 const CAM_DIST = 4.2;
@@ -288,18 +388,20 @@ const overview = { x: MAP_CENTER.x, z: MAP_CENTER.z, h: 95, yaw: 0 };
 const mapBtn = document.getElementById('mapView');
 if (mapBtn) mapBtn.addEventListener('pointerdown', e => {
   e.preventDefault();
+  if (introPlaying) return;
   mapOverview = !mapOverview;
   mapBtn.classList.toggle('on', mapOverview);
   if (mapOverview) {
     overview.x = MAP_CENTER.x;
     overview.z = MAP_CENTER.z;
     overview.h = 95;
-    document.getElementById('hint').textContent = 'VISTA MAPA \u00b7 joystick mueve \u00b7 CORRER acerca \u00b7 SALTAR aleja';
+    document.getElementById('hint').textContent = 'VISTA MAPA · joystick mueve · CORRER acerca · SALTAR aleja';
   } else {
-    document.getElementById('hint').textContent = 'JOYSTICK v3 \u00b7 correr toggle';
+    document.getElementById('hint').textContent = 'JOYSTICK v3 · correr toggle';
   }
 });
-camera.position.set(player.x, CAM_HEIGHT, player.z - CAM_DIST);
+camera.position.set(player.x + 2.2, 0.2, player.z + 2.2);
+camera.lookAt(player.x, player.y + 0.5, player.z);
 document.addEventListener('contextmenu', e => e.preventDefault());
 
 function animate() {
@@ -308,7 +410,7 @@ function animate() {
 
   let f = 0, side = 0, intentFwd = 0, intentSide = 0, tank = false;
   let lockFacing = null;
-  if (!mapOverview) {
+  if (!mapOverview && !introPlaying) {
     if (joy.active && (Math.abs(joy.x) > 0.12 || Math.abs(joy.y) > 0.12)) {
       if (Math.abs(joy.x) > 0.18) player.facing -= joy.x * 1.15 * dt;
       lockFacing = player.facing;
@@ -324,7 +426,7 @@ function animate() {
   const running = !!(runToggle || keys.shift);
   const speed = running ? RUN_SPEED : WALK_SPEED;
 
-  const canMove = !attacking && !mapOverview;
+  const canMove = !introPlaying && !attacking && !mapOverview;
   const backNow = canMove && player.grounded && backpedal({ fwd: intentFwd, strafe: intentSide, facing: player.facing, tank });
   const keepFacing = player.facing;
   stepPlayer(player, course, { f: mapOverview ? 0 : f, side: mapOverview ? 0 : side, speed: backNow ? Math.min(speed, WALK_SPEED * BACK_SPEED) : speed, running: running && !backNow, jump: mapOverview ? false : jumpQueued, canMove }, dt);
@@ -355,7 +457,7 @@ function animate() {
   if (!leverPulled && distanceToLever(player.x, player.y, player.z) < 2.0) {
     leverPulled = true;
     if (mapData.leverArm) mapData.leverArm.rotation.x = 0.8;
-    document.getElementById('hint').textContent = 'La gran reja responde... (cinem\u00e1tica jefe)';
+    document.getElementById('hint').textContent = 'La gran reja responde... (cinemática jefe)';
   }
 
   actor.position.set(player.x, player.y, player.z);
@@ -376,7 +478,9 @@ function animate() {
     locomotionMixer.update(dt);
   }
 
-  if (mapOverview) {
+  if (introPlaying && bootState.started) {
+    updateIntroCamera(dt);
+  } else if (mapOverview) {
     const ox = joy.active ? -joy.x : ((keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0));
     const oz = joy.active ? joy.y : ((keys.w || keys.arrowup ? 1 : 0) - (keys.s || keys.arrowdown ? 1 : 0));
     overview.x += ox * 40 * dt;
