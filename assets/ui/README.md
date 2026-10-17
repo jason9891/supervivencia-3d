@@ -1,13 +1,9 @@
-# UI assets
+# UI
 
-## Pantalla de carga
+Sube la ilustración de carga como:
 
-Sube la ilustración del caballero al atardecer como:
+**assets/ui/loading-screen.jpg**
 
-`loading-screen.jpg`
+(El caballero de espaldas mirando el castillo al atardecer.)
 
-Ruta completa en el repo:
-
-`assets/ui/loading-screen.jpg`
-
-El juego la usa a pantalla completa en el loading (barra dorada abajo).
+Desde GitHub: Add file → Upload files en la carpeta `assets/ui/`.
