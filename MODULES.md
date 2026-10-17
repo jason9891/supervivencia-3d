@@ -61,3 +61,15 @@ const combat = createCombatAddon({ THREE, scene, camera, player, onSwing: () => 
 |---|---|
 | `locomotion.js` | Elige la animación de movimiento (retroceso, correr, salto en 3 fases, aterrizaje) y el giro suave. Lo usan `index.html` y `combat-lab.html`. Pruebas: `tests/locomotion.test.mjs`. |
 | `assets/weapons/` | 16 GLB CC0 de Quaternius (12 armas + escudos) con `CREDITS.md`; los usa `equipment.js`. |
+
+## Añadido: desmembramiento del monstruo (solo `enemy-lab.html`)
+
+| Archivo | Qué hace |
+|---|---|
+| `dismember-core.js` | Reglas puras: reparte la malla por pesos de hueso, lazos del corte, tapa de carne y cuerpo rígido con suelo para la pieza suelta. |
+| `dismember.js` | `createDismember({model, mesh}).sever('Head' \| 'LeftArm' \| 'RightArm')`: corta la malla real, deja la pieza con física y sangre; `restore()` lo deshace. |
+| `tools/gen-monster-death.py` | Además de las 5 muertes: `deathArmR/L` (se corta el brazo que cae al piso), `deathDecap` (de bruces) y `deathDecapBack` (de espaldas). El clip lleva `sever` (parte, instante, dirección). |
+| `assets/anims/monster-hull.json` | Volumen de colisión del monstruo que usa el generador. |
+| `tests/dismember.test.mjs` | `THREE_DIR=$PWD/node_modules/three node tests/dismember.test.mjs` prueba con la malla real: sin suelo atravesado, pieza fuera del cuerpo con varias semillas, revivir restaura. |
+
+No toca `map1.js`, `course.js` ni los módulos visuales del héroe.

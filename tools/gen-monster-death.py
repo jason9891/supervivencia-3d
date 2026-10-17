@@ -6,6 +6,9 @@ Sobre el mismo esqueleto real y el mismo IK que la caminata/carrera/golpes (tool
     el suelo (se comprueba con el FK completo, y se verifica al final);
   · los brazos dejan de seguir el clip y CUELGAN por gravedad hasta apoyarse en el suelo (nada de brazos tiesos como al caminar);
   · la mandíbula obedece a la gravedad: cae abierta de espaldas, floja de lado y se cierra de bruces (el hocico toca el suelo).
+Además hay cuatro muertes con DESMEMBRAMIENTO (deathArmR, deathArmL, deathDecap, deathDecapBack): el clip se calcula SIN el volumen de la parte
+cortada (el brazo que chocaba con el suelo, o la cabeza) y con un muñón en su lugar; el cuerpo puede apoyarse de ese lado o desplomarse sin la
+cabeza. El clip lleva `sever` (qué parte se corta, cuándo y hacia dónde sale) y el motor (dismember.js) corta la malla en ese instante.
 Uso: python3 tools/gen-monster-death.py   (necesita numpy; ejecutar desde la raíz del repo)"""
 import sys, json, importlib.util
 import numpy as np
@@ -30,28 +33,60 @@ def tilt_angle(t, final):
         b = t - LAND; g = 1 - 0.06 * np.exp(-5 * b) * abs(np.sin(11 * b))
     return final * g
 
-# ---------- volúmenes del cuerpo (esferas a lo largo de los huesos) para no atravesar el suelo
-def body_points(pose):
+# ---------- volumen del cuerpo para no atravesar el suelo
+# Se mide con la MALLA REAL: assets/anims/monster-hull.json (tools/export-monster-hull.mjs) guarda una muestra de sus vértices con sus 4 huesos y pesos
+# (la mandíbula es el hueso 65). Aquí se deforman con el MISMO skinning lineal que el motor, de modo que el punto más bajo (cadera, cola, hombro, garra,
+# hocico…) es el que de verdad toca el suelo. Al cortar una parte, sus vértices salen del cuerpo y los pesos del muñón pasan al hueso de unión,
+# igual que hace dismember.js. (Antes eran esferas aproximadas y la cadera de la malla llegaba a hundirse 11 cm al caer de espaldas.)
+_H = json.load(open('assets/anims/monster-hull.json'))
+H_NAMES = _H['bones']; H_REST = _H['rest']; JAW_IDX = H_NAMES.index('Jaw')
+H_P = np.array(_H['p'], dtype=float).reshape(-1, 3); H_I = np.array(_H['i'], dtype=int).reshape(-1, 4); H_W = np.array(_H['w'], dtype=float).reshape(-1, 4)
+H_GID = [gw.byname[n] if n in gw.byname else None for n in H_NAMES]
+def subtree_ids(root):
+    out = {root}; grew = True
+    while grew:
+        grew = False
+        for c, pr in gw.par.items():
+            if pr in out and c not in out: out.add(c); grew = True
+    return out
+PART_ATTACH = {'Head': 'Neck', 'LeftArm': 'LeftShoulder', 'RightArm': 'RightShoulder'}
+def _part_set(part):
+    ids = subtree_ids(G(part)); s = {k for k, g in enumerate(H_GID) if g in ids}
+    if part == 'Head': s.add(JAW_IDX)   # la mandíbula cuelga de la cabeza
+    return s
+PART_SET = {p: _part_set(p) for p in PART_ATTACH}
+PART_ATT = {p: H_NAMES.index(a) for p, a in PART_ATTACH.items()}
+def _cut_arrays(cut):
+    """Muestra tras cortar: máscara de vértices que siguen en el cuerpo e índices de hueso reasignados (el muñón queda rígido al hueso de unión)."""
+    keep = np.ones(len(H_P), dtype=bool); I = H_I.copy()
+    for part in cut:
+        inset = np.isin(I, list(PART_SET[part]))
+        keep &= (H_W * inset).sum(axis=1) < 0.5
+        I = np.where(inset, PART_ATT[part], I)
+    return keep, I
+_CUT_CACHE = {}
+def skinned_points(pose, cut=()):
+    """Vértices de la muestra deformados por `pose` (marco del mundo, unidades GLB). Devuelve (puntos Nx3, Rw, Pw)."""
     Rw, Pw = gw.editor_fk(pose)
-    pts = []
-    def seg(a, b, r, n=2):
-        for k in range(n + 1): pts.append((Pw[G(a)] + (Pw[G(b)] - Pw[G(a)]) * k / n, r))
-    seg('Hips', 'Spine', 0.10); seg('Spine', 'Spine1', 0.095); seg('Spine1', 'Spine2', 0.10); seg('Spine2', 'Neck', 0.075)
-    hj = Pw[G('Head')]; Rh = Rw[G('Head')]; jaw = pose['jaw']['z']
-    a = hj + Rh @ (Rrest[G('Head')].T @ np.array([-0.05, 0.0, 0.0]))
-    b = hj + Rh @ (Rrest[G('Head')].T @ (gm.HEAD_TIP + np.array([0.0, jaw * 0.12, 0.0])))
-    for k in range(4): pts.append((a + (b - a) * k / 3, 0.12))
-    for s in ('Left', 'Right'):
-        seg(s + 'Arm', s + 'ForeArm', 0.05); seg(s + 'ForeArm', s + 'Hand', 0.045)
-        d = Pw[G(s + 'Hand')] - Pw[G(s + 'ForeArm')]; d /= np.linalg.norm(d); pts.append((Pw[G(s + 'Hand')] + d * 0.05, 0.04))
-        seg(s + 'UpLeg', s + 'Leg', 0.065); seg(s + 'Leg', s + 'Foot', 0.05)
-        pts.append((Pw[G(s + 'Foot')], 0.072))
-        pts.append((Pw[G(s + 'Foot')] + Rw[G(s + 'Foot')] @ (Rrest[G(s + 'Foot')].T @ np.array([0.08, -0.04, 0.0])), 0.03))
-    return pts, Rw, Pw
-
-def need(pose):
-    pts, _, _ = body_points(pose)
-    return max(0.0, max(r - p[1] for p, r in pts) + MARGIN)
+    A = np.zeros((len(H_NAMES), 3, 3)); t = np.zeros((len(H_NAMES), 3))
+    for k, g in enumerate(H_GID):
+        if g is None: continue
+        A[k] = Rw[g] @ Rrest[g].T; t[k] = Pw[g] - A[k] @ gw.Prest[g]
+    Rh = Rw[G('Head')]; Rh0 = Rrest[G('Head')].T; jr = np.array(H_REST['Jaw'])
+    A[JAW_IDX] = Rh @ Rz(pose['jaw']['z']) @ Rh0
+    t[JAW_IDX] = (Pw[G('Head')] + Rh @ (Rh0 @ (jr - gw.Prest[G('Head')]))) - A[JAW_IDX] @ jr
+    key = tuple(sorted(cut))
+    if key not in _CUT_CACHE: _CUT_CACHE[key] = _cut_arrays(key)
+    keep, I = _CUT_CACHE[key]
+    Q = np.einsum('nk,nkij,nj->ni', H_W, A[I], H_P) + np.einsum('nk,nki->ni', H_W, t[I])
+    return Q[keep], Rw, Pw
+def body_points(pose, cut=()):
+    """(puntos del cuerpo, Rw, Pw). `cut`: partes desmembradas ('Head', 'LeftArm', 'RightArm'): sin su malla."""
+    return skinned_points(pose, cut)
+def need(pose, cut=()):
+    """Cuánto hay que subir el cuerpo para que ningún vértice quede bajo el suelo."""
+    Q, _, _ = body_points(pose, cut)
+    return max(0.0, -Q[:, 1].min() + MARGIN)
 
 # ---------- mandíbula por gravedad (−z abre): de espaldas cae abierta (relajada), de lado queda floja, de bruces el hocico toca el suelo y se CIERRA
 JAW_REST = {'back': -0.46, 'side': -0.12, 'front': -0.02, 'kneel': -0.20}
@@ -116,6 +151,21 @@ VARIANTS = {
         jaw=track([(0, -0.10), (0.2, -0.38, 'out'), (0.65, -0.20, 'sm')]), head=track([(0, 0.0), (0.2, 0.14, 'out'), (0.65, -0.10, 'sm'), (0.95, -0.12, 'sm'), (1.35, -0.40, 'in')])),
 }
 
+def severed(base, cut, sever, **over):
+    """Variante con desmembramiento: misma caída que `base`, sin el volumen de lo cortado.
+    sever = [(parte, t, dirección en el marco del monstruo, fuerza de salida en m/s)]. Dirección y fuerza se eligieron barriendo ángulos y fuerzas con la malla real
+    (ver tests/dismember.test.mjs): la pieza queda fuera del cuerpo en el reposo y no cae justo donde el cuerpo se desploma."""
+    v = dict(VARIANTS[base]); v.update(over); v['cut'] = tuple(cut)
+    v['sever'] = [dict(part=p, t=t, dir=[round(float(x), 3) for x in d], push=push) for p, t, d, push in sever]
+    return v
+
+# El brazo que choca con el suelo se corta: D → el lado derecho (+z), I → el izquierdo (−z). La cabeza sale hacia donde el cuerpo NO cae.
+_dir = lambda deg: (float(np.cos(np.radians(deg))), 0.0, float(np.sin(np.radians(deg))))   # (x = delante del monstruo, z = su lado derecho)
+VARIANTS['deathArmR'] = severed('deathSideR', ['RightArm'], [('RightArm', 0.12, _dir(135), 2.4)])        # el brazo sale hacia atrás-derecha, lejos de donde cae el cuerpo
+VARIANTS['deathArmL'] = severed('deathSideL', ['LeftArm'], [('LeftArm', 0.12, _dir(225), 2.4)])         # espejo
+VARIANTS['deathDecap'] = severed('deathFront', ['Head'], [('Head', 0.10, _dir(330), 2.6)])              # cae de bruces: la cabeza sale hacia delante, algo a la izquierda, fuera de donde cae el pecho
+VARIANTS['deathDecapBack'] = severed('death', ['Head'], [('Head', 0.10, (1.0, 0.0, -0.35), 0.9)])       # cae de espaldas: la cabeza sale hacia delante
+
 def base_frame(v, t, jaw):
     lt, rt_ = v['drag'](t)
     pole = {s: apole[s] * (1 - clamp01(t / 0.2)) + np.array([-0.5, -0.85, 0.0]) * clamp01(t / 0.2) for s in ('Left', 'Right')}
@@ -153,7 +203,8 @@ def build(name, v):
             fr['hand_world'][s] = (np.array([sh[0] + 0.03 + 0.20 * low, 0.095, sh[2] + SIDE[s] * 0.03]), wa)
         frames.append((t, fr))
     # elevar cada fotograma lo justo para no atravesar el suelo (suavizado para evitar tirones, sin quedar nunca por debajo de lo necesario)
-    needs = np.array([need(compose(dict(fr))) for _, fr in frames])
+    cut = v.get('cut', ())
+    needs = np.array([need(compose(dict(fr)), cut) for _, fr in frames])
     k = np.exp(-0.5 * (np.arange(-6, 7) / 2.0) ** 2); k /= k.sum()
     smooth = np.convolve(np.pad(needs, 6, mode='edge'), k, mode='valid')
     lifts = np.maximum(needs, smooth)
@@ -163,15 +214,17 @@ def build(name, v):
         # el cuerpo entero sube rígido: los puntos del mundo a los que cae la mano suben con él
         fr['hand_world'] = {s: (p + np.array([0.0, float(lf), 0.0]), w) for s, (p, w) in fr['hand_world'].items()}
         keys.append({'t': round(t, 3), 'pose': compose(fr)})
-    return {'name': name, 'duration': round(T, 4), 'keys': continuous(keys), 'speed': 0.0, 'tilt': {'axis': 'z', 'angle': 0.0}, 'baked': True}
+    clip = {'name': name, 'duration': round(T, 4), 'keys': continuous(keys), 'speed': 0.0, 'tilt': {'axis': 'z', 'angle': 0.0}, 'baked': True}
+    if v.get('sever'): clip['sever'] = v['sever']; clip['cut'] = list(cut)
+    return clip
 
 def verify(clip):
     """Peor penetración del suelo en todo el clip (debe ser ≈0) y altura final del cuerpo."""
-    worst = 0.0
+    worst = 0.0; cut = tuple(clip.get('cut', ()))
     for kf in clip['keys']:
-        pts, _, _ = body_points(kf['pose']); worst = max(worst, max(r - p[1] for p, r in pts))
-    last = clip['keys'][-1]['pose']; pts, _, _ = body_points(last)
-    return worst, min(p[1] - r for p, r in pts), max(p[1] for p, r in pts)
+        Q, _, _ = body_points(kf['pose'], cut); worst = max(worst, -Q[:, 1].min())
+    last = clip['keys'][-1]['pose']; Q, _, _ = body_points(last, cut)
+    return worst, Q[:, 1].min(), Q[:, 1].max()
 
 if __name__ == '__main__':
     out = {}

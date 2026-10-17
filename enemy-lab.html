@@ -56,6 +56,10 @@ button.on{background:#3a4a2a;border-color:#8fbf6a}
     <button data-death="deathSideR" type="button">LADO D</button>
     <button data-death="deathSideL" type="button">LADO I</button>
     <button data-death="deathKneel" type="button">RODILLAS</button>
+    <button data-death="deathArmR" type="button">✂ BRAZO D</button>
+    <button data-death="deathArmL" type="button">✂ BRAZO I</button>
+    <button data-death="deathDecap" type="button">✂ CABEZA ↪</button>
+    <button data-death="deathDecapBack" type="button">✂ CABEZA ↩</button>
     <button data-mode="revive" type="button">REVIVIR</button>
   </div>
   <div class="row">
@@ -293,7 +297,9 @@ document.querySelectorAll('[data-death]').forEach((b) => b.addEventListener('cli
   procedural.revive();
   procedural.die(b.dataset.death);
   document.querySelectorAll('[data-mode]').forEach((x) => x.classList.remove('on'));
-  statusEl.textContent = 'MUERTE: ' + b.dataset.death + (procedural.deathVariants.includes(b.dataset.death) ? '' : ' (sin clip: muerte procedural)');
+  const sev = procedural.deathSevers;
+  statusEl.textContent = 'MUERTE: ' + b.dataset.death + (procedural.deathVariants.includes(b.dataset.death) ? '' : ' (sin clip: muerte procedural)') +
+    (sev.length ? ' · corta: ' + sev.join(', ') + (procedural.dismember ? '' : ' (sin desmembramiento: no cargó dismember.js)') : '');
 }));
 document.querySelectorAll('[data-hit]').forEach((b) => b.addEventListener('click', () => hit(Number(b.dataset.hit))));
 
@@ -324,6 +330,7 @@ async function toggleArena() {
 }
 function setArena(on) {
   arenaOn = on;
+  if (on && procedural) { procedural.revive(); procedural.setMode('idle'); }   // recompone la malla y quita las piezas sueltas del visor
   document.getElementById('arenaBtn').classList.toggle('on', on);
   document.getElementById('rowClips').style.display = on ? 'none' : 'flex';
   document.getElementById('pad').style.display = on ? 'grid' : 'none';

@@ -112,6 +112,8 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
   const clips = {};
   const parentInv = new Map();
   let jawBone = null;
+  let dis = null;                 // dismember.js: corta la malla cuando el clip de muerte lo pide
+  const severed = new Set();      // partes ya cortadas en esta muerte
   let clipT = 0, clipRate = 1;
   let blendFrom = null, blendT = 0;
   const BLEND = 0.14;
@@ -134,7 +136,7 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
       }
       return { t: k.t, q, p };
     });
-    return { name: c.name, duration: c.duration, hit: c.hit, chain: c.chain, speed: c.speed, tilt: c.tilt, baked: c.baked, keys };
+    return { name: c.name, duration: c.duration, hit: c.hit, chain: c.chain, speed: c.speed, tilt: c.tilt, baked: c.baked, sever: c.sever, cut: c.cut, keys };
   }
   // Cuando hay clips, cualquier cambio de animación se funde desde la pose en pantalla (sin saltos).
   function beginBlend() {
@@ -195,8 +197,18 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
     if (clips[deathClip]) beginBlend();
     dead = true;
     deathT = 0;
+    severed.clear();
     attackPhase = 0;
     mode = 'dead';
+  }
+
+  // Desmembramiento: el clip de muerte trae `sever: [{ part, t, dir }]`; al llegar a t se corta la malla (con la pose ya aplicada)
+  function fireSevers() {
+    const c = clips[deathClip];
+    if (!dis || !c || !c.sever) return;
+    for (const s of c.sever) {
+      if (deathT >= s.t && !severed.has(s.part)) { severed.add(s.part); dis.sever(s.part, { dirLocal: s.dir, push: s.push, up: s.up, spin: s.spin }); }
+    }
   }
 
   function flushSkeleton() {
@@ -209,6 +221,7 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
   function update(dt) {
     if (boneCount < 4) return;
     time += dt;
+    if (dis) dis.update(dt);   // las piezas sueltas siguen cayendo y rodando aunque el cuerpo ya esté quieto
     if (clips.attack1 && attackPhase > 0 && !dead) {
       attackT += dt;
       const c = clips['attack' + attackPhase];
@@ -225,6 +238,7 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
       poseClip(clips[deathClip], deathT, false);   // se queda en la última pose
       finishBlend(dt);
       flushSkeleton();
+      fireSevers();
       return;
     }
     if (dead) {
@@ -407,12 +421,22 @@ export function createMixamoProcedural(THREE, root, opts = {}) {
     },
     die,
     /** Se levanta tras morir (vuelve a idle con fundido). */
-    revive() { if (!dead) return; dead = false; deathT = 0; attackPhase = 0; single = false; mode = 'idle'; if (clips.walk) beginBlend(); },
+    revive() {
+      if (dis) dis.restore();   // vuelve la malla completa (las piezas sueltas desaparecen) aunque ya no esté 'muerto'
+      severed.clear();
+      if (!dead) return;
+      dead = false; deathT = 0; attackPhase = 0; single = false; mode = 'idle'; if (clips.walk) beginBlend();
+    },
     update,
     /** Carga clips horneados: { walk, run, attack1, attack2, attack3 } (objetos de clip del JSON). Lo que falte sigue siendo procedural. */
     useClips(map) { for (const [k, c] of Object.entries(map || {})) if (c && c.keys && c.keys.length) clips[k] = compileClip(c); },
     /** Hueso de mandíbula creado por RigEditor (hijo de Head): se mueve con la clave 'jaw' de los clips. */
     attachJaw(bone) { jawBone = bone; if (bone) rest.set(bone, { pos: bone.position.clone(), quat: bone.quaternion.clone() }); },
+    /** Desmembramiento (createDismember de dismember.js): los clips de muerte con `sever` cortan la malla del monstruo. */
+    attachDismember(d) { dis = d; },
+    get dismember() { return dis; },
+    /** Partes que corta el clip de muerte elegido (vacío si no desmiembra). */
+    get deathSevers() { const c = clips[deathClip]; return c && c.sever ? c.sever.map((s) => s.part) : []; },
     setRate(r) { clipRate = r > 0 ? r : 1; },
     get hasClips() { return !!(clips.walk || clips.run || clips.attack1); },
     get hasDeathClip() { return !!clips.death; },

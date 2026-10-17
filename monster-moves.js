@@ -1,6 +1,8 @@
 // monster-moves.js — carga los clips realistas del monstruo (assets/anims/monster-*.json) y la mandíbula, y los engancha a mixamo-procedural.
+// Las muertes con desmembramiento (cabeza o brazo) las corta dismember.js sobre la malla real.
 // Los clips los genera tools/gen-monster-walk.py (caminata) y tools/gen-monster-moves.py (carrera y 3 golpes) sobre el esqueleto real.
 import { RigEditor } from './rig-edit.js';
+import { createDismember } from './dismember.js';
 
 const BASE = './assets/anims/';
 const WALK_SPEED_MS = 0.374;   // m/s (a la escala 2.69) que recorre monster-walk.json a rate 1: 2·S/(STANCE·T)·2.69 con S=0.05, STANCE=0.6, T=1.2
@@ -24,5 +26,9 @@ export async function equipMonster(anim, model, base) {
     let mesh = null; model.traverse((o) => { if (!mesh && o.isSkinnedMesh) mesh = o; });
     if (mesh) anim.attachJaw(new RigEditor(model, mesh, anim.bones).build());
   } catch (e) { console.warn('monster jaw', e); }
+  try {   // desmembramiento: se crea DESPUÉS de la mandíbula (la mandíbula forma parte de la cabeza que se corta)
+    let mesh = null; model.traverse((o) => { if (!mesh && o.isSkinnedMesh) mesh = o; });
+    if (mesh) anim.attachDismember(createDismember({ model, mesh }));
+  } catch (e) { console.warn('monster dismember', e); }
   return true;
 }

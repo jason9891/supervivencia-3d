@@ -56,8 +56,9 @@ function createHpBar() {
   return { el, fill };
 }
 
-// Elige cómo muere: de espaldas (lo más común), de bruces, de costado (D/I) o de rodillas.
-const DEATH_PICKS = [['death', 0.35], ['deathFront', 0.25], ['deathSideR', 0.125], ['deathSideL', 0.125], ['deathKneel', 0.15]];
+// Elige cómo muere: de espaldas (lo más común), de bruces, de costado (D/I), de rodillas, o perdiendo un brazo o la cabeza.
+const DEATH_PICKS = [['death', 0.28], ['deathFront', 0.20], ['deathSideR', 0.10], ['deathSideL', 0.10], ['deathKneel', 0.12],
+  ['deathArmR', 0.05], ['deathArmL', 0.05], ['deathDecap', 0.06], ['deathDecapBack', 0.04]];   // las últimas cuatro desmiembran (brazo o cabeza)
 export function pickDeath(rand = Math.random) {
   let r = rand(), acc = 0;
   for (const [name, w] of DEATH_PICKS) { acc += w; if (r < acc) return name; }
