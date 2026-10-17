@@ -45,6 +45,52 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.35));
 
 const mapData = buildMap1(scene);
 let pageRead = false, hasKey = false, leverPulled = false, gateClosed = false, foodTaken = false;
+// Cinemática corta al caer la reja: se detiene, mira atrás, vuelve
+let gateCinePlaying = false;
+let gateCineT = 0;
+let gateCineFacing0 = 0;
+const GATE_CINE = { pause: 0.3, turn: 0.85, hold: 1.0, return: 0.9 };
+const GATE_CINE_DUR = GATE_CINE.pause + GATE_CINE.turn + GATE_CINE.hold + GATE_CINE.return;
+
+function lerpAngle(a, b, t) {
+  let d = ((b - a + Math.PI) % (Math.PI * 2)) - Math.PI;
+  if (d < -Math.PI) d += Math.PI * 2;
+  return a + d * t;
+}
+function startGateCine() {
+  if (gateCinePlaying) return;
+  gateCinePlaying = true;
+  gateCineT = 0;
+  gateCineFacing0 = player.facing;
+  document.body.classList.add('intro-lock');
+  document.getElementById('hint').textContent = 'La reja cae... algo anda mal';
+}
+function updateGateCine(dt) {
+  gateCineT += dt;
+  const lookBack = gateCineFacing0 + Math.PI;
+  const p = GATE_CINE.pause;
+  const t1 = p + GATE_CINE.turn;
+  const t2 = t1 + GATE_CINE.hold;
+  const t3 = t2 + GATE_CINE.return;
+  if (gateCineT < p) {
+    // quieto un instante
+  } else if (gateCineT < t1) {
+    const u = easeInOut((gateCineT - p) / GATE_CINE.turn);
+    player.facing = lerpAngle(gateCineFacing0, lookBack, u);
+  } else if (gateCineT < t2) {
+    player.facing = lookBack;
+    document.getElementById('hint').textContent = '…el camino de regreso quedó sellado';
+  } else if (gateCineT < t3) {
+    const u = easeInOut((gateCineT - t2) / GATE_CINE.return);
+    player.facing = lerpAngle(lookBack, gateCineFacing0, u);
+  } else {
+    player.facing = gateCineFacing0;
+    gateCinePlaying = false;
+    document.body.classList.remove('intro-lock');
+    document.getElementById('hint').textContent = 'Sigue adelante… el pueblo parece vacío';
+  }
+  visYaw = player.facing;
+}
 
 const course = { segments: [{ a: 100, b: -100 }], gaps: 0, freeMap: true };
 const player = createPlayer(course);
@@ -61,8 +107,6 @@ let introPlaying = true;
 let introT = 0;
 const INTRO = {
   midX: 6.75,
-  // Rampa: z bajo = pie (y≈0), z alto = meseta (y≈6).
-  // Personaje arranca abajo y sube unos pasos; cámara baja desde la mitad.
   startZ: 12,
   endZ: 26,
   camMidZ: 38,
@@ -71,7 +115,7 @@ const INTRO = {
   blendDur: 1.5,
   waistY: 1.05,
   faceY: 1.65,
-  facing: 0, // +Z = cuesta arriba
+  facing: 0,
 };
 const INTRO_DUR = INTRO.walkDur + INTRO.orbitDur + INTRO.blendDur;
 let introAudio = null;
@@ -138,7 +182,6 @@ function easeInOut(t) {
 }
 function stepIntroWalk(dt) {
   const u = Math.min(1, introT / INTRO.walkDur);
-  // Sube: de startZ (pie) hacia endZ (unos pasos cuesta arriba)
   const z = INTRO.startZ + (INTRO.endZ - INTRO.startZ) * easeInOut(u);
   player.x = INTRO.midX;
   player.z = z;
@@ -147,7 +190,6 @@ function stepIntroWalk(dt) {
   return u < 1;
 }
 function updateIntroCamera(dt) {
-  // introT ya avanza al inicio de animate()
   const walking = introT < INTRO.walkDur;
   if (!walking) {
     player.x = INTRO.midX;
@@ -157,14 +199,11 @@ function updateIntroCamera(dt) {
   }
 
   const px = player.x, py = player.y, pz = player.z;
-  // dirección en la que mira (y camina) el caballero — cuesta arriba (+Z)
   const fx = Math.sin(player.facing), fz = Math.cos(player.facing);
   let cam = new THREE.Vector3();
   let look = new THREE.Vector3(px, py + INTRO.waistY, pz);
 
   if (introT < INTRO.walkDur) {
-    // Personaje sube desde abajo; cámara viene en sentido contrario:
-    // desde la mitad de la pendiente hacia el rostro del caballero.
     const u = easeInOut(introT / INTRO.walkDur);
     const midY = getGroundHeight(INTRO.midX, INTRO.camMidZ, 3);
     const camStart = new THREE.Vector3(
@@ -172,7 +211,6 @@ function updateIntroCamera(dt) {
       midY + INTRO.waistY + 0.15,
       INTRO.camMidZ
     );
-    // Frente al caballero (él mira +Z, la cámara se coloca delante y mira hacia él)
     const frontDist = 2.6;
     const camEnd = new THREE.Vector3(
       px + fx * frontDist,
@@ -185,7 +223,6 @@ function updateIntroCamera(dt) {
     else if (introT < 5.5) document.getElementById('hint').textContent = 'Escudos y espadas mejoraron…';
     else document.getElementById('hint').textContent = '…pero la magia y los monstruos se volvieron leyenda';
   } else if (introT < INTRO.walkDur + INTRO.orbitDur) {
-    // Giro por encima del personaje
     const u = (introT - INTRO.walkDur) / INTRO.orbitDur;
     const ang = player.facing + Math.PI * 0.2 + u * Math.PI * 1.4;
     const r = 2.7 - 0.25 * Math.sin(u * Math.PI);
@@ -194,7 +231,6 @@ function updateIntroCamera(dt) {
     look.set(px, py + INTRO.faceY * 0.55 + INTRO.waistY * 0.45, pz);
     document.getElementById('hint').textContent = 'Llegas a casa…';
   } else if (introT < INTRO_DUR) {
-    // Blend a cámara de juego (detrás del personaje)
     const u = easeInOut((introT - INTRO.walkDur - INTRO.orbitDur) / INTRO.blendDur);
     const ang = player.facing + Math.PI * 0.2 + Math.PI * 1.4;
     const orbit = new THREE.Vector3(
@@ -355,7 +391,7 @@ loadHero(THREE, GLTFLoader)
   });
 
 function attack() {
-  if (introPlaying) return;
+  if (introPlaying || gateCinePlaying) return;
   if (!player.grounded) return;
   playerHitArmed = true;
   setTimeout(() => {
@@ -386,7 +422,7 @@ function attack() {
   if (activeAction && activeAction !== attackAction) activeAction.crossFadeTo(attackAction, 0.08, false);
   activeAction = attackAction;
 }
-function toggleArm() { if (introPlaying) return; armed = !armed; document.getElementById('arm').classList.toggle('on', armed); }
+function toggleArm() { if (introPlaying || gateCinePlaying) return; armed = !armed; document.getElementById('arm').classList.toggle('on', armed); }
 document.getElementById('atk').addEventListener('pointerdown', e => { e.preventDefault(); attack(); });
 document.getElementById('arm').addEventListener('pointerdown', e => { e.preventDefault(); toggleArm(); });
 
@@ -433,19 +469,19 @@ function setRunToggle(on) {
 const runButton = document.getElementById('run');
 runButton.addEventListener('pointerdown', e => {
   e.preventDefault();
-  if (introPlaying) return;
+  if (introPlaying || gateCinePlaying) return;
   setRunToggle(!runToggle);
 });
 const keys = {};
 addEventListener('keydown', e => {
-  if (introPlaying) return;
+  if (introPlaying || gateCinePlaying) return;
   const k = e.key.toLowerCase();
   keys[k] = true;
   if (k === 'm' && !e.repeat) document.getElementById('mapView')?.dispatchEvent(new PointerEvent('pointerdown'));
 });
 addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 let jumpQueued = false;
-document.getElementById('jump').addEventListener('pointerdown', e => { e.preventDefault(); if (!introPlaying) jumpQueued = true; });
+document.getElementById('jump').addEventListener('pointerdown', e => { e.preventDefault(); if (!introPlaying && !gateCinePlaying) jumpQueued = true; });
 
 const clock = new THREE.Clock();
 const CAM_DIST = 4.2;
@@ -483,7 +519,7 @@ const overview = { x: MAP_CENTER.x, z: MAP_CENTER.z, h: 95, yaw: 0 };
 const mapBtn = document.getElementById('mapView');
 if (mapBtn) mapBtn.addEventListener('pointerdown', e => {
   e.preventDefault();
-  if (introPlaying) return;
+  if (introPlaying || gateCinePlaying) return;
   mapOverview = !mapOverview;
   mapBtn.classList.toggle('on', mapOverview);
   if (mapOverview) {
@@ -507,10 +543,11 @@ function animate() {
     introT += dt;
     if (introT < INTRO.walkDur) stepIntroWalk(dt);
   }
+  if (gateCinePlaying) updateGateCine(dt);
 
   let f = 0, side = 0, intentFwd = 0, intentSide = 0, tank = false;
   let lockFacing = null;
-  if (!mapOverview && !introPlaying) {
+  if (!mapOverview && !introPlaying && !gateCinePlaying) {
     if (joy.active && (Math.abs(joy.x) > 0.12 || Math.abs(joy.y) > 0.12)) {
       if (Math.abs(joy.x) > 0.18) player.facing -= joy.x * 1.15 * dt;
       lockFacing = player.facing;
@@ -526,7 +563,7 @@ function animate() {
   const running = !!(runToggle || keys.shift);
   const speed = running ? RUN_SPEED : WALK_SPEED;
 
-  const canMove = !introPlaying && !attacking && !mapOverview;
+  const canMove = !introPlaying && !gateCinePlaying && !attacking && !mapOverview;
   const backNow = canMove && player.grounded && backpedal({ fwd: intentFwd, strafe: intentSide, facing: player.facing, tank });
   const keepFacing = player.facing;
   stepPlayer(player, course, { f: mapOverview ? 0 : f, side: mapOverview ? 0 : side, speed: backNow ? Math.min(speed, WALK_SPEED * BACK_SPEED) : speed, running: running && !backNow, jump: mapOverview ? false : jumpQueued, canMove }, dt);
@@ -540,7 +577,7 @@ function animate() {
   if (!gateClosed && player.x > 30 && player.x < 40 && player.z > 64 && player.z < 72) {
     closePassageGate(mapData);
     gateClosed = true;
-    document.getElementById('hint').textContent = 'La reja cae... algo anda mal';
+    startGateCine();
   }
   if (!pageRead && distanceToPage(player.x, player.y, player.z) < 2.2) showStoryPage();
   if (!hasKey && distanceToKey(player.x, player.y, player.z) < 1.8) {
@@ -564,7 +601,7 @@ function animate() {
     stepIntroWalk(0);
   }
   actor.position.set(player.x, player.y, player.z);
-  if (introPlaying && bootState.started) {
+  if ((introPlaying && bootState.started) || gateCinePlaying) {
     visYaw = player.facing;
   } else {
     visYaw = smoothYaw(visYaw, player.facing, dt);
