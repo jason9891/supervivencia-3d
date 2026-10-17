@@ -48,8 +48,8 @@ let pageRead = false, hasKey = false, leverPulled = false, gateClosed = false, f
 
 const course = { segments: [{ a: 100, b: -100 }], gaps: 0, freeMap: true };
 const player = createPlayer(course);
-player.x = 6.75; player.z = 38; player.y = 3;
-player.checkpoint = { x: 6.75, z: 38 };
+player.x = 6.75; player.z = 40; player.y = 3;
+player.checkpoint = { x: 6.75, z: 40 };
 player.facing = Math.PI;
 
 // --- Boot + cinemática narrativa de intro ---
@@ -61,13 +61,16 @@ let introPlaying = true;
 let introT = 0;
 const INTRO = {
   midX: 6.75,
-  midZ: 38,
-  endZ: 14,
+  // Rampa: z bajo ≈ pie (y=0), z alto ≈ meseta (y=6). Bajamos de 40 → 16.
+  midZ: 40,
+  endZ: 16,
   walkDur: 9.0,
   orbitDur: 3.2,
-  blendDur: 1.4,
+  blendDur: 1.5,
   waistY: 1.05,
   faceY: 1.65,
+  // facing: Math.PI mira hacia −Z (cuesta abajo)
+  facing: Math.PI,
 };
 const INTRO_DUR = INTRO.walkDur + INTRO.orbitDur + INTRO.blendDur;
 let introAudio = null;
@@ -81,7 +84,7 @@ function placeIntroStart() {
   player.x = INTRO.midX;
   player.z = INTRO.midZ;
   player.y = getGroundHeight(player.x, player.z, 4);
-  player.facing = Math.PI;
+  player.facing = INTRO.facing;
   player.checkpoint = { x: player.x, z: player.z };
   visYaw = player.facing;
   actor.position.set(player.x, player.y, player.z);
@@ -134,57 +137,69 @@ function easeInOut(t) {
 }
 function stepIntroWalk(dt) {
   const u = Math.min(1, introT / INTRO.walkDur);
+  // z baja: de midZ hacia endZ (cuesta abajo)
   const z = INTRO.midZ + (INTRO.endZ - INTRO.midZ) * easeInOut(u);
   player.x = INTRO.midX;
   player.z = z;
   player.y = getGroundHeight(player.x, player.z, player.y);
-  player.facing = Math.PI;
+  player.facing = INTRO.facing;
   return u < 1;
 }
 function updateIntroCamera(dt) {
+  // introT ya avanza al inicio de animate()
   const walking = introT < INTRO.walkDur;
   if (!walking) {
     player.x = INTRO.midX;
     player.z = INTRO.endZ;
     player.y = getGroundHeight(player.x, player.z, player.y);
-    player.facing = Math.PI;
+    player.facing = INTRO.facing;
   }
 
   const px = player.x, py = player.y, pz = player.z;
+  // dirección en la que mira (y camina) el caballero
   const fx = Math.sin(player.facing), fz = Math.cos(player.facing);
   let cam = new THREE.Vector3();
   let look = new THREE.Vector3(px, py + INTRO.waistY, pz);
 
   if (introT < INTRO.walkDur) {
+    // Cámara a altura de cintura, bajando desde más arriba en la pendiente
+    // hasta quedar FRENTE al personaje (mirándole a la cara).
     const u = easeInOut(introT / INTRO.walkDur);
-    const camStartZ = INTRO.midZ + 6;
-    const camEndZ = pz - fz * 2.4;
-    const camStartY = py + 2.2;
-    const camEndY = py + INTRO.waistY;
-    cam.set(
-      INTRO.midX + 1.2 * (1 - u),
-      camStartY + (camEndY - camStartY) * u,
-      camStartZ + (camEndZ - camStartZ) * u
+    // Inicio: más arriba en la rampa (mayor z) y un poco al lado
+    const camStart = new THREE.Vector3(
+      INTRO.midX + 1.4,
+      py + 2.4,
+      INTRO.midZ + 5.5
     );
-    look.set(px, py + INTRO.waistY + 0.15 * u, pz);
+    // Fin: frente al caballero (en la dirección que mira)
+    const frontDist = 2.55;
+    const camEnd = new THREE.Vector3(
+      px + fx * frontDist,
+      py + INTRO.waistY,
+      pz + fz * frontDist
+    );
+    cam.lerpVectors(camStart, camEnd, u);
+    look.set(px, py + INTRO.waistY + 0.2 * u, pz);
     if (introT < 3) document.getElementById('hint').textContent = '…han pasado muchos años';
     else if (introT < 6) document.getElementById('hint').textContent = 'Escudos y espadas mejoraron…';
     else document.getElementById('hint').textContent = '…pero la magia y los monstruos se volvieron leyenda';
   } else if (introT < INTRO.walkDur + INTRO.orbitDur) {
+    // Giro por encima del personaje
     const u = (introT - INTRO.walkDur) / INTRO.orbitDur;
-    const ang = player.facing + Math.PI * 0.15 + u * Math.PI * 1.35;
-    const r = 2.6 - 0.3 * Math.sin(u * Math.PI);
-    const h = INTRO.waistY + 0.35 + 1.1 * Math.sin(u * Math.PI);
+    const ang = player.facing + Math.PI * 0.2 + u * Math.PI * 1.4;
+    const r = 2.7 - 0.25 * Math.sin(u * Math.PI);
+    const h = INTRO.waistY + 0.4 + 1.15 * Math.sin(u * Math.PI);
     cam.set(px + Math.sin(ang) * r, py + h, pz + Math.cos(ang) * r);
     look.set(px, py + INTRO.faceY * 0.55 + INTRO.waistY * 0.45, pz);
     document.getElementById('hint').textContent = 'Llegas a casa…';
   } else if (introT < INTRO_DUR) {
+    // Blend a cámara de juego (detrás del personaje)
     const u = easeInOut((introT - INTRO.walkDur - INTRO.orbitDur) / INTRO.blendDur);
-    const ang = player.facing + Math.PI * 0.15 + Math.PI * 1.35;
+    const ang = player.facing + Math.PI * 0.2 + Math.PI * 1.4;
     const orbit = new THREE.Vector3(
-      px + Math.sin(ang) * 2.3,
-      py + INTRO.waistY + 0.4,
-      pz + Math.cos(ang) * 2.3
+      px + Math.sin(ang) * 2.4,
+      py + INTRO.waistY + 0.45,
+      pz + Math.cos(ang) * 2.4
     );
     const gameplay = new THREE.Vector3(
       px - Math.sin(visYaw) * CAM_DIST,
@@ -199,7 +214,7 @@ function updateIntroCamera(dt) {
     player.x = INTRO.midX;
     player.z = INTRO.endZ;
     player.y = getGroundHeight(player.x, player.z, player.y);
-    player.facing = Math.PI;
+    player.facing = INTRO.facing;
     player.checkpoint = { x: player.x, z: player.z };
     document.getElementById('hint').textContent = 'Avanza · el pueblo parece en calma…';
     return false;
@@ -479,7 +494,7 @@ if (mapBtn) mapBtn.addEventListener('pointerdown', e => {
     document.getElementById('hint').textContent = 'JOYSTICK v3 · correr toggle';
   }
 });
-camera.position.set(player.x + 1.2, player.y + 2.2, player.z + 6);
+camera.position.set(player.x + 1.4, player.y + 2.4, player.z + 5.5);
 camera.lookAt(player.x, player.y + 1.05, player.z);
 document.addEventListener('contextmenu', e => e.preventDefault());
 
