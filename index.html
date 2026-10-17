@@ -55,8 +55,10 @@ body.intro-lock #joyBase,body.intro-lock #atk,body.intro-lock #arm,body.intro-lo
 (function(){
   var el=document.getElementById('boot');
   if(!el) return;
-  fetch('./assets/ui/loading-screen.b64').then(function(r){return r.text()}).then(function(b){
-    el.style.backgroundImage='url(data:image/jpeg;base64,'+b.trim()+')';
+  Promise.all([0,1,2,3].map(function(i){
+    return fetch('./assets/ui/loading-p'+i+'.txt').then(function(r){return r.text()});
+  })).then(function(parts){
+    el.style.backgroundImage='url(data:image/jpeg;base64,'+parts.join('').replace(/\s+/g,'')+')';
   }).catch(function(){});
 })();
 </script>
