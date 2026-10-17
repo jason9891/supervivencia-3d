@@ -33,7 +33,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 #story h3{margin:0 0 10px;color:#f3d7a0;font-size:15px;letter-spacing:.06em}
 #story p{margin:0 0 14px;white-space:pre-wrap}
 #story button{display:block;width:100%;padding:10px;border:1px solid #c4a574;border-radius:8px;background:#2a241c;color:#f3d7a0;font:bold 13px system-ui}
-#boot{position:fixed;z-index:50;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:max(7vh,28px);color:#e8dfce;font:14px system-ui;letter-spacing:.08em;transition:opacity .7s ease;background:#0a0806 url(./assets/ui/loading-screen.jpg) center center / cover no-repeat}
+#boot{position:fixed;z-index:50;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:max(7vh,28px);color:#e8dfce;font:14px system-ui;letter-spacing:.08em;transition:opacity .7s ease;background:#0a0806 center center / cover no-repeat}
 #boot::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,6,4,.15) 0%,rgba(8,6,4,.05) 40%,rgba(8,6,4,.55) 78%,rgba(8,6,4,.75) 100%);pointer-events:none}
 #boot.hide{opacity:0;pointer-events:none}
 #boot .title{display:none}
@@ -51,6 +51,15 @@ body.intro-lock #joyBase,body.intro-lock #atk,body.intro-lock #arm,body.intro-lo
     <div class="msg" id="bootMsg">Preparando el pueblo…</div>
   </div>
 </div>
+<script>
+(function(){
+  var el=document.getElementById('boot');
+  if(!el) return;
+  fetch('./assets/ui/loading-screen.b64').then(function(r){return r.text()}).then(function(b){
+    el.style.backgroundImage='url(data:image/jpeg;base64,'+b.trim()+')';
+  }).catch(function(){});
+})();
+</script>
 <div id="stat"></div>
 <button type="button" id="mapView">VISTA · MAPA</button>
 <button type="button" id="characterLab" onclick="location.href='./character-lab.html'">VISUAL · PERSONAJE</button>
