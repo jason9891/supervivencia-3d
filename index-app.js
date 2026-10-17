@@ -48,9 +48,9 @@ let pageRead = false, hasKey = false, leverPulled = false, gateClosed = false, f
 
 const course = { segments: [{ a: 100, b: -100 }], gaps: 0, freeMap: true };
 const player = createPlayer(course);
-player.x = 6.75; player.z = 40; player.y = 3;
-player.checkpoint = { x: 6.75, z: 40 };
-player.facing = Math.PI;
+player.x = 6.75; player.z = 12; player.y = 0;
+player.checkpoint = { x: 6.75, z: 12 };
+player.facing = 0;
 
 // --- Boot + cinemática narrativa de intro ---
 const bootEl = document.getElementById('boot');
@@ -61,16 +61,17 @@ let introPlaying = true;
 let introT = 0;
 const INTRO = {
   midX: 6.75,
-  // Rampa: z bajo ≈ pie (y=0), z alto ≈ meseta (y=6). Bajamos de 40 → 16.
-  midZ: 40,
-  endZ: 16,
-  walkDur: 9.0,
+  // Rampa: z bajo = pie (y≈0), z alto = meseta (y≈6).
+  // Personaje arranca abajo y sube unos pasos; cámara baja desde la mitad.
+  startZ: 12,
+  endZ: 26,
+  camMidZ: 38,
+  walkDur: 8.5,
   orbitDur: 3.2,
   blendDur: 1.5,
   waistY: 1.05,
   faceY: 1.65,
-  // facing: Math.PI mira hacia −Z (cuesta abajo)
-  facing: Math.PI,
+  facing: 0, // +Z = cuesta arriba
 };
 const INTRO_DUR = INTRO.walkDur + INTRO.orbitDur + INTRO.blendDur;
 let introAudio = null;
@@ -82,8 +83,8 @@ function setBoot(pct, msg) {
 }
 function placeIntroStart() {
   player.x = INTRO.midX;
-  player.z = INTRO.midZ;
-  player.y = getGroundHeight(player.x, player.z, 4);
+  player.z = INTRO.startZ;
+  player.y = getGroundHeight(player.x, player.z, 0);
   player.facing = INTRO.facing;
   player.checkpoint = { x: player.x, z: player.z };
   visYaw = player.facing;
@@ -137,8 +138,8 @@ function easeInOut(t) {
 }
 function stepIntroWalk(dt) {
   const u = Math.min(1, introT / INTRO.walkDur);
-  // z baja: de midZ hacia endZ (cuesta abajo)
-  const z = INTRO.midZ + (INTRO.endZ - INTRO.midZ) * easeInOut(u);
+  // Sube: de startZ (pie) hacia endZ (unos pasos cuesta arriba)
+  const z = INTRO.startZ + (INTRO.endZ - INTRO.startZ) * easeInOut(u);
   player.x = INTRO.midX;
   player.z = z;
   player.y = getGroundHeight(player.x, player.z, player.y);
@@ -156,32 +157,32 @@ function updateIntroCamera(dt) {
   }
 
   const px = player.x, py = player.y, pz = player.z;
-  // dirección en la que mira (y camina) el caballero
+  // dirección en la que mira (y camina) el caballero — cuesta arriba (+Z)
   const fx = Math.sin(player.facing), fz = Math.cos(player.facing);
   let cam = new THREE.Vector3();
   let look = new THREE.Vector3(px, py + INTRO.waistY, pz);
 
   if (introT < INTRO.walkDur) {
-    // Cámara a altura de cintura, bajando desde más arriba en la pendiente
-    // hasta quedar FRENTE al personaje (mirándole a la cara).
+    // Personaje sube desde abajo; cámara viene en sentido contrario:
+    // desde la mitad de la pendiente hacia el rostro del caballero.
     const u = easeInOut(introT / INTRO.walkDur);
-    // Inicio: más arriba en la rampa (mayor z) y un poco al lado
+    const midY = getGroundHeight(INTRO.midX, INTRO.camMidZ, 3);
     const camStart = new THREE.Vector3(
-      INTRO.midX + 1.4,
-      py + 2.4,
-      INTRO.midZ + 5.5
+      INTRO.midX + 0.6,
+      midY + INTRO.waistY + 0.15,
+      INTRO.camMidZ
     );
-    // Fin: frente al caballero (en la dirección que mira)
-    const frontDist = 2.55;
+    // Frente al caballero (él mira +Z, la cámara se coloca delante y mira hacia él)
+    const frontDist = 2.6;
     const camEnd = new THREE.Vector3(
       px + fx * frontDist,
       py + INTRO.waistY,
       pz + fz * frontDist
     );
     cam.lerpVectors(camStart, camEnd, u);
-    look.set(px, py + INTRO.waistY + 0.2 * u, pz);
-    if (introT < 3) document.getElementById('hint').textContent = '…han pasado muchos años';
-    else if (introT < 6) document.getElementById('hint').textContent = 'Escudos y espadas mejoraron…';
+    look.set(px, py + INTRO.waistY + 0.15 * u, pz);
+    if (introT < 2.8) document.getElementById('hint').textContent = '…han pasado muchos años';
+    else if (introT < 5.5) document.getElementById('hint').textContent = 'Escudos y espadas mejoraron…';
     else document.getElementById('hint').textContent = '…pero la magia y los monstruos se volvieron leyenda';
   } else if (introT < INTRO.walkDur + INTRO.orbitDur) {
     // Giro por encima del personaje
@@ -280,7 +281,7 @@ const locomotionActor = new THREE.Group(); scene.add(locomotionActor); locomotio
 let locomotionMixer = null, walkAction = null, runAction = null, idleAction = null, activeAction = null;
 let attackAction = null, attacking = false, armed = false;
 let attackUntil = 0;
-const clipMap = new Map(), locoState = createLocoState(); let loco = null, visYaw = Math.PI;
+const clipMap = new Map(), locoState = createLocoState(); let loco = null, visYaw = 0;
 const gltfLoader = new GLTFLoader();
 const normName = n => (n || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 function findClip(clips, names) {
@@ -494,7 +495,7 @@ if (mapBtn) mapBtn.addEventListener('pointerdown', e => {
     document.getElementById('hint').textContent = 'JOYSTICK v3 · correr toggle';
   }
 });
-camera.position.set(player.x + 1.4, player.y + 2.4, player.z + 5.5);
+camera.position.set(INTRO.midX + 0.6, 3.2, INTRO.camMidZ);
 camera.lookAt(player.x, player.y + 1.05, player.z);
 document.addEventListener('contextmenu', e => e.preventDefault());
 
