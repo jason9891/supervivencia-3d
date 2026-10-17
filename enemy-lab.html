@@ -374,6 +374,7 @@ function arenaAttack() {
   const hits = a.rt.tryPlayerHit({ reach: 2.2, dmg: 14 });
   arenaMsg = hits.length ? 'Le diste (-' + hits[0].result.damage + ')' : 'Fallaste';
 }
+window.__arena = () => arena;   // para pruebas automáticas
 document.getElementById('arenaBtn').addEventListener('click', () => toggleArena().catch((e) => showErr('arena: ' + (e.message || e))));
 document.getElementById('pAttack').addEventListener('click', arenaAttack);
 document.getElementById('pRevive').addEventListener('click', arenaRevive);

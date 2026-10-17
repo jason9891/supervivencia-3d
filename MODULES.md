@@ -72,4 +72,6 @@ const combat = createCombatAddon({ THREE, scene, camera, player, onSwing: () => 
 | `assets/anims/monster-hull.json` | Volumen de colisión del monstruo que usa el generador. |
 | `tests/dismember.test.mjs` | `THREE_DIR=$PWD/node_modules/three node tests/dismember.test.mjs` prueba con la malla real: sin suelo atravesado, pieza fuera del cuerpo con varias semillas, revivir restaura. |
 
+| `corpse.js` | El cadáver es sólido: huella (x, z) sacada de la malla ya caída; `pushOut` aparta al jugador y a otros monstruos (se puede saltar por encima). La conecta `enemy-runtime.js`, así que vale en el juego y en el laboratorio. Pruebas: `tests/corpse.test.mjs`. |
+
 No toca `map1.js`, `course.js` ni los módulos visuales del héroe.

@@ -5,6 +5,7 @@ import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/
 import { MeshoptDecoder } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/meshopt_decoder.module.js';
 import { createMixamoProcedural } from './mixamo-procedural.js';
 import { equipMonster } from './monster-moves.js';
+import * as Corpse from './corpse.js';
 import {
   createEnemy, stepEnemy, resolveEnemyStrike, resolveHit, separate, ENEMIES,
 } from './combat.js';
@@ -188,7 +189,7 @@ export async function createEnemyRuntime(opts) {
     anim.setMode('idle');
 
     const unit = {
-      data, root, anim, hpBar: createHpBar(),
+      data, root, anim, hpBar: createHpBar(), height: TARGET_HEIGHT * (data.def.scale || 1),
       lastState: 'idle', visYaw: data.facing,
     };
     units.push(unit);
@@ -223,6 +224,42 @@ export async function createEnemyRuntime(opts) {
     unit.lastState = e.state;
   }
 
+  // --- Cadáver sólido: huella (x,z) de la malla ya caída; se refresca mientras cae y se congela al quedar quieto ---
+  const CORPSE_R = 0.075, CORPSE_JUMP = 0.45;   // radio de cada punto y altura (× altura del monstruo) a la que se puede saltar por encima
+  function corpseMesh(unit) { let m = null; unit.root.traverse((o) => { if (!m && o.isSkinnedMesh) m = o; }); return m; }
+  function refreshCorpse(unit, dt) {
+    const e = unit.data;
+    if (!e.dead || !unit.anim) { unit.corpse = null; return; }
+    unit.corpseAge = (unit.corpseAge || 0) + dt;
+    if (unit.corpse && (unit.corpse.frozen || unit.corpseAge - unit.corpse.at < 0.12)) return;
+    const mesh = unit.corpseMesh || (unit.corpseMesh = corpseMesh(unit));
+    if (!mesh || !mesh.geometry.index) return;
+    unit.root.updateMatrixWorld(true); mesh.skeleton.update();
+    const idx = mesh.geometry.index.array, seen = new Set(), xz = [], v = tmp2;
+    for (let i = 0; i < idx.length; i += 7) {   // paso 7 sobre el índice: ~1/7 de los vértices, de sobra para la huella
+      const k = idx[i]; if (seen.has(k)) continue; seen.add(k);
+      mesh.getVertexPosition(k, v); v.applyMatrix4(mesh.matrixWorld); xz.push(v.x, v.z);
+    }
+    unit.corpse = { pts: Corpse.thin(xz, 450), at: unit.corpseAge, frozen: unit.corpseAge > 2.4 };   // 2.4 s: ya quedó en reposo (los clips duran 1.9 s)
+  }
+  const tmp2 = new THREE.Vector3();
+  const corpseR = (unit) => CORPSE_R * (unit.height || TARGET_HEIGHT) / 0.95;
+  function pieceDiscs(unit) {   // la cabeza o el brazo cortados también estorban
+    const d = unit.anim && unit.anim.dismember; if (!d || !d.pieces.length) return null;
+    const out = []; for (const r of d.pieces) out.push(r.piece.position.x, r.piece.position.z);
+    return Float32Array.from(out);
+  }
+  /** Saca a `pos` (con .x .z .y) de todos los cadáveres. `pr`: radio de quien se mueve. Quien salta por encima no choca. */
+  function pushFromCorpses(pos, pr, except) {
+    for (const unit of units) {
+      if (unit === except || !unit.data.dead) continue;
+      const H = unit.height || TARGET_HEIGHT;
+      if (pos.y !== undefined && pos.y - (unit.data.y || 0) > CORPSE_JUMP * H) continue;
+      if (unit.corpse) Corpse.pushOut(pos, unit.corpse.pts, corpseR(unit), pr);
+      const pd = pieceDiscs(unit); if (pd) Corpse.pushOut(pos, pd, corpseR(unit) * 1.4, pr);
+    }
+  }
+
   function update(dt) {
     const pstats = { defense: 4, blockFrac: 0 };
     const events = [];
@@ -247,6 +284,7 @@ export async function createEnemyRuntime(opts) {
         unit.root.position.set(e.x, e.y, e.z);
         syncAnim(unit);
         if (unit.anim) unit.anim.update(dt);
+        refreshCorpse(unit, dt);
         const bar = unit.hpBar;
         const s0 = toScreen(e.x, e.y + 1.15, e.z);
         if (s0 && !e.dead) {
@@ -333,6 +371,8 @@ export async function createEnemyRuntime(opts) {
 
       syncAnim(unit);
       if (unit.anim) unit.anim.update(dt);
+      refreshCorpse(unit, dt);
+      if (!e.dead) { const q = { x: e.x, z: e.z, y: e.y }; pushFromCorpses(q, e.radius || 0.4, unit); e.x = q.x; e.z = q.z; }   // los vivos tampoco atraviesan cadáveres
 
       const bar = unit.hpBar;
       if (e.dead || e.hp <= 0) {
@@ -386,6 +426,7 @@ export async function createEnemyRuntime(opts) {
   function resolveAgainstPlayer(player) {
     if (!player) return;
     const pr = 0.42;
+    pushFromCorpses(player, pr);   // el cadáver es sólido (se puede saltar por encima)
     for (const unit of units) {
       const e = unit.data;
       if (e.dead) continue;
@@ -418,7 +459,7 @@ export async function createEnemyRuntime(opts) {
     for (const unit of units) {
       const e = unit.data;
       e.hp = e.maxHp; e.dead = false; e.deadT = 0; e.state = activated ? 'chase' : 'idle'; e.t = 0; e.hitstun = 0;
-      e.x = e.spawn.x; e.z = e.spawn.z; unit.combo = null; unit.lastState = 'idle';
+      e.x = e.spawn.x; e.z = e.spawn.z; unit.combo = null; unit.lastState = 'idle'; unit.corpse = null; unit.corpseAge = 0;
       unit.root.rotation.z = 0; unit.root.rotation.x = 0;
       if (unit.anim) { unit.anim.revive(); unit.anim.setMode('idle'); }
     }
