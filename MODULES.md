@@ -74,4 +74,8 @@ const combat = createCombatAddon({ THREE, scene, camera, player, onSwing: () => 
 
 | `corpse.js` | El cadáver es sólido: huella (x, z) sacada de la malla ya caída; `pushOut` aparta al jugador y a otros monstruos (se puede saltar por encima). La conecta `enemy-runtime.js`, así que vale en el juego y en el laboratorio. Pruebas: `tests/corpse.test.mjs`. |
 
+| `nav.js` | Ruta A* local para el monstruo: rodea paredes y mesas en vez de empujar contra ellas. Pruebas: `tests/nav.test.mjs`. |
+
+En `enemy-runtime.js`: barra de objetivo estilo Blade (solo aparece al pelear), encaramiento automático al atacar y al quedarte quieto cerca, y los muros se respetan por altura (como `resolveWallCollisions` del mapa).
+
 No toca `map1.js`, `course.js` ni los módulos visuales del héroe.

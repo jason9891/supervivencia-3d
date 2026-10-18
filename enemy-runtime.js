@@ -6,6 +6,7 @@ import { MeshoptDecoder } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examp
 import { createMixamoProcedural } from './mixamo-procedural.js';
 import { equipMonster } from './monster-moves.js';
 import * as Corpse from './corpse.js';
+import { findPath, lineClear, nextWaypoint } from './nav.js';
 import {
   createEnemy, stepEnemy, resolveEnemyStrike, resolveHit, separate, ENEMIES,
 } from './combat.js';
@@ -57,6 +58,35 @@ function createHpBar() {
   return { el, fill };
 }
 
+// Barra de objetivo estilo Blade: nombre arriba, barra roja con marco dorado y una estela clara que baja tras recibir daño.
+function createTargetHud() {
+  if (typeof document === 'undefined') return { show() {} };
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;z-index:21;top:calc(env(safe-area-inset-top) + 46px);left:50%;transform:translateX(-50%);width:min(64vw,340px);' +
+    'pointer-events:none;opacity:0;transition:opacity .25s;text-align:center';
+  const name = document.createElement('div');
+  name.style.cssText = 'font:600 11px/1.2 Georgia,serif;letter-spacing:.2em;text-transform:uppercase;color:#e8dfce;text-shadow:0 1px 3px #000,0 0 6px #000;margin-bottom:3px';
+  const frame = document.createElement('div');
+  frame.style.cssText = 'position:relative;height:10px;background:#120a08;border:1px solid #b08d4a;border-radius:2px;box-shadow:0 0 0 1px #000,inset 0 0 4px #000;overflow:hidden';
+  const ghost = document.createElement('i'); ghost.style.cssText = 'position:absolute;inset:0 auto 0 0;width:100%;background:#e9d9b0';
+  const fill = document.createElement('i'); fill.style.cssText = 'position:absolute;inset:0 auto 0 0;width:100%;background:linear-gradient(#d4392b,#8d1a12)';
+  frame.append(ghost, fill); box.append(name, frame); document.body.appendChild(box);
+  let label = null, ghostW = 1, hold = 0, last = 1;
+  return {
+    el: box,
+    show(text, frac, dt) {
+      if (!text) { box.style.opacity = '0'; label = null; return; }
+      if (text !== label) { label = text; name.textContent = text; ghostW = frac; last = frac; hold = 0; }
+      frac = Math.max(0, Math.min(1, frac));
+      if (frac < last - 1e-4) hold = 0.45;                  // recibió daño: la estela espera un momento y luego baja
+      last = frac;
+      if (hold > 0) hold -= dt; else ghostW = Math.max(frac, ghostW - dt * 0.6);
+      fill.style.width = frac * 100 + '%'; ghost.style.width = Math.max(ghostW, frac) * 100 + '%';
+      box.style.opacity = '1';
+    },
+  };
+}
+
 // Elige cómo muere: de espaldas (lo más común), de bruces, de costado (D/I), de rodillas, o perdiendo un brazo o la cabeza.
 const DEATH_PICKS = [['death', 0.28], ['deathFront', 0.20], ['deathSideR', 0.10], ['deathSideL', 0.10], ['deathKneel', 0.12],
   ['deathArmR', 0.05], ['deathArmL', 0.05], ['deathDecap', 0.06], ['deathDecapBack', 0.04]];   // las últimas cuatro desmiembran (brazo o cabeza)
@@ -73,12 +103,21 @@ function wrapAngle(a) {
   return a;
 }
 
-function resolveWalls(x, z, radius, walls) {
+// Los muros del mapa traen altura (minY/maxY): uno de otro piso no bloquea al monstruo. Mismo criterio que resolveWallCollisions del mapa.
+export function wallBlocks(w, y, h) {
+  if (y === undefined) return true;
+  if (y >= (w.maxY ?? Infinity) - 0.3) return false;   // el monstruo va por encima del muro
+  if (y + h <= (w.minY ?? -Infinity)) return false;    // va por debajo
+  return true;
+}
+
+function resolveWalls(x, z, radius, walls, y, h = 1) {
   if (!walls || !walls.length) return { x, z };
   let px = x, pz = z;
   const r = radius || 0.4;
   for (let pass = 0; pass < 3; pass++) {
     for (const w of walls) {
+      if (!wallBlocks(w, y, h)) continue;
       const nx = Math.max(w.minX, Math.min(px, w.maxX));
       const nz = Math.max(w.minZ, Math.min(pz, w.maxZ));
       let dx = px - nx, dz = pz - nz;
@@ -124,9 +163,11 @@ export async function createEnemyRuntime(opts) {
   const walls = opts.walls || [];
   const onHint = opts.onHint || (() => {});
 
+  let probeY, probeH = TARGET_HEIGHT;   // altura de quien se está moviendo: onPlat sólo cuenta los muros de su piso
   const onPlat = (x, z) => {
     const r = 0.4;
     for (const w of walls) {
+      if (!wallBlocks(w, probeY, probeH)) continue;
       const nx = Math.max(w.minX, Math.min(x, w.maxX));
       const nz = Math.max(w.minZ, Math.min(z, w.maxZ));
       const dx = x - nx, dz = z - nz;
@@ -189,7 +230,7 @@ export async function createEnemyRuntime(opts) {
     anim.setMode('idle');
 
     const unit = {
-      data, root, anim, hpBar: createHpBar(), height: TARGET_HEIGHT * (data.def.scale || 1),
+      data, root, anim, hpBar: createHpBar(), height: TARGET_HEIGHT * (data.def.scale || 1), label: 'Criatura del establo',
       lastState: 'idle', visYaw: data.facing,
     };
     units.push(unit);
@@ -222,6 +263,69 @@ export async function createEnemyRuntime(opts) {
     else if (e.state === 'recover') { anim.setMode('walk'); anim.setRate(WALK_RATE); }
     else anim.setMode('idle');
     unit.lastState = e.state;
+  }
+
+  // --- Ruta: si hay un obstáculo entre el monstruo y el jugador, rodea en vez de empujar contra él ---
+  const REPLAN = 0.45;
+  // La ruta se planea con más holgura que la colisión (0.4 + 0.3): así no pasa pegada a una esquina y no se engancha.
+  const PAD = 0.3, PAD_D = PAD * 0.7071;
+  const blockedAt = (x, z) => !onPlat(x, z) || !onPlat(x + PAD, z) || !onPlat(x - PAD, z) || !onPlat(x, z + PAD) || !onPlat(x, z - PAD) ||
+    !onPlat(x + PAD_D, z + PAD_D) || !onPlat(x - PAD_D, z + PAD_D) || !onPlat(x + PAD_D, z - PAD_D) || !onPlat(x - PAD_D, z - PAD_D);
+  /** Devuelve el punto al que debe ir (en lugar del jugador) o null si ve al jugador en línea recta. */
+  function steer(unit, dt) {
+    const e = unit.data;
+    probeY = e.y; probeH = unit.height || TARGET_HEIGHT;
+    const nav = unit.nav || (unit.nav = { path: null, t: 0 });
+    nav.t += dt;
+    if (lineClear(e.x, e.z, player.x, player.z, blockedAt, 0.3)) { nav.path = null; return null; }
+    if (!nav.path || nav.t > REPLAN) { nav.path = findPath(e.x, e.z, player.x, player.z, blockedAt); nav.t = 0; }
+    if (!nav.path || !nav.path.length) return null;
+    return nextWaypoint(nav.path, e.x, e.z, 0.6);
+  }
+
+  function activate() {
+    if (activated) return;
+    activated = true;
+    for (const unit of units) {
+      if (!unit.data.dead) { unit.data.state = 'chase'; unit.data.def.aggro = 40; }
+    }
+  }
+
+  // --- Barra de vida del objetivo al estilo Blade of Darkness: arriba y al centro, con el nombre y una estela de daño.
+  //     Sólo aparece para el enemigo con el que estás peleando (cerca y despierto, o recién golpeado); antes no se ve ninguna.
+  const ENGAGE_R = 9, HURT_SHOW = 6, LOCK_R = 6, ASSIST_R = 3.2;
+  const hud = createTargetHud();
+  const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
+  const distTo = (unit) => Math.hypot(player.x - unit.data.x, player.z - unit.data.z);
+  const engaged = (unit) => !unit.data.dead && ((activated && distTo(unit) < ENGAGE_R) || (unit.lastHit !== undefined && now() - unit.lastHit < HURT_SHOW));
+  /** Enemigo que se está encarando: el más cercano al frente del jugador (cerca de él y despierto o ya golpeado). */
+  function lockTarget() {
+    let best = null, bs = Infinity;
+    for (const unit of units) {
+      if (!engaged(unit) || distTo(unit) > LOCK_R) continue;
+      const d = distTo(unit), diff = Math.abs(wrapAngle(Math.atan2(unit.data.x - player.x, unit.data.z - player.z) - (player.facing || 0)));
+      const sc = d * (1 + diff / Math.PI);
+      if (sc < bs) { bs = sc; best = unit; }
+    }
+    return best;
+  }
+  /** Encara al jugador hacia el objetivo (al atacar). Devuelve el objetivo o null. */
+  function faceTarget() {
+    const t = lockTarget(); if (!t) return null;
+    player.facing = Math.atan2(t.data.x - player.x, t.data.z - player.z);
+    return t;
+  }
+  /** Mientras no te mueves y hay un enemigo encima, el personaje gira hacia él (como el lock de Blade). */
+  function assistFacing(dt) {
+    const t = lockTarget(); if (!t || distTo(t) > ASSIST_R) return null;
+    const diff = wrapAngle(Math.atan2(t.data.x - player.x, t.data.z - player.z) - (player.facing || 0));
+    player.facing = (player.facing || 0) + diff * Math.min(1, dt * 7);
+    return t;
+  }
+  function updateHud(dt) {
+    let t = null, bd = Infinity;
+    for (const unit of units) { if (engaged(unit)) { const d = distTo(unit); if (d < bd) { bd = d; t = unit; } } }
+    hud.show(t ? t.label || t.data.def.name || 'Enemigo' : null, t ? t.data.hp / t.data.maxHp : 0, dt);
   }
 
   // --- Cadáver sólido: huella (x,z) de la malla ya caída; se refresca mientras cae y se congela al quedar quieto ---
@@ -265,14 +369,8 @@ export async function createEnemyRuntime(opts) {
     const events = [];
 
     if (!activated && inDoor(player.x, player.z)) {
-      activated = true;
+      activate();
       onHint('\u00a1Algo se mueve en el establo!');
-      for (const unit of units) {
-        if (!unit.data.dead) {
-          unit.data.state = 'chase';
-          unit.data.def.aggro = 40;
-        }
-      }
     }
 
     for (const unit of units) {
@@ -280,19 +378,11 @@ export async function createEnemyRuntime(opts) {
 
       if (!activated) {
         e.state = 'idle';
-        e.y = getGroundY(e.x, e.z);
+        e.y = getGroundY(e.x, e.z, e.y);
         unit.root.position.set(e.x, e.y, e.z);
         syncAnim(unit);
         if (unit.anim) unit.anim.update(dt);
         refreshCorpse(unit, dt);
-        const bar = unit.hpBar;
-        const s0 = toScreen(e.x, e.y + 1.15, e.z);
-        if (s0 && !e.dead) {
-          bar.el.style.display = 'block';
-          bar.el.style.left = s0.x + 'px';
-          bar.el.style.top = s0.y + 'px';
-          bar.fill.style.width = Math.max(0, (e.hp / e.maxHp) * 100) + '%';
-        } else bar.el.style.display = 'none';
         continue;
       }
 
@@ -318,7 +408,20 @@ export async function createEnemyRuntime(opts) {
         const d0 = Math.hypot(player.x - e.x, player.z - e.z);
         const an = unit.anim, far0 = d0 > RUN_DIST;
         e.def.speed = an && an.hasClips ? an.groundSpeed(far0 ? 'run' : 'walk') * (far0 ? RUN_RATE : WALK_RATE) : (far0 ? RUN_SPEED : WALK_SPEED);
-        stepEnemy(e, player, onPlat, dt);   // sus eventos de golpe único se ignoran: los golpes vienen del combo
+        probeY = e.y; probeH = unit.height || TARGET_HEIGHT;
+        const wp = (e.state === 'chase' || e.state === 'recover') ? steer(unit, dt) : null;
+        unit.pathing = false;
+        if (wp && e.state === 'chase' && d0 > e.def.reach * 0.9) {
+          // rodeando un obstáculo: avanza hacia el siguiente punto de la ruta (la IA normal sólo vuelve cuando el jugador está al alcance)
+          unit.pathing = true;
+          if (e.hitstun > 0) e.hitstun = Math.max(0, e.hitstun - dt);
+          const dx = wp.x - e.x, dz = wp.z - e.z, dl = Math.hypot(dx, dz) || 1, step = e.def.speed * dt;
+          e.facing = Math.atan2(dx, dz);
+          for (const [ox, oz] of [[0, 0], [0.6, 0], [-0.6, 0], [1.2, 0], [-1.2, 0]]) {   // directo, o girando un poco si algo estorba
+            const c = Math.cos(ox), sn = Math.sin(ox), ux = (dx * c - dz * sn) / dl, uz = (dx * sn + dz * c) / dl;
+            if (onPlat(e.x + ux * step, e.z + uz * step)) { e.x += ux * step; e.z += uz * step; break; }
+          }
+        } else stepEnemy(e, player, onPlat, dt);   // sus eventos de golpe único se ignoran: los golpes vienen del combo
         if (e.state === 'windup' && !e.dead) {
           unit.combo = { t: 0, i: 0 };
           if (unit.anim) { unit.anim.setMode('idle'); unit.anim.attack(); }
@@ -339,16 +442,16 @@ export async function createEnemyRuntime(opts) {
         }
       }
 
-      if (!e.dead) {
+      if (!e.dead && !unit.pathing) {   // siempre encara al jugador (salvo mientras rodea un obstáculo: mira hacia donde camina)
         const dx = player.x - e.x, dz = player.z - e.z;
         if (Math.hypot(dx, dz) > 0.05) e.facing = Math.atan2(dx, dz);
       }
 
-      const fixed = resolveWalls(e.x, e.z, e.radius || 0.35, walls);
+      const fixed = resolveWalls(e.x, e.z, e.radius || 0.35, walls, e.y, unit.height);
       e.x = fixed.x;
       e.z = fixed.z;
 
-      e.y = getGroundY(e.x, e.z);
+      e.y = getGroundY(e.x, e.z, e.y);
       unit.root.position.set(e.x, e.y, e.z);
 
       let dYaw = wrapAngle(e.facing - unit.visYaw);
@@ -374,21 +477,10 @@ export async function createEnemyRuntime(opts) {
       refreshCorpse(unit, dt);
       if (!e.dead) { const q = { x: e.x, z: e.z, y: e.y }; pushFromCorpses(q, e.radius || 0.4, unit); e.x = q.x; e.z = q.z; }   // los vivos tampoco atraviesan cadáveres
 
-      const bar = unit.hpBar;
-      if (e.dead || e.hp <= 0) {
-        bar.el.style.display = 'none';
-      } else {
-        const s = toScreen(e.x, e.y + 1.15, e.z);
-        if (s) {
-          bar.el.style.display = 'block';
-          bar.el.style.left = s.x + 'px';
-          bar.el.style.top = s.y + 'px';
-          bar.fill.style.width = Math.max(0, (e.hp / e.maxHp) * 100) + '%';
-        } else bar.el.style.display = 'none';
-      }
     }
 
     if (activated) separate(units.map((u) => u.data), onPlat, 0.9);
+    updateHud(dt);
     return events;
   }
 
@@ -415,11 +507,13 @@ export async function createEnemyRuntime(opts) {
         e.stats
       );
       hits.push({ enemy: e, result: r });
+      unit.lastHit = now();
       if (r.killed) {
         killAnim(unit);
         onHint((e.def.name || 'Enemigo') + ' derrotado');
       }
     }
+    if (hits.length) activate();   // un golpe despierta al monstruo aunque no hayas cruzado la puerta
     return hits;
   }
 
@@ -446,7 +540,7 @@ export async function createEnemyRuntime(opts) {
       player.z += dz * push * 0.6;
       e.x -= dx * push * 0.4;
       e.z -= dz * push * 0.4;
-      const fixed = resolveWalls(e.x, e.z, er, walls);
+      const fixed = resolveWalls(e.x, e.z, er, walls, e.y, unit.height);
       e.x = fixed.x;
       e.z = fixed.z;
       unit.root.position.x = e.x;
@@ -459,7 +553,7 @@ export async function createEnemyRuntime(opts) {
     for (const unit of units) {
       const e = unit.data;
       e.hp = e.maxHp; e.dead = false; e.deadT = 0; e.state = activated ? 'chase' : 'idle'; e.t = 0; e.hitstun = 0;
-      e.x = e.spawn.x; e.z = e.spawn.z; unit.combo = null; unit.lastState = 'idle'; unit.corpse = null; unit.corpseAge = 0;
+      e.x = e.spawn.x; e.z = e.spawn.z; unit.lastHit = undefined; unit.nav = null; unit.pathing = false; unit.combo = null; unit.lastState = 'idle'; unit.corpse = null; unit.corpseAge = 0;
       unit.root.rotation.z = 0; unit.root.rotation.x = 0;
       if (unit.anim) { unit.anim.revive(); unit.anim.setMode('idle'); }
     }
@@ -471,6 +565,8 @@ export async function createEnemyRuntime(opts) {
     update,
     tryPlayerHit,
     resolveAgainstPlayer,
+    lockTarget, faceTarget, assistFacing,
+    hideHud() { hud.show(null, 0, 0); },
     get activated() { return activated; },
     get units() { return units; },
     ENEMIES,

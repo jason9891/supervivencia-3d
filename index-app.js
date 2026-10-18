@@ -393,6 +393,7 @@ loadHero(THREE, GLTFLoader)
 function attack() {
   if (introPlaying || gateCinePlaying) return;
   if (!player.grounded) return;
+  if (enemyRt && enemyRt.faceTarget) enemyRt.faceTarget();   // encara al enemigo más cercano antes de golpear
   playerHitArmed = true;
   setTimeout(() => {
     if (enemyRt && playerHitArmed) {
@@ -571,6 +572,7 @@ function animate() {
   if (!mapOverview) jumpQueued = false;
   resolveWallCollisions(player);
   if (enemyRt && enemyRt.resolveAgainstPlayer) enemyRt.resolveAgainstPlayer(player);
+  if (enemyRt && enemyRt.assistFacing && !joy.active && !introPlaying && !mapOverview && player.grounded) enemyRt.assistFacing(dt);   // quieto y con un enemigo encima: lo encara
   resolveWallCollisions(player);
   resolveGround(player);
 

@@ -337,6 +337,7 @@ function setArena(on) {
   document.getElementById('act').style.display = on ? 'flex' : 'none';
   if (modelRoot) modelRoot.visible = !on;
   floor.visible = !on;
+  if (!on && arena) arena.rt.hideHud();
   if (arena) { arena.marker.visible = on; arena.big.visible = on; for (const u of arena.rt.units) { u.root.visible = on; u.hpBar.el.style.display = on ? u.hpBar.el.style.display : 'none'; } }
   if (on) { viewerCam.y = camera.position.y; viewerCam.z = camera.position.z; statusEl.textContent = 'ARENA: muévete con ◀▲▼▶ / WASD, ataca con ATACAR / J. El monstruo se activa solo.'; }
   else { camera.position.set(0, viewerCam.y || 1.5, viewerCam.z || 5.5); statusEl.textContent = 'Visor de animaciones'; }
@@ -371,6 +372,7 @@ function arenaStep(dt) {
 function arenaAttack() {
   const a = arena; if (!a || a.cd > 0 || a.player.dead) return;
   a.cd = 0.45;
+  a.rt.faceTarget();   // encara al enemigo más cercano antes de golpear
   const hits = a.rt.tryPlayerHit({ reach: 2.2, dmg: 14 });
   arenaMsg = hits.length ? 'Le diste (-' + hits[0].result.damage + ')' : 'Fallaste';
 }
