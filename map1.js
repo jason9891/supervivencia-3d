@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { clearRamps, addRamp, sampleRampY, getSlopeAt, buildRampMesh, RAMPS } from './map-ramps.js';
 import { buildModule2, LEVEL2_Y as MOD2_L2, MOD2 } from './modulo2.js';
 import { createMedievalMaterials, worldUV, buildChest, buildTable, buildChair, buildTorch, placeProp, updateTorches } from './props-medieval.js';
-import { buildNaturalRamp } from './natural-ramp.js';
+import { buildNaturalRamp, updateNaturalRamp } from './natural-ramp.js';
 
 export const MAP1_NAME = 'El Regreso';
 export const LEVEL0_Y = 0;
@@ -134,6 +134,7 @@ function startMapLoop() {
     const t = ms * 0.001, dt = Math.min(0.05, t - last);
     last = t;
     updateTorches(t);
+    updateNaturalRamp(t);
     updateGate(dt);
     requestAnimationFrame(tick);
   };
@@ -212,7 +213,7 @@ export function buildMap1(scene) {
   }
 
   // Pisos del nivel 1: cada zona tiene su propia losa y ninguna se solapa (antes parpadeaban)
-  pad(13.5, 6, LEVEL1_Y, 6.75, 69, stone);        // descanso al final de la rampa  (x 0-13.5,  z 66-72)
+  addPlatform(0, 13.5, 66, 72, LEVEL1_Y);          // descanso al final de la rampa (su visual la dibuja natural-ramp.js)
   pad(54, 9, LEVEL1_Y, 40.5, 67.5, stone);        // corredor                       (x 13.5-67.5, z 63-72)
   pad(54, 63, LEVEL1_Y, 40.5, 31.5, dirt);        // plaza                          (x 13.5-67.5, z 0-63)
   pad(22.5, 9.6, LEVEL1_Y, 78.75, 58.2, dirt);    // patio                          (x 67.5-90,  z 53.4-63)
@@ -220,7 +221,7 @@ export function buildMap1(scene) {
   // Muralla: el nivel 1 es una meseta, este muro la apoya desde el terreno hasta la plaza
   box(0.8, 6.8, 63.1, M.wall, 13.5, LEVEL1_Y - 3.4, 31.55, true);
 
-  pad(13.5, 9, LEVEL0_Y, 6.75, 4.5, grass);
+  addPlatform(0, 13.5, 0, 9, LEVEL0_Y);            // zona de arranque (su visual la dibuja natural-ramp.js)
   const rampDef = {
     sx: 6.75, sz: 9,
     ex: 6.75, ez: 66,
@@ -228,7 +229,8 @@ export function buildMap1(scene) {
     halfWidth: 5.5,
   };
   addRamp(rampDef);                                              // la física no cambia
-  buildNaturalRamp(scene, rampDef, { detail: RAMP_DETAIL });     // ladera de pasto, sendero, rocas
+  const ramp = buildNaturalRamp(scene, rampDef, { detail: RAMP_DETAIL });   // recinto cerrado: pasto, rocas, acantilado
+  for (const c of ramp.colliders) addWall(...c);                             // muros de contención invisibles
 
   wallBox(13.1, 13.9, 0.0, 63.1);
   wallBox(13.5, 36.0, 62.9, 63.6);

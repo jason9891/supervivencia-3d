@@ -9,6 +9,7 @@ import {
   resolveWallCollisions, resolveGround, closePassageGate, tryUnlockTowerDoor, MAP_CENTER, WALLS, getGroundHeight
 } from './map1.js';
 import { createEnemyRuntime } from './enemy-runtime.js';
+import * as Inv from './inventario.js';
 
 const errorBox = document.getElementById('error');
 addEventListener('error', e => { errorBox.style.display = 'block'; errorBox.textContent = 'Error: ' + (e.message || ''); });
@@ -45,6 +46,15 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.35));
 
 const mapData = buildMap1(scene);
 let pageRead = false, hasKey = false, leverPulled = false, gateClosed = false, foodTaken = false;
+// Activadores del mapa → inventario: el mapa solo avisa con banderas (llave, nota, comida) y inventario.js las convierte en objetos.
+// Se guarda en el mismo almacenamiento que usa el laboratorio de combate, así lo recogido aquí aparece allí.
+let invStore = null; try { invStore = window.localStorage; } catch { invStore = null; }
+const inv = Inv.load(invStore);
+function syncInventory() {
+  const got = Inv.syncFlags(inv, { llave: hasKey, nota: pageRead, comida: foodTaken });
+  if (got.length) Inv.save(inv, invStore);
+  return got;
+}
 // Cinemática corta al caer la reja: se detiene, mira atrás, vuelve
 let gateCinePlaying = false;
 let gateCineT = 0;
@@ -576,22 +586,25 @@ function animate() {
   resolveWallCollisions(player);
   resolveGround(player);
 
-  if (!gateClosed && player.x > 30 && player.x < 40 && player.z > 64 && player.z < 72) {
+  // La reja cae sola cuando cruzas x = 36.5 viniendo de la rampa (checkGateTrigger, dentro de resolveWallCollisions): la cinemática arranca en ese instante.
+  if (!gateClosed && mapData.gate && mapData.gate.userData.closed) {
     closePassageGate(mapData);
     gateClosed = true;
     startGateCine();
   }
-  if (!pageRead && distanceToPage(player.x, player.y, player.z) < 2.2) showStoryPage();
+  if (!pageRead && distanceToPage(player.x, player.y, player.z) < 2.2) { showStoryPage(); syncInventory(); }
   if (!hasKey && distanceToKey(player.x, player.y, player.z) < 1.8) {
     hasKey = true;
     if (mapData.keyMesh) mapData.keyMesh.visible = false;
     document.getElementById('hint').textContent = 'Llave obtenida';
     tryUnlockTowerDoor(mapData, hasKey);
+    syncInventory();
   }
   if (!foodTaken && distanceToFood(player.x, player.y, player.z) < 1.6) {
     foodTaken = true;
     if (mapData.foodMesh) mapData.foodMesh.visible = false;
     document.getElementById('hint').textContent = 'Comida en el establo...';
+    syncInventory();
   }
   if (!leverPulled && distanceToLever(player.x, player.y, player.z) < 2.0) {
     leverPulled = true;
