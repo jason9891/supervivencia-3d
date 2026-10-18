@@ -10,6 +10,7 @@ import {
 } from './map1.js';
 import { createEnemyRuntime } from './enemy-runtime.js';
 import * as Inv from './inventario.js';
+import { buildWorldProps } from './props-mundo.js';
 
 const errorBox = document.getElementById('error');
 addEventListener('error', e => { errorBox.style.display = 'block'; errorBox.textContent = 'Error: ' + (e.message || ''); });
@@ -45,6 +46,8 @@ scene.add(new THREE.DirectionalLight(0xffe0b0, 0.85).translateX(-12).translateY(
 scene.add(new THREE.AmbientLight(0xffffff, 0.35));
 
 const mapData = buildMap1(scene);
+// Mercado de la plaza, interior del establo, cuartos del módulo y almenas: archivo aparte, registra sus colisiones en los WALLS del mapa.
+try { buildWorldProps(scene, { WALLS }); } catch (e) { console.warn('props-mundo', e); }
 let pageRead = false, hasKey = false, leverPulled = false, gateClosed = false, foodTaken = false;
 // Activadores del mapa → inventario: el mapa solo avisa con banderas (llave, nota, comida) y inventario.js las convierte en objetos.
 // Se guarda en el mismo almacenamiento que usa el laboratorio de combate, así lo recogido aquí aparece allí.

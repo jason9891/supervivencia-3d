@@ -78,4 +78,6 @@ const combat = createCombatAddon({ THREE, scene, camera, player, onSwing: () => 
 
 En `enemy-runtime.js`: barra de objetivo estilo Blade (solo aparece al pelear), encaramiento automático al atacar y al quedarte quieto cerca, y los muros se respetan por altura (como `resolveWallCollisions` del mapa).
 
+| `props-mundo.js` | Objetos del mundo: mercado de la plaza (comida, telas, armas, herrero), interior del establo (pesebres, paja, carreta), despacho, sala y piso 2 del módulo, almenas y antorchas de las torres. Se llama después de `buildMap1` desde `index-app.js` y registra su colisión en `WALLS`; no edita `map1.js`. |
+
 No toca `map1.js`, `course.js` ni los módulos visuales del héroe.
