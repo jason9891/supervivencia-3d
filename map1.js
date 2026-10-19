@@ -9,13 +9,14 @@ import { clearRamps, addRamp, sampleRampY, getSlopeAt, buildRampMesh, RAMPS } fr
 import { buildModule2, LEVEL2_Y as MOD2_L2, MOD2 } from './modulo2.js';
 import { createMedievalMaterials, worldUV, buildChest, buildTable, buildChair, buildTorch, placeProp, updateTorches } from './props-medieval.js';
 import { buildNaturalRamp, updateNaturalRamp } from './natural-ramp.js';
+import { buildTowers } from './torres.js';
 
 export const MAP1_NAME = 'El Regreso';
 export const LEVEL0_Y = 0;
 export const LEVEL1_Y = 6;
 
 // true = paredes de piedra con musgo; false = conserva el naranja del diseño original
-const USE_STONE_WALLS = false;
+const USE_STONE_WALLS = true;
 // 1 = escritorio, 0.5 = móvil (menos hierba y rocas en la rampa)
 const RAMP_DETAIL = 1;
 
@@ -46,7 +47,7 @@ export const STORY_PAGE = {
 
 let PAGE_POS = new THREE.Vector3(76, LEVEL1_Y + 1.05, 10);
 let KEY_POS = new THREE.Vector3(78, LEVEL1_Y + 1.02, 14);
-let LEVER_POS = new THREE.Vector3(84, LEVEL1_Y + 11, 67);
+let LEVER_POS = new THREE.Vector3(85, LEVEL1_Y + 5.5 + 0.6, 70.2);   // dentro de la sala alta de la torre 2 (y 11.5)
 let FOOD_POS = new THREE.Vector3(28, LEVEL1_Y + 0.45, 52);
 
 const PLAYER_R = 0.45;
@@ -136,6 +137,7 @@ function startMapLoop() {
     updateTorches(t);
     updateNaturalRamp(t);
     updateGate(dt);
+    if (_mapData && _mapData.towers) _mapData.towers.update(dt);
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
@@ -217,7 +219,6 @@ export function buildMap1(scene) {
   pad(54, 9, LEVEL1_Y, 40.5, 67.5, stone);        // corredor                       (x 13.5-67.5, z 63-72)
   pad(54, 63, LEVEL1_Y, 40.5, 31.5, dirt);        // plaza                          (x 13.5-67.5, z 0-63)
   pad(22.5, 9.6, LEVEL1_Y, 78.75, 58.2, dirt);    // patio                          (x 67.5-90,  z 53.4-63)
-  pad(5.5, 9, LEVEL1_Y, 77.5, 67.5, stone);       // paso entre las torres          (x 74.75-80.25, z 63-72)
   // Muralla: el nivel 1 es una meseta, este muro la apoya desde el terreno hasta la plaza
   box(0.8, 6.8, 63.1, M.wall, 13.5, LEVEL1_Y - 3.4, 31.55, true);
 
@@ -244,8 +245,6 @@ export function buildMap1(scene) {
   wallBox(67.4, 89.6, 53.4, 54.5);
   wallBox(67.3, 68.0, 62.9, 72.0);
   wallBox(74.8, 75.5, 62.6, 71.6);
-  wallBox(80.4, 81.1, 62.9, 72.0);
-  wallBox(80.5, 89.8, 62.9, 63.5);
   wallBox(13.3, 89.9, 0.25, 1.25);
   wallBox(0, 67.3, 71.6, 72.4);                      // borde norte: descanso y corredor
 
@@ -274,26 +273,17 @@ export function buildMap1(scene) {
   box(5, 0.4, 5, stone, 40, LEVEL1_Y + 0.18, 28, true);
   box(3, 0.7, 3, dark, 40, LEVEL1_Y + 0.5, 28, true);
 
-  box(7.5, 11, 9, dark, 71.25, LEVEL1_Y + 5.2, 67.5, true);
-  addPlatform(67.5, 75, 63, 72, LEVEL1_Y + 10.5);
-  box(9.5, 11, 9, dark, 85.25, LEVEL1_Y + 5.2, 67.5, true);
-  addPlatform(80.5, 90, 63, 72, LEVEL1_Y + 10.5);
-  const portcullis = box(5.5, 8, 0.7, iron, 77.5, LEVEL1_Y + 3.6, 63.5, true);
+  box(7.5, 11, 9, M.wall, 71.25, LEVEL1_Y + 5.2, 67.5, true);                        // torre 1, maciza
+  const portcullis = box(5.5, 8, 0.7, iron, 77.75, LEVEL1_Y + 3.6, 63.5, true);       // rastrillo del paso entre las torres
   portcullis.name = 'portcullis';
-  box(1.6, 0.28, 3.2, wood, 75.9, LEVEL1_Y + 10.55, 66.5);
-  addPlatform(75.1, 76.7, 64.8, 68.2, LEVEL1_Y + 10.5);
-  box(1.6, 0.28, 3.2, wood, 79.1, LEVEL1_Y + 10.55, 66.5);
-  addPlatform(78.3, 79.9, 64.8, 68.2, LEVEL1_Y + 10.5);
-  box(1.2, 0.15, 0.35, wood, 77.5, LEVEL1_Y + 10.2, 65.2);
-  box(0.9, 0.15, 0.3, wood, 77.2, LEVEL1_Y + 9.6, 67.8);
 
   const mod = buildModule2(scene, { addWall, addPlatform, box });
   if (mod.pagePos) PAGE_POS.copy(mod.pagePos);
   if (mod.keyPos) KEY_POS.copy(mod.keyPos);
 
-  const leverArm = box(0.12, 0.12, 0.8, mat(0x8a3030), LEVER_POS.x, LEVER_POS.y, LEVER_POS.z);
-  const towerDoor = box(1.4, 2.3, 0.3, wood, 84, LEVEL1_Y + 11.5, 63.2, true);
-  towerDoor.userData = { locked: true };
+  // torre 2 hueca, puerta con llave, palanca, puente levadizo, pasarela rota y entrada al castillo (torres.js)
+  const towers = buildTowers(scene, { M, worldUV, addWall, addPlatform, WALLS, PLATFORMS });
+  const leverArm = towers.leverArm, towerDoor = towers.door;
 
   /* ---- props medievales de prueba en el establo (x 14-35, z 46-62) ---- */
   const addSolid = (a, b, c, d) => addWall(a, b, c, d, LEVEL1_Y, LEVEL1_Y + 2);
@@ -337,7 +327,7 @@ export function buildMap1(scene) {
 
   const result = {
     gate, gateLeft, gateRight, portcullis,
-    pageMesh: mod.pageMesh, keyMesh: mod.keyMesh, foodMesh, leverArm, towerDoor,
+    pageMesh: mod.pageMesh, keyMesh: mod.keyMesh, foodMesh, leverArm, towerDoor, towers,
     hallDoor: null, herbs: [], creature: null,
     chests: [chest1],
     pagePos: PAGE_POS.clone(), keyPos: KEY_POS.clone(), leverPos: LEVER_POS.clone(),
@@ -356,9 +346,11 @@ export function closePassageGate(mapData) {
 }
 
 export function tryUnlockTowerDoor(mapData, hasKey) {
-  if (!mapData?.towerDoor || !mapData.towerDoor.userData.locked || !hasKey) return false;
-  mapData.towerDoor.userData.locked = false;
-  mapData.towerDoor.visible = false;
-  mapData.towerDoor.position.y = -40;
-  return true;
+  if (!mapData?.towers || !hasKey) return false;
+  return mapData.towers.unlock();
+}
+
+// Jalar la palanca de la torre 2: la hoja del puente levadizo cae hacia el castillo.
+export function pullLever(mapData) {
+  return !!(mapData?.towers && mapData.towers.pull());
 }

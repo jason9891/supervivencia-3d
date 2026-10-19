@@ -112,19 +112,7 @@ export function buildModule2(scene, helpers = {}) {
   pad(maxX - minX - 1, maxZ - minZ - 2, LEVEL2_Y, midX, (minZ + maxZ) / 2 + 2, wood);
   box(0.25, 1.1, stairs.z1 - stairs.z0 + 2, wood, stairs.x0 - 0.15, LEVEL2_Y + 0.55, (stairs.z0 + stairs.z1) / 2 + 1);
 
-  // ── Pasarela norte piso 2 → torres (ROTA, hueco salto) ──
-  // tramo sur (sale del módulo)
-  pad(8, 4.5, LEVEL2_Y, midX, 54.5, wood);
-  // tramo norte (llega cerca torres) — separado
-  pad(8, 3.5, LEVEL2_Y, midX, 61.5, wood);
-  // hueco ~z 56.8–59.7 (~2.5 u) para saltar
-  box(0.4, 1.2, 4, dark, midX - 4.2, LEVEL2_Y + 0.6, 54.5);
-  box(0.4, 1.2, 4, dark, midX + 4.2, LEVEL2_Y + 0.6, 54.5);
-  box(0.4, 1.2, 3, dark, midX - 4.2, LEVEL2_Y + 0.6, 61.5);
-  box(0.4, 1.2, 3, dark, midX + 4.2, LEVEL2_Y + 0.6, 61.5);
-  // restos del puente roto
-  box(1.4, 0.15, 0.4, wood, midX - 0.8, LEVEL2_Y - 0.3, 58);
-  box(1.1, 0.15, 0.35, wood, midX + 1.0, LEVEL2_Y - 0.8, 57.5);
+  // La pasarela rota, la puerta y las torres las arma torres.js (diseño de prueba_modulo.html).
 
   const pagePos = new THREE.Vector3(76, LEVEL1_Y + 1.05, 10);
   const keyPos = new THREE.Vector3(78, LEVEL1_Y + 1.02, 14);

@@ -6,7 +6,7 @@ import { backpedal, smoothYaw, createLocoState, stepLoco, createLoco, switchActi
 import {
   buildMap1, getCurrentZone, STORY_PAGE,
   distanceToPage, distanceToKey, distanceToLever, distanceToFood,
-  resolveWallCollisions, resolveGround, closePassageGate, tryUnlockTowerDoor, MAP_CENTER, WALLS, getGroundHeight
+  resolveWallCollisions, resolveGround, closePassageGate, tryUnlockTowerDoor, pullLever, MAP_CENTER, WALLS, getGroundHeight
 } from './map1.js';
 import { createEnemyRuntime } from './enemy-runtime.js';
 import * as Inv from './inventario.js';
@@ -611,8 +611,8 @@ function animate() {
   }
   if (!leverPulled && distanceToLever(player.x, player.y, player.z) < 2.0) {
     leverPulled = true;
-    if (mapData.leverArm) mapData.leverArm.rotation.x = 0.8;
-    document.getElementById('hint').textContent = 'La gran reja responde... (cinemática jefe)';
+    pullLever(mapData);
+    document.getElementById('hint').textContent = 'El puente levadizo baja...';
   }
 
   if (introPlaying && bootState.started && introT < INTRO.walkDur) {

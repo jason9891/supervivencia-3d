@@ -81,3 +81,6 @@ En `enemy-runtime.js`: barra de objetivo estilo Blade (solo aparece al pelear), 
 | `props-mundo.js` | Objetos del mundo: mercado de la plaza (comida, telas, armas, herrero), interior del establo (pesebres, paja, carreta), despacho, sala y piso 2 del módulo, almenas y antorchas de las torres. Se llama después de `buildMap1` desde `index-app.js` y registra su colisión en `WALLS`; no edita `map1.js`. |
 
 No toca `map1.js`, `course.js` ni los módulos visuales del héroe.
+
+## torres.js
+Torre 2 hueca (planta baja, escalera, sala alta), puerta con llave (x 84-86, y 11.5), palanca, puente levadizo (bisagra z=72), pasarela rota del módulo (x 82.5-87.5) y entrada al castillo. Portado de `prueba_modulo.html`. `buildTowers()` lo llama `map1.js`; expone `unlock()` (`tryUnlockTowerDoor`) y `pull()` (`pullLever`). Las paredes usan piedra (`USE_STONE_WALLS = true`).

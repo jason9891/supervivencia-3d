@@ -169,21 +169,23 @@ export function buildWorldProps(scene, { WALLS = [], lights = true } = {}) {
     wall(67.8, 68.6, 1.7, 52.8);          // oeste (cubre también el dintel de la puerta de la plaza)
     wall(88.7, 89.5, 1.7, 52.8);          // este
     wall(68.6, 88.7, 1.7, 2.4);           // sur
-    wall(68.6, 74.7, 52.1, 52.8);         // norte, a la izquierda de la salida a la pasarela
-    wall(82.7, 88.7, 52.1, 52.8);         // norte, a la derecha
-    wall(74.7, 82.7, 52.1, 52.8, L2 + 3.0, Y1);   // dintel sobre la salida a la pasarela (hueco de 3 m de alto)
+    wall(68.6, 82.5, 52.1, 52.8);         // norte, a la izquierda de la salida a la pasarela
+    wall(87.5, 88.7, 52.1, 52.8);         // norte, a la derecha
+    wall(82.5, 87.5, 52.1, 52.8, L2 + 2.8, Y1);   // dintel sobre la salida a la pasarela (x 82.5-87.5, hueco de 2.8 m)
   }
 
-  // ============================ TORRES: almenas, estandartes y antorchas ============================
-  { const towers = [[67.5, 75, 63, 72], [80.5, 90, 63, 72]], top = L1 + 10.7;
-    for (const [x0, x1, z0, z1] of towers) {
-      const g = new THREE.Group(), merlon = (x, z) => bx(g, 0.7, 0.8, 0.7, M.wall, x, top + 0.4, z);
-      for (let x = x0 + 0.5; x <= x1 - 0.4; x += 1.3) { merlon(x, z0 + 0.35); merlon(x, z1 - 0.35); }
-      for (let z = z0 + 1.8; z <= z1 - 1.7; z += 1.3) { merlon(x0 + 0.35, z); merlon(x1 - 0.35, z); }
-      root.add(g);
+  // ============================ TORRES: estandartes, interior de la torre 2 y antorchas ============================
+  // (las paredes, la escalera, la puerta, la palanca y el puente las arma torres.js)
+  { place(banner(C.red, 3), 71.25, L1 + 7.5, 62.7, Math.PI); place(banner(C.red, 3), 88.3, L1 + 7.5, 62.7, Math.PI);
+    // sala alta (y 11.5)
+    { const g = new THREE.Group(); const t = buildTable(M); t.scale.set(0.75, 1, 0.9); g.add(t); g.userData.solid = [[0, 0, 1.2, 0.7, 0, 0.85]]; place(g, 82.3, L2, 69.4, 0); }
+    place(crate(0.5), 82, L2, 64.6); place(banner(C.red, 2.4), 89.35, L2 + 2.3, 67.5, -Math.PI / 2);
+    // planta baja (y 6)
+    place(barrel(), 82.2, L1, 70.4); place(crate(0.7), 83.3, L1, 70.7); place(crate(0.5), 82.4, L1, 64.7);
+    if (lights) {
+      place(buildTorch(M), 75.1, L1 + 3.2, 66, Math.PI / 2); place(buildTorch(M), 80.4, L1 + 3.2, 66, -Math.PI / 2);
+      place(buildTorch(M), 81.15, L2 + 2.4, 66.5, Math.PI / 2); place(buildTorch(M), 81.15, L1 + 2.4, 69.4, Math.PI / 2);
     }
-    place(banner(C.red, 3), 71.25, L1 + 7.5, 62.8, 0); place(banner(C.red, 3), 85.25, L1 + 7.5, 62.8, 0);
-    if (lights) { place(buildTorch(M), 75.1, L1 + 3.2, 66, Math.PI / 2); place(buildTorch(M), 80.4, L1 + 3.2, 66, -Math.PI / 2); }
   }
   return { root, solids };
 }
