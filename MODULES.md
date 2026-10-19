@@ -84,3 +84,6 @@ No toca `map1.js`, `course.js` ni los módulos visuales del héroe.
 
 ## torres.js
 Torre 2 hueca (planta baja, escalera, sala alta), puerta con llave (x 84-86, y 11.5), palanca, puente levadizo (bisagra z=72), pasarela rota del módulo (x 82.5-87.5) y entrada al castillo. Portado de `prueba_modulo.html`. `buildTowers()` lo llama `map1.js`; expone `unlock()` (`tryUnlockTowerDoor`) y `pull()` (`pullLever`). Las paredes usan piedra (`USE_STONE_WALLS = true`).
+
+## hero-lab.html / hero-lab.js
+Visor de animaciones FBX (Mixamo) sobre `assets/characters/hero/personaje_1.fbx`. Lee `assets/characters/hero/manifest.json` (se regenera con `node tools/gen-hero-manifest.mjs` al agregar FBX). Agrupa por tipo, pausa/bucle/velocidad/línea de tiempo, movimiento raíz ON/OFF, esqueleto, «cargar todas» y «+ agregar FBX» desde el dispositivo. Las posiciones de caderas se reescalan a la altura del modelo. El FBX apunta a una textura externa (`Color_94217cb0-…`): si se sube una imagen a esa carpeta y se corre el generador, se aplica sola.
