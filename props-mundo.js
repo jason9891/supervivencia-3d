@@ -153,6 +153,27 @@ export function buildWorldProps(scene, { WALLS = [], lights = true } = {}) {
   place(buildChest(M), 87.5, L2, 30, -Math.PI / 2); place(buildChest(M), 87.5, L2, 40, -Math.PI / 2); place(barrel(), 88.4, L2, 46); place(crate(0.6), 70.2, L2, 49);
   place(banner(C.purple, 2.0), 73, L2 + 3.1, 51.9, Math.PI); place(banner(C.purple, 2.0), 85, L2 + 3.1, 51.9, Math.PI);
 
+  // ============================ MÓDULO · paredes de 10.5 m (y 6 a 16.5) ============================
+  // El mapa levanta las paredes del módulo hasta y = 11 (5 m); el piso 2 está en y = 11.5 y quedaba al aire libre.
+  // Aquí se completan hasta y = 16.5 con el mismo material de las paredes de abajo y se registran como muros con altura.
+  {
+    let wallMat = null;   // el material de las paredes del mapa (naranja del diseño o piedra, según USE_STONE_WALLS)
+    scene.traverse((o) => { if (!wallMat && o.isMesh && o.geometry && o.geometry.type === 'BoxGeometry' && Math.abs(o.position.x - 13.5) < 0.01 && Math.abs(o.position.z - 31.55) < 0.05 && o.geometry.parameters.height === 5) wallMat = o.material; });
+    wallMat = wallMat || cm(0xb86a2b, 0.85);
+    const Y0 = L1 + 5.0, Y1 = L1 + 10.5;   // de donde terminan las paredes del mapa hasta el tope de 10.5 m
+    const wall = (x0, x1, z0, z1, y0 = Y0, y1 = Y1) => {
+      const w = x1 - x0, d = z1 - z0, h = y1 - y0, geo = new THREE.BoxGeometry(w, h, d); worldUV(geo, w, h, d, wallMat);
+      const o = new THREE.Mesh(geo, wallMat); o.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); o.castShadow = o.receiveShadow = true; root.add(o);
+      const b = [x0, x1, z0, z1, y0, y1]; solids.push(b); WALLS.push({ minX: x0, maxX: x1, minZ: z0, maxZ: z1, minY: y0, maxY: y1 });
+    };
+    wall(67.8, 68.6, 1.7, 52.8);          // oeste (cubre también el dintel de la puerta de la plaza)
+    wall(88.7, 89.5, 1.7, 52.8);          // este
+    wall(68.6, 88.7, 1.7, 2.4);           // sur
+    wall(68.6, 74.7, 52.1, 52.8);         // norte, a la izquierda de la salida a la pasarela
+    wall(82.7, 88.7, 52.1, 52.8);         // norte, a la derecha
+    wall(74.7, 82.7, 52.1, 52.8, L2 + 3.0, Y1);   // dintel sobre la salida a la pasarela (hueco de 3 m de alto)
+  }
+
   // ============================ TORRES: almenas, estandartes y antorchas ============================
   { const towers = [[67.5, 75, 63, 72], [80.5, 90, 63, 72]], top = L1 + 10.7;
     for (const [x0, x1, z0, z1] of towers) {
