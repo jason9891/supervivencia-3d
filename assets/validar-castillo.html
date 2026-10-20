@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Validar castillo</title>
+<style>
+:root{color-scheme:dark}
+body{margin:0;padding:14px;background:#101114;color:#d8d2c4;font:14px/1.5 Georgia,serif}
+h1{font-size:18px;margin:0 0 10px}
+.ok{color:#9ccf72}.no{color:#e0794a}.dim{color:#8f8678}
+ol{padding-left:22px}li{margin:2px 0}
+pre{white-space:pre-wrap;word-break:break-word}
+</style>
+</head>
+<body>
+<h1>Validación del recorrido en serpiente</h1>
+<div id="out">Revisando… <span id="seg">0</span> s</div>
+<script>
+/* si esta línea sigue en pantalla a los 6 segundos, el navegador no ejecutó el módulo */
+window.__t = setTimeout(function () {
+  var o = document.getElementById('out');
+  if (o && /Revisando/.test(o.textContent)) o.innerHTML = '<div class="no">El script no se ejecutó. Prueba con otro navegador o actualiza el sistema.</div>';
+}, 6000);
+</script>
+<script type="module">
+const out = document.getElementById('out');
+let s = 0;
+const iv = setInterval(() => { const e = document.getElementById('seg'); if (e) e.textContent = ++s; }, 1000);
+async function main() {
+  clearTimeout(window.__t);
+  const url = './castillo-grafo.js';
+  let r;
+  try { r = await fetch(url + '?v=' + Date.now(), { cache: 'no-store' }); }
+  catch (e) { out.innerHTML = '<div class="no">No pude pedir ' + url + ': ' + e.message + '</div>'; return; }
+  if (!r.ok) {
+    out.innerHTML = '<div class="no">No encuentro <b>castillo-grafo.js</b> en esta carpeta (error ' + r.status + ').</div>' +
+      '<p>Revisa que el archivo exista, que se llame exactamente <b>castillo-grafo.js</b> (minúsculas, con guion, terminado en .js) y que esté en la misma carpeta que esta página.</p>';
+    return;
+  }
+  const mod = await import(url + '?v=' + Date.now());
+  const { validar, NODOS } = mod;
+  const x = validar();
+  const regla = q => '<div class="' + (q.ok ? 'ok' : 'no') + '">' + (q.ok ? 'OK ' : 'FALLA ') + q.texto + '</div>';
+  out.innerHTML = x.reglas.map(regla).join('') +
+    '<p><b>Camino mínimo</b> (' + x.camino.length + ' pasos)</p><ol>' + x.camino.map(n => '<li>' + NODOS[n].nombre + '</li>').join('') + '</ol>' +
+    '<p><b>Se pueden saltar:</b> ' + (x.saltables.map(n => NODOS[n].nombre).join(', ') || 'ninguna') + '</p>' +
+    '<p><b>Metros del camino mínimo:</b> ' + x.metrosCamino + ' de ' + x.metrosTotal + ' en total</p>' +
+    '<p><b>Tiempo estimado:</b> ' + x.minutos[0] + ' a ' + x.minutos[1] + ' min · con las zonas opcionales: ' + x.minutosConOpcionales[0] + ' a ' + x.minutosConOpcionales[1] + ' min</p>' +
+    '<p class="dim">Los metros por área son estimaciones: se afinan al construir cada área.</p>';
+}
+main().catch(e => { out.innerHTML = '<pre class="no">Error al cargar el módulo: ' + (e && e.message) + '</pre>'; }).finally(() => clearInterval(iv));
+</script>
+</body>
+</html>
