@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Bake del héroe</title></head>
+<body style="font:14px system-ui;background:#111;color:#eee;padding:16px">
+<p>Convierte <code>assets/characters/hero/personaje_1.fbx</code> + todas las animaciones FBX en un solo
+<code>personaje_1.glb</code> (en metros, sin movimiento de raíz) y un <code>personaje_1.meta.json</code>.
+Se corre con <code>python3 tools/bake-hero.py</code> (ver ese archivo). Estado: <b id="s">…</b></p>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+
+const DIR = '../assets/characters/hero/';
+const HEIGHT = 1.82;
+const log = (m) => { document.getElementById('s').textContent = m; };
+
+window.__bake = async () => {
+  const loader = new FBXLoader();
+  const man = await (await fetch(DIR + 'manifest.json', { cache: 'no-cache' })).json();
+  const root = await loader.loadAsync(DIR + encodeURIComponent(man.character));
+  // fuera cámara y luz que trae el FBX
+  [...root.children].forEach((c) => { if (c.isCamera || c.isLight) root.remove(c); });
+  const mesh = root.getObjectByProperty('isSkinnedMesh', true);
+  const sk = mesh.skeleton;
+  root.updateMatrixWorld(true);
+
+  // 1) altura real del cuerpo (malla en pose de reposo, en unidades del FBX) → factor a metros
+  const b = new THREE.Box3().setFromObject(mesh);
+  const f = HEIGHT / (b.max.y - b.min.y);
+  const feetY = b.min.y;                                   // se apoya en y = 0
+  // 2) la malla trae escala 1000 y giro −90° en su nodo: se hornea en la geometría
+  const M = new THREE.Matrix4().makeScale(f, f, f).multiply(new THREE.Matrix4().makeTranslation(0, -feetY, 0)).multiply(mesh.matrixWorld);
+  let g = mesh.geometry.clone();
+  g.applyMatrix4(M);
+  g = mergeVertices(g, 1e-5);
+  g.computeBoundingSphere(); g.computeBoundingBox();
+  // 3) esqueleto escalado igual (posiciones locales ×f; la raíz sube lo que se subió el cuerpo)
+  const S = new THREE.Matrix4().makeScale(f, f, f);
+  const T = new THREE.Matrix4().makeTranslation(0, -feetY * f / f, 0);   // (−feetY en unidades originales)
+  const SM = new THREE.Matrix4().makeScale(f, f, f).multiply(new THREE.Matrix4().makeTranslation(0, -feetY, 0));
+  const SMi = SM.clone().invert();
+  for (const bone of sk.bones) bone.position.multiplyScalar(f);
+  const hips = sk.bones.find((x) => /Hips$/.test(x.name));
+  hips.position.y += -feetY * f;                           // sube todo el esqueleto: pies en y = 0
+  const inv = sk.boneInverses.map((m) => SM.clone().multiply(m).multiply(SMi));
+  mesh.removeFromParent();
+  const skinned = new THREE.SkinnedMesh(g, new THREE.MeshStandardMaterial({ color: 0xb9a58d, roughness: 0.8, metalness: 0, name: 'piel' }));
+  skinned.name = 'personaje_1';
+  const scene = new THREE.Group(); scene.name = 'hero';
+  scene.add(root.children.find((c) => c.isBone) || hips);
+  scene.add(skinned);
+  scene.updateMatrixWorld(true);
+  const skel = new THREE.Skeleton(sk.bones, inv);
+  skinned.bind(skel, new THREE.Matrix4());
+  const hipsRest = hips.position.y;
+
+  // 4) animaciones: posiciones ×k (altura de caderas), sin desplazamiento horizontal de la raíz
+  const clips = [], moves = {}, meta = { height: HEIGHT, clips: {} };
+  const friendly = (n) => n.replace(/\.fbx$/i, '').replace(/^sword and shield\s*/i, '').trim();
+  for (const file of man.anims) {
+    log('Leyendo ' + file);
+    const o = await loader.loadAsync(DIR + encodeURIComponent(file));
+    const src = o.animations[0]; if (!src) continue;
+    const clip = src.clone(); clip.name = friendly(file);
+    const hp = clip.tracks.find((t) => /Hips\.position$/.test(t.name));
+    const k = hp && hp.values[1] > 1e-3 ? hipsRest / hp.values[1] : f;
+    for (const t of clip.tracks) {
+      if (/\.scale$/.test(t.name)) { clip.tracks.splice(clip.tracks.indexOf(t), 1); continue; }
+      if (t.name.endsWith('.position')) for (let i = 0; i < t.values.length; i++) t.values[i] *= k;
+    }
+    const ip = clip.tracks.find((t) => /Hips\.position$/.test(t.name));
+    if (ip) { const n = ip.values.length - 3; moves[clip.name] = [+(ip.values[n] - ip.values[0]).toFixed(3), +(ip.values[n + 2] - ip.values[2]).toFixed(3)]; }   // desplazamiento de la raíz (m) antes de dejarla en su sitio
+    if (ip) for (let i = 0; i < ip.values.length; i += 3) { ip.values[i] = ip.values[0]; ip.values[i + 2] = ip.values[2]; }
+    // el salto lo eleva la física del juego: la animación solo conserva la flexión, no la subida de caderas
+    if (ip && /^jump/.test(clip.name)) for (let i = 1; i < ip.values.length; i += 3) ip.values[i] = Math.min(ip.values[i], ip.values[1]);
+    clips.push(clip);
+  }
+  // 5) momento del golpe de cada ataque = pico de velocidad de la mano derecha (también patadas)
+  const mixer = new THREE.AnimationMixer(scene), hand = scene.getObjectByName('mixamorigRightHand'), foot = scene.getObjectByName('mixamorigRightFoot');
+  const v = new THREE.Vector3(), p0 = new THREE.Vector3();
+  for (const clip of clips) {
+    const m = { duration: +clip.duration.toFixed(3) };
+    if (moves[clip.name]) { m.move = moves[clip.name]; m.speed = +(Math.hypot(...moves[clip.name]) / clip.duration).toFixed(2); }
+    if (/attack|slash|kick/.test(clip.name)) {
+      const bone = /kick/.test(clip.name) ? foot : hand;
+      const a = mixer.clipAction(clip); a.play(); let best = 0, bt = 0, prev = null; const dt = 1 / 60;
+      for (let t = 0; t < clip.duration; t += dt) {
+        a.time = t; mixer.update(0); scene.updateMatrixWorld(true); bone.getWorldPosition(v);
+        if (prev) { const s = v.distanceTo(prev) / dt; if (s > best) { best = s; bt = t; } }
+        prev = prev || new THREE.Vector3(); prev.copy(v);
+      }
+      a.stop(); mixer.uncacheAction(clip);
+      m.hit = +bt.toFixed(3); m.peak = +best.toFixed(2);
+    }
+    meta.clips[clip.name] = m;
+  }
+  log('Exportando GLB…');
+  const glb = await new Promise((res, rej) => new GLTFExporter().parse(scene, res, rej, { binary: true, animations: clips, onlyVisible: false }));
+  const bytes = new Uint8Array(glb); let s = ''; const CH = 0x8000;
+  for (let i = 0; i < bytes.length; i += CH) s += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+  meta.verts = g.attributes.position.count; meta.glbBytes = bytes.length;
+  log('Listo: ' + (bytes.length / 1e6).toFixed(1) + ' MB');
+  return { glb64: btoa(s), meta };
+};
+window.__ready = true;
+</script></body></html>

@@ -49,7 +49,7 @@ export function stepLoco(s, { grounded, moving, running, back }, dt, has = () =>
     return pick(first('jump loop', 'jump start') ?? idle);
   }
   if (moving) {
-    if (back) return pick(walk, { rate: BACK_RATE });
+    if (back) return has('walk back') ? pick('walk back') : pick(walk, { rate: BACK_RATE });   // con clip propio (héroe FBX) se reproduce hacia adelante
     return pick(running ? run : walk);
   }
   if (s.sinceLand < AIR.LAND_SPAN && s.landedFrom > 0.2 && has('jump land')) return pick('jump land', { rate: AIR.LAND_RATE, once: true });

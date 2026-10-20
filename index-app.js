@@ -2,6 +2,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.m
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js';
 import { createPlayer, stepPlayer, WALK_SPEED, RUN_SPEED } from './course.js';
 import { loadHero } from './hero.js';
+import { loadHeroFbx } from './hero-fbx.js';
 import { backpedal, smoothYaw, createLocoState, stepLoco, createLoco, switchAction, BACK_SPEED } from './locomotion.js';
 import {
   buildMap1, getCurrentZone, STORY_PAGE,
@@ -328,7 +329,7 @@ addM(actor, new THREE.CapsuleGeometry(0.24, 0.45, 6, 10), skin, [0, 1.5, 0]);
 addM(actor, new THREE.SphereGeometry(0.22, 12, 10), skin, [0, 1.85, 0]);
 const locomotionActor = new THREE.Group(); scene.add(locomotionActor); locomotionActor.visible = false;
 let locomotionMixer = null, walkAction = null, runAction = null, idleAction = null, activeAction = null;
-let attackAction = null, attacking = false, armed = false;
+let attackAction = null, attacking = false, armed = false, heroKit = null, comboI = 0, lastAtk = 0;
 let attackUntil = 0;
 const clipMap = new Map(), locoState = createLocoState(); let loco = null, visYaw = 0;
 const gltfLoader = new GLTFLoader();
@@ -343,6 +344,7 @@ function selectLocomotion(next) {
 }
 function setupLocomotion(gltf, label) {
   const model = gltf.scene;
+  heroKit = gltf.kit || null;
   model.updateMatrixWorld(true);
   const bounds = new THREE.Box3().setFromObject(model);
   const size = bounds.getSize(new THREE.Vector3());
@@ -379,10 +381,10 @@ function setupLocomotion(gltf, label) {
   locomotionActor.visible = true;
   document.getElementById('hint').textContent = label + ' · JOYSTICK v3';
 }
-loadHero(THREE, GLTFLoader)
+loadHeroFbx(THREE, GLTFLoader).catch(e => { console.warn('héroe FBX no disponible, uso el anterior', e); return loadHero(THREE, GLTFLoader); })
   .then(i => {
     setBoot(85, 'Animaciones del caballero…');
-    setupLocomotion({ scene: i.model, animations: i.clips }, i.source === 'hero' ? 'HUMANO' : 'MANIQUÍ');
+    setupLocomotion({ scene: i.model, animations: i.clips, kit: i.kit }, i.source === 'fbx' ? 'HÉROE' : i.source === 'hero' ? 'HUMANO' : 'MANIQUÍ');
     bootState.hero = true;
     setBoot(95, 'Preparando cinemática…');
     tryStartIntro();
@@ -406,36 +408,45 @@ loadHero(THREE, GLTFLoader)
 function attack() {
   if (introPlaying || gateCinePlaying) return;
   if (!player.grounded) return;
+  const now = performance.now() / 1000;
+  if (attacking && now < attackUntil - 0.2) return;
   if (enemyRt && enemyRt.faceTarget) enemyRt.faceTarget();   // encara al enemigo más cercano antes de golpear
+  let act = attackAction, dur = 0.85, hitMs = 220;
+  if (heroKit && locomotionMixer && heroKit.combo.length) {   // héroe FBX: combo de golpes, el impacto cae donde lo marca cada animación
+    if (now - lastAtk > 1.6) comboI = 0;
+    const st = heroKit.combo[comboI++ % heroKit.combo.length]; lastAtk = now;
+    act = locomotionMixer.clipAction(clipMap.get(st.key)); dur = st.dur * 0.92; hitMs = st.hit * 1000;
+  } else if (!act && locomotionMixer) {
+    for (const n of ['sword attack', 'sword regular a', 'melee hook', 'attack']) {
+      const c = clipMap.get(n);
+      if (c) {
+        act = attackAction = locomotionMixer.clipAction(c);
+        act.setLoop(THREE.LoopOnce, 1);
+        act.clampWhenFinished = true;
+        break;
+      }
+    }
+  }
   playerHitArmed = true;
   setTimeout(() => {
     if (enemyRt && playerHitArmed) {
       enemyRt.tryPlayerHit({ reach: 2.4, dmg: 16 });
       playerHitArmed = false;
     }
-  }, 220);
-  if (!attackAction && locomotionMixer) {
-    for (const n of ['sword attack', 'sword regular a', 'melee hook', 'attack']) {
-      const c = clipMap.get(n);
-      if (c) {
-        attackAction = locomotionMixer.clipAction(c);
-        attackAction.setLoop(THREE.LoopOnce, 1);
-        attackAction.clampWhenFinished = true;
-        break;
-      }
-    }
-  }
-  if (!attackAction) return;
-  const now = performance.now() / 1000;
-  if (attacking && now < attackUntil - 0.2) return;
+  }, hitMs);
+  if (!act) return;
+  attackAction = act;
+  act.setLoop(THREE.LoopOnce, 1);
+  act.clampWhenFinished = true;
   attacking = true;
-  attackUntil = now + 0.85;
-  attackAction.reset();
-  attackAction.setEffectiveWeight(1);
-  attackAction.play();
-  if (activeAction && activeAction !== attackAction) activeAction.crossFadeTo(attackAction, 0.08, false);
-  activeAction = attackAction;
+  attackUntil = now + dur;
+  act.reset();
+  act.setEffectiveWeight(1);
+  act.play();
+  if (activeAction && activeAction !== act) activeAction.crossFadeTo(act, 0.08, false);
+  activeAction = act;
 }
+window.__dbg = () => ({ clip: activeAction && activeAction.getClip().name, attacking, armed, kit: !!heroKit, x: player.x, y: player.y, z: player.z });   // para pruebas
 function toggleArm() { if (introPlaying || gateCinePlaying) return; armed = !armed; document.getElementById('arm').classList.toggle('on', armed); }
 document.getElementById('atk').addEventListener('pointerdown', e => { e.preventDefault(); attack(); });
 document.getElementById('arm').addEventListener('pointerdown', e => { e.preventDefault(); toggleArm(); });
@@ -642,6 +653,7 @@ function animate() {
       running: introWalk ? false : running,
       back: introWalk ? false : backNow,
     }, dt, n => clipMap.has(n));
+    if (heroKit) heroKit.adjust(pk, { armed, walk: WALK_SPEED, run: RUN_SPEED, back: WALK_SPEED * BACK_SPEED });
     if (!attacking && loco) loco.apply(pk);
     if (introWalk && locomotionMixer.timeScale !== 0.72) locomotionMixer.timeScale = 0.72;
     else if (!introWalk && locomotionMixer.timeScale !== 1) locomotionMixer.timeScale = 1;
