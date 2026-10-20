@@ -10,12 +10,75 @@ import * as THREE from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const DIR = '../assets/characters/hero/';
 const HEIGHT = 1.82;
 const log = (m) => { document.getElementById('s').textContent = m; };
 
-window.__bake = async () => {
+// ---- retargeting UAL (Universal Animation Library) → huesos mixamorig del personaje ----
+const UAL_URLS = ['../assets/characters/ual/UAL1_Standard.glb', '../assets/characters/ual/UAL2_Standard.glb'];
+const SIDE = { l: 'Left', r: 'Right' };
+// solo lo que usa (o usará) el juego: movimiento, saltos, combate, golpes recibidos y muerte
+const KEEP = /^(Idle_Loop|Idle_Shield|Walk_Formal|Walk_Loop|Jog_Fwd|Sprint|Jump|NinjaJump|Roll|Crouch|Sword|Melee|Hit_|Death|Punch|Spell|Shield|Zombie_Walk)/;
+function ualMap(src) {            // nombre UAL → nombre mixamorig
+  const m = { pelvis: 'Hips', spine_01: 'Spine', spine_02: 'Spine1', spine_03: 'Spine2', neck_01: 'Neck', Head: 'Head' };
+  for (const [k, S] of Object.entries(SIDE)) {
+    Object.assign(m, { ['clavicle_' + k]: S + 'Shoulder', ['upperarm_' + k]: S + 'Arm', ['lowerarm_' + k]: S + 'ForeArm', ['hand_' + k]: S + 'Hand', ['thigh_' + k]: S + 'UpLeg', ['calf_' + k]: S + 'Leg', ['foot_' + k]: S + 'Foot', ['ball_' + k]: S + 'ToeBase', ['ball_leaf_' + k]: S + 'Toe_End' });
+    for (const [f, F] of Object.entries({ thumb: 'Thumb', index: 'Index', middle: 'Middle', ring: 'Ring', pinky: 'Pinky' })) {
+      for (let i = 1; i <= 3; i++) m[`${f}_0${i}_${k}`] = `${S}Hand${F}${i}`;
+      m[`${f}_04_leaf_${k}`] = `${S}Hand${F}4`;
+    }
+  }
+  const out = new Map(); for (const [a, b] of Object.entries(m)) { const sb = src.getObjectByName(a); if (sb) out.set(sb, 'mixamorig' + b); } return out;
+}
+async function retargetUAL(tgtScene, hipsRestY) {
+  const gl = new GLTFLoader(), load = (u) => new Promise((r, j) => gl.load(u, r, undefined, j));
+  const srcs = []; for (const u of UAL_URLS) { try { srcs.push(await load(u)); } catch (e) { /* UAL2 es opcional */ } }
+  const src = srcs[0].scene; src.updateMatrixWorld(true);
+  const smap = ualMap(src);
+  const tBones = []; tgtScene.traverse((o) => { if (o.isBone) tBones.push(o); });
+  tgtScene.updateMatrixWorld(true);
+  const sRest = new Map(), tRestW = new Map(), tRestL = new Map();
+  for (const sb of smap.keys()) sRest.set(sb, sb.getWorldQuaternion(new THREE.Quaternion()));
+  for (const tb of tBones) { tRestW.set(tb, tb.getWorldQuaternion(new THREE.Quaternion())); tRestL.set(tb, tb.quaternion.clone()); }
+  const byT = new Map(); for (const [sb, name] of smap) byT.set(tgtScene.getObjectByName(name), sb);
+  const pel = src.getObjectByName('pelvis'), p0 = pel.getWorldPosition(new THREE.Vector3()), kPos = hipsRestY / p0.y;
+  const hipsT = tgtScene.getObjectByName('mixamorigHips'), hipsRest = hipsT.position.clone();
+  const mixer = new THREE.AnimationMixer(src);
+  const out = [];
+  for (const g of srcs) for (const clip of g.animations) {
+    if (clip.name === 'A_TPose' || !KEEP.test(clip.name)) continue;
+    const a = mixer.clipAction(clip); a.play();
+    const FPS = 30, n = Math.max(2, Math.ceil(clip.duration * FPS) + 1), times = new Float32Array(n);
+    const qs = new Map(tBones.map((b) => [b, new Float32Array(n * 4)])), pos = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const t = Math.min(clip.duration, i / FPS); times[i] = t;
+      a.time = t; mixer.update(0); src.updateMatrixWorld(true);
+      const wAnim = new Map();
+      for (const tb of tBones) {                       // de la cadera hacia afuera (tBones va en orden de jerarquía)
+        const parentW = wAnim.get(tb.parent) || new THREE.Quaternion();
+        const sb = byT.get(tb); let local;
+        if (sb) {
+          const d = sb.getWorldQuaternion(new THREE.Quaternion()).multiply(sRest.get(sb).clone().invert());   // giro en el mundo respecto al reposo
+          const wt = d.multiply(tRestW.get(tb));
+          local = parentW.clone().invert().multiply(wt);
+        } else local = tRestL.get(tb).clone();
+        wAnim.set(tb, parentW.clone().multiply(local));
+        local.toArray(qs.get(tb), i * 4);
+      }
+      const pw = pel.getWorldPosition(new THREE.Vector3());
+      pos[i * 3] = hipsRest.x + (pw.x - p0.x) * kPos; pos[i * 3 + 1] = hipsRest.y + (pw.y - p0.y) * kPos; pos[i * 3 + 2] = hipsRest.z + (pw.z - p0.z) * kPos;
+    }
+    a.stop(); mixer.uncacheAction(clip);
+    const tracks = tBones.filter((b) => byT.has(b)).map((b) => new THREE.QuaternionKeyframeTrack(b.name + '.quaternion', times, qs.get(b)));
+    tracks.push(new THREE.VectorKeyframeTrack('mixamorigHips.position', times, pos));
+    const ac = new THREE.AnimationClip(clip.name, clip.duration, tracks); ac.optimize(); out.push(ac);
+  }
+  return out;
+}
+
+window.__bake = async (mode = 'ual') => {
   const loader = new FBXLoader();
   const man = await (await fetch(DIR + 'manifest.json', { cache: 'no-cache' })).json();
   const root = await loader.loadAsync(DIR + encodeURIComponent(man.character));
@@ -55,8 +118,14 @@ window.__bake = async () => {
   skinned.bind(skel, new THREE.Matrix4());
   const hipsRest = hips.position.y;
 
+  let clips = [], moves = {}; const meta = { height: HEIGHT, mode, clips: {} };
+  if (mode === 'ual') {
+    log('Retargeting UAL…');
+    clips = await retargetUAL(scene, hipsRest);
+    for (const c of clips) meta.clips[c.name] = { duration: +c.duration.toFixed(3) };
+  } else {
   // 4) animaciones: posiciones ×k (altura de caderas), sin desplazamiento horizontal de la raíz
-  const clips = [], moves = {}, meta = { height: HEIGHT, clips: {} };
+  
   const friendly = (n) => n.replace(/\.fbx$/i, '').replace(/^sword and shield\s*/i, '').trim();
   for (const file of man.anims) {
     log('Leyendo ' + file);
@@ -94,6 +163,7 @@ window.__bake = async () => {
       m.hit = +bt.toFixed(3); m.peak = +best.toFixed(2);
     }
     meta.clips[clip.name] = m;
+  }
   }
   log('Exportando GLB…');
   const glb = await new Promise((res, rej) => new GLTFExporter().parse(scene, res, rej, { binary: true, animations: clips, onlyVisible: false }));

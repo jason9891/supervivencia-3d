@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Hornea assets/characters/hero/personaje_1.fbx + las animaciones FBX en personaje_1.glb y personaje_1.meta.json.
 Requisitos: python3 con playwright y chromium (en este entorno: /opt/pw-browsers/chromium) y `npm i three` en la raíz.
-Uso:  node tools/gen-hero-manifest.mjs && python3 tools/bake-hero.py
+Uso:  python3 tools/bake-hero.py [ual|mixamo]   (por defecto ual: las animaciones de siempre sobre el personaje)
+Antes:  node tools/gen-hero-manifest.mjs && python3 tools/bake-hero.py
 """
 import base64, json, os, sys, threading, http.server, functools
 from playwright.sync_api import sync_playwright
@@ -25,8 +26,9 @@ with sync_playwright() as p:
     pg.route('**/cdn.jsdelivr.net/npm/three@0.170.0/**', lambda r: r.fulfill(path=THREE + r.request.url.split('three@0.170.0/')[1]))
     pg.goto(f'http://127.0.0.1:{port}/tools/bake-hero.html')
     pg.wait_for_function('window.__ready', timeout=60000)
-    res = pg.evaluate('window.__bake()')
-    open(os.path.join(OUT, 'personaje_1.glb'), 'wb').write(base64.b64decode(res['glb64']))
-    json.dump(res['meta'], open(os.path.join(OUT, 'personaje_1.meta.json'), 'w'), indent=1, ensure_ascii=False)
+    mode = sys.argv[1] if len(sys.argv) > 1 else 'ual'      # ual = animaciones de siempre sobre el personaje · mixamo = las FBX
+    res = pg.evaluate('m => window.__bake(m)', mode)
+    open(os.path.join(OUT, 'personaje_1.glb' if mode == 'ual' else 'personaje_1-mixamo.glb'), 'wb').write(base64.b64decode(res['glb64']))
+    json.dump(res['meta'], open(os.path.join(OUT, 'personaje_1.meta.json' if mode == 'ual' else 'personaje_1-mixamo.meta.json'), 'w'), indent=1, ensure_ascii=False)
     print('GLB', round(res['meta']['glbBytes'] / 1e6, 2), 'MB ·', res['meta']['verts'], 'vértices ·', len(res['meta']['clips']), 'animaciones')
     b.close()
