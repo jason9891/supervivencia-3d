@@ -1,5 +1,9 @@
 {
  "character": "personaje_1.fbx",
+ "characters": [
+  "personaje_1.fbx",
+  "sera_limpio.fbx"
+ ],
  "texture": null,
  "anims": [
   "sheath sword 1.fbx",

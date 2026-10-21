@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Bake de sera_limpio</title></head>
+<body style="font:14px system-ui;background:#111;color:#eee;padding:16px">
+<p>Convierte <code>assets/characters/hero/sera_limpio.fbx</code> (1.4 M de vértices, textura incrustada) en <code>sera_limpio.glb</code>:
+malla simplificada, esqueleto <code>mixamorig</code> en metros, textura 2048, sin animaciones (las pone <code>clips-lab.html</code>).
+Se corre con <code>python3 tools/bake-sera.py [triángulos]</code>. Estado: <b id="s">…</b></p>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { MeshoptSimplifier } from './vendor/meshopt_simplifier.js';
+
+const FILE = '../assets/characters/hero/sera_limpio.fbx';
+const HEIGHT = 1.82, TEX = 2048;
+const log = (m) => { document.getElementById('s').textContent = m; console.log(m); };
+
+window.__bake = async (targetTris = 45000) => {
+  await MeshoptSimplifier.ready;
+  log('Leyendo FBX…');
+  const root = await new FBXLoader().loadAsync(FILE);
+  [...root.children].forEach((c) => { if (c.isCamera || c.isLight) root.remove(c); });
+  const mesh = root.getObjectByProperty('isSkinnedMesh', true), sk = mesh.skeleton;
+  root.updateMatrixWorld(true);
+  const srcTex = [].concat(mesh.material)[0].map;
+  await new Promise((r) => { const t0 = Date.now(), iv = setInterval(() => { if ((srcTex && srcTex.image) || Date.now() - t0 > 30000) { clearInterval(iv); r(); } }, 100); });   // la textura incrustada carga aparte
+  if (!srcTex || !srcTex.image) throw new Error('el FBX no trae la imagen de textura');
+  const b = new THREE.Box3().setFromObject(mesh);
+  const f = HEIGHT / (b.max.y - b.min.y), feetY = b.min.y;
+  const SM = new THREE.Matrix4().makeScale(f, f, f).multiply(new THREE.Matrix4().makeTranslation(0, -feetY, 0));
+  const M = SM.clone().multiply(mesh.matrixWorld);
+  log('Geometría original: ' + mesh.geometry.attributes.position.count + ' vértices');
+  let g = mesh.geometry.clone();
+  g.applyMatrix4(M);
+  g.deleteAttribute('normal');                                   // las normales del FBX se recalculan al final
+  for (const k of Object.keys(g.attributes)) if (!['position', 'uv', 'skinIndex', 'skinWeight'].includes(k)) g.deleteAttribute(k);
+  log('Soldando vértices…');
+  g = mergeVertices(g, 1e-5);
+  const nv0 = g.attributes.position.count, nt0 = g.index.count / 3;
+  log(`Soldada: ${nv0} vértices, ${nt0} triángulos. Simplificando a ${targetTris}…`);
+
+  // simplificación con atributos (uv + pesos de piel) para que las costuras y la deformación se respeten
+  const pos = g.attributes.position.array, uv = g.attributes.uv.array, sw = g.attributes.skinWeight.array;
+  const attr = new Float32Array(nv0 * 6);
+  for (let i = 0; i < nv0; i++) { attr.set([uv[i * 2], uv[i * 2 + 1], sw[i * 4], sw[i * 4 + 1], sw[i * 4 + 2], sw[i * 4 + 3]], i * 6); }
+  const idx = Uint32Array.from(g.index.array);
+  const [simp, err] = MeshoptSimplifier.simplifyWithAttributes(idx, pos, 3, attr, 6, [1, 1, 0.6, 0.6, 0.6, 0.6], null, targetTris * 3, 0.05, ['Prune']);
+  log(`Simplificada: ${simp.length / 3} triángulos (error ${err.toFixed(4)})`);
+
+  // compactar vértices usados
+  const remap = new Int32Array(nv0).fill(-1); let nv = 0;
+  for (let i = 0; i < simp.length; i++) if (remap[simp[i]] < 0) remap[simp[i]] = nv++;
+  const P = new Float32Array(nv * 3), UV = new Float32Array(nv * 2), SI = new Uint16Array(nv * 4), SW = new Float32Array(nv * 4);
+  const si = g.attributes.skinIndex.array;
+  for (let o = 0; o < nv0; o++) { const n = remap[o]; if (n < 0) continue; P.set(pos.subarray(o * 3, o * 3 + 3), n * 3); UV.set(uv.subarray(o * 2, o * 2 + 2), n * 2); SI.set(si.subarray(o * 4, o * 4 + 4), n * 4); SW.set(sw.subarray(o * 4, o * 4 + 4), n * 4); }
+  const I = new Uint32Array(simp.length); for (let i = 0; i < simp.length; i++) I[i] = remap[simp[i]];
+  // normales suaves entre vértices que comparten posición (las costuras UV no deben verse en la luz)
+  const key = (i) => Math.round(P[i * 3] * 2e4) + ',' + Math.round(P[i * 3 + 1] * 2e4) + ',' + Math.round(P[i * 3 + 2] * 2e4);
+  const acc = new Map(), keys = new Array(nv);
+  for (let i = 0; i < nv; i++) { keys[i] = key(i); if (!acc.has(keys[i])) acc.set(keys[i], [0, 0, 0]); }
+  const a = new THREE.Vector3(), c = new THREE.Vector3(), d = new THREE.Vector3();
+  for (let t = 0; t < I.length; t += 3) {
+    a.fromArray(P, I[t] * 3); c.fromArray(P, I[t + 1] * 3).sub(a); d.fromArray(P, I[t + 2] * 3).sub(a); c.cross(d);   // área ponderada
+    for (let k = 0; k < 3; k++) { const v = acc.get(keys[I[t + k]]); v[0] += c.x; v[1] += c.y; v[2] += c.z; }
+  }
+  const N = new Float32Array(nv * 3);
+  for (let i = 0; i < nv; i++) { const v = acc.get(keys[i]), l = Math.hypot(v[0], v[1], v[2]) || 1; N[i * 3] = v[0] / l; N[i * 3 + 1] = v[1] / l; N[i * 3 + 2] = v[2] / l; }
+  const ng = new THREE.BufferGeometry();
+  ng.setAttribute('position', new THREE.BufferAttribute(P, 3)); ng.setAttribute('normal', new THREE.BufferAttribute(N, 3)); ng.setAttribute('uv', new THREE.BufferAttribute(UV, 2));
+  ng.setAttribute('skinIndex', new THREE.BufferAttribute(SI, 4)); ng.setAttribute('skinWeight', new THREE.BufferAttribute(SW, 4));
+  ng.setIndex(new THREE.BufferAttribute(I, 1));
+  ng.computeBoundingSphere(); ng.computeBoundingBox();
+
+  // esqueleto en metros (igual que bake-hero.html)
+  const SMi = SM.clone().invert();
+  for (const bone of sk.bones) bone.position.multiplyScalar(f);
+  const hips = sk.bones.find((x) => /Hips$/.test(x.name));
+  hips.position.y += -feetY * f;
+  const inv = sk.boneInverses.map((m) => SM.clone().multiply(m).multiply(SMi));
+  mesh.removeFromParent();
+
+  // textura a 2048 (la original puede ser mayor)
+  log('Textura…');
+  const im = srcTex.image, cv = document.createElement('canvas'); cv.width = cv.height = TEX;
+  console.log('textura original: ' + (im && im.constructor && im.constructor.name) + ' ' + (im && im.width) + 'x' + (im && im.height) + ' ' + srcTex.constructor.name);
+  let drawable = im;
+  if (im && im.data) {                                          // DataTexture (p. ej. TGA): se pasa a un canvas intermedio
+    drawable = document.createElement('canvas'); drawable.width = im.width; drawable.height = im.height;
+    drawable.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(im.data.buffer, im.data.byteOffset, im.width * im.height * 4), im.width, im.height), 0, 0);
+  }
+  cv.getContext('2d').drawImage(drawable, 0, 0, TEX, TEX);
+  const tex = new THREE.CanvasTexture(cv); tex.flipY = srcTex.flipY; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; tex.wrapS = srcTex.wrapS; tex.wrapT = srcTex.wrapT;
+  tex.userData.mimeType = 'image/jpeg';
+  const skinned = new THREE.SkinnedMesh(ng, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8, metalness: 0, name: 'sera' }));
+  skinned.name = 'sera_limpio'; skinned.frustumCulled = false;
+  const scene = new THREE.Group(); scene.name = 'hero';
+  scene.add(root.children.find((x) => x.isBone) || hips); scene.add(skinned);
+  scene.updateMatrixWorld(true);
+  skinned.bind(new THREE.Skeleton(sk.bones, inv), new THREE.Matrix4());
+
+  log('Exportando GLB…');
+  const glb = await new Promise((res, rej) => new GLTFExporter().parse(scene, res, rej, { binary: true, onlyVisible: false }));
+  const bytes = new Uint8Array(glb); let s = ''; const CH = 0x8000;
+  for (let i = 0; i < bytes.length; i += CH) s += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+  const meta = { height: HEIGHT, srcVerts: mesh.geometry.attributes.position.count, srcTris: nt0, verts: nv, tris: I.length / 3, texture: [im.width, im.height, TEX], glbBytes: bytes.length, hipsY: +hips.position.y.toFixed(4) };
+  log('Listo: ' + (bytes.length / 1e6).toFixed(1) + ' MB');
+  return { glb64: btoa(s), meta };
+};
+window.__ready = true;
+</script></body></html>
