@@ -11,6 +11,7 @@ import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { paintTexture } from './hero-paint.js';
 
 const DIR = '../assets/characters/hero/';
 const HEIGHT = 1.82;
@@ -108,7 +109,12 @@ window.__bake = async (mode = 'ual') => {
   hips.position.y += -feetY * f;                           // sube todo el esqueleto: pies en y = 0
   const inv = sk.boneInverses.map((m) => SM.clone().multiply(m).multiply(SMi));
   mesh.removeFromParent();
-  const skinned = new THREE.SkinnedMesh(g, new THREE.MeshStandardMaterial({ color: 0xb9a58d, roughness: 0.8, metalness: 0, name: 'piel' }));
+  // textura pintada por regiones del cuerpo (el FBX no trae la imagen original)
+  log('Pintando textura…');
+  const cv = paintTexture(g, 2048);
+  window.__tex = cv.toDataURL('image/png');
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; tex.userData.mimeType = 'image/jpeg';
+  const skinned = new THREE.SkinnedMesh(g, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.78, metalness: 0, name: 'piel' }));
   skinned.name = 'personaje_1';
   const scene = new THREE.Group(); scene.name = 'hero';
   scene.add(root.children.find((c) => c.isBone) || hips);

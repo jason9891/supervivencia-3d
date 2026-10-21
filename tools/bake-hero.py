@@ -29,6 +29,8 @@ with sync_playwright() as p:
     mode = sys.argv[1] if len(sys.argv) > 1 else 'ual'      # ual = animaciones de siempre sobre el personaje · mixamo = las FBX
     res = pg.evaluate('m => window.__bake(m)', mode)
     open(os.path.join(OUT, 'personaje_1.glb' if mode == 'ual' else 'personaje_1-mixamo.glb'), 'wb').write(base64.b64decode(res['glb64']))
+    tex = pg.evaluate('window.__tex')
+    if os.environ.get('SAVE_TEX'): open(os.environ['SAVE_TEX'], 'wb').write(base64.b64decode(tex.split(',')[1]))
     json.dump(res['meta'], open(os.path.join(OUT, 'personaje_1.meta.json' if mode == 'ual' else 'personaje_1-mixamo.meta.json'), 'w'), indent=1, ensure_ascii=False)
     print('GLB', round(res['meta']['glbBytes'] / 1e6, 2), 'MB ·', res['meta']['verts'], 'vértices ·', len(res['meta']['clips']), 'animaciones')
     b.close()

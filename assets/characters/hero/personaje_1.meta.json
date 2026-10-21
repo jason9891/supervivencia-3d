@@ -1,0 +1,134 @@
+{
+ "height": 1.82,
+ "mode": "ual",
+ "clips": {
+  "Crouch_Fwd_Loop": {
+   "duration": 2
+  },
+  "Crouch_Idle_Loop": {
+   "duration": 2.933
+  },
+  "Death01": {
+   "duration": 2.4
+  },
+  "Hit_Chest": {
+   "duration": 0.333
+  },
+  "Hit_Head": {
+   "duration": 0.433
+  },
+  "Idle_Loop": {
+   "duration": 2.5
+  },
+  "Jog_Fwd_Loop": {
+   "duration": 0.933
+  },
+  "Jump_Land": {
+   "duration": 1.267
+  },
+  "Jump_Loop": {
+   "duration": 2.5
+  },
+  "Jump_Start": {
+   "duration": 1.333
+  },
+  "Punch_Cross": {
+   "duration": 1
+  },
+  "Punch_Jab": {
+   "duration": 0.867
+  },
+  "Roll": {
+   "duration": 1.467
+  },
+  "Spell_Simple_Enter": {
+   "duration": 0.533
+  },
+  "Spell_Simple_Exit": {
+   "duration": 0.433
+  },
+  "Spell_Simple_Idle_Loop": {
+   "duration": 2.1
+  },
+  "Spell_Simple_Shoot": {
+   "duration": 0.5
+  },
+  "Sprint_Loop": {
+   "duration": 0.667
+  },
+  "Sword_Attack": {
+   "duration": 1.533
+  },
+  "Sword_Idle": {
+   "duration": 1.667
+  },
+  "Walk_Formal_Loop": {
+   "duration": 1.333
+  },
+  "Walk_Loop": {
+   "duration": 1.333
+  },
+  "Hit_Knockback": {
+   "duration": 0.833
+  },
+  "Idle_Shield_Break": {
+   "duration": 1.067
+  },
+  "Idle_Shield_Loop": {
+   "duration": 2.5
+  },
+  "Melee_Hook": {
+   "duration": 0.467
+  },
+  "Melee_Hook_Rec": {
+   "duration": 0.6
+  },
+  "NinjaJump_Idle_Loop": {
+   "duration": 2
+  },
+  "NinjaJump_Land": {
+   "duration": 1.267
+  },
+  "NinjaJump_Start": {
+   "duration": 0.967
+  },
+  "Shield_Dash": {
+   "duration": 1.1
+  },
+  "Shield_OneShot": {
+   "duration": 0.833
+  },
+  "Sword_Block": {
+   "duration": 1.233
+  },
+  "Sword_Dash": {
+   "duration": 1.567
+  },
+  "Sword_Heavy_Combo": {
+   "duration": 4.333
+  },
+  "Sword_Regular_A": {
+   "duration": 0.433
+  },
+  "Sword_Regular_A_Rec": {
+   "duration": 0.967
+  },
+  "Sword_Regular_B": {
+   "duration": 0.533
+  },
+  "Sword_Regular_B_Rec": {
+   "duration": 1.033
+  },
+  "Sword_Regular_C": {
+   "duration": 2
+  },
+  "Sword_Regular_Combo": {
+   "duration": 3
+  },
+  "Zombie_Walk_Fwd_Loop": {
+   "duration": 1.333
+  }
+ },
+ "verts": 22798,
+ "glbBytes": 5897672
+}
