@@ -33,6 +33,7 @@ function ualMap(src) {            // nombre UAL → nombre mixamorig
   }
   const out = new Map(); for (const [a, b] of Object.entries(m)) { const sb = src.getObjectByName(a); if (sb) out.set(sb, 'mixamorig' + b); } return out;
 }
+const STRIDE_AMP = { UpLeg: 1.4, Leg: 1.25 };
 async function retargetUAL(tgtScene, hipsRestY) {
   const gl = new GLTFLoader(), load = (u) => new Promise((r, j) => gl.load(u, r, undefined, j));
   const srcs = []; for (const u of UAL_URLS) { try { srcs.push(await load(u)); } catch (e) { /* UAL2 es opcional */ } }
@@ -51,6 +52,7 @@ async function retargetUAL(tgtScene, hipsRestY) {
   for (const g of srcs) for (const clip of g.animations) {
     if (clip.name === 'A_TPose' || !KEEP.test(clip.name)) continue;
     const a = mixer.clipAction(clip); a.play();
+    const locoClip = /^(Walk|Jog|Sprint|Zombie)/.test(clip.name);
     const FPS = 30, n = Math.max(2, Math.ceil(clip.duration * FPS) + 1), times = new Float32Array(n);
     const qs = new Map(tBones.map((b) => [b, new Float32Array(n * 4)])), pos = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
@@ -61,7 +63,9 @@ async function retargetUAL(tgtScene, hipsRestY) {
         const parentW = wAnim.get(tb.parent) || new THREE.Quaternion();
         const sb = byT.get(tb); let local;
         if (sb) {
-          const d = sb.getWorldQuaternion(new THREE.Quaternion()).multiply(sRest.get(sb).clone().invert());   // giro en el mundo respecto al reposo
+          let d = sb.getWorldQuaternion(new THREE.Quaternion()).multiply(sRest.get(sb).clone().invert());   // giro en el mundo respecto al reposo
+          const amp = locoClip ? (STRIDE_AMP[tb.name.replace(/^mixamorig(Left|Right)?/, '')] || 0) * (/^Walk/.test(clip.name) ? 1 : 0.7) + (/^Walk/.test(clip.name) ? 0 : 0.3 * !!STRIDE_AMP[tb.name.replace(/^mixamorig(Left|Right)?/, '')]) : 0;           // paso más largo: el héroe tiene la cadera a 0.97 m
+          if (amp) d = new THREE.Quaternion().slerp(d, amp);
           const wt = d.multiply(tRestW.get(tb));
           local = parentW.clone().invert().multiply(wt);
         } else local = tRestL.get(tb).clone();
