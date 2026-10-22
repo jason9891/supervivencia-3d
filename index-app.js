@@ -381,7 +381,7 @@ function setupLocomotion(gltf, label) {
   locomotionActor.visible = true;
   document.getElementById('hint').textContent = label + ' · JOYSTICK v3';
 }
-loadHero(THREE, GLTFLoader)
+loadHeroFbx(THREE, GLTFLoader).catch(e => { console.warn('héroe nuevo no disponible, uso el anterior', e); return loadHero(THREE, GLTFLoader); })
   .then(i => {
     setBoot(85, 'Animaciones del caballero…');
     setupLocomotion({ scene: i.model, animations: i.clips, kit: i.kit }, i.source === 'fbx' ? 'HÉROE' : i.source === 'hero' ? 'HUMANO' : 'MANIQUÍ');
