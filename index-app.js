@@ -3,6 +3,7 @@ import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/
 import { createPlayer, stepPlayer, WALK_SPEED, RUN_SPEED } from './course.js';
 import { loadHero } from './hero.js';
 import { loadHeroFbx } from './hero-fbx.js';
+import { loadArmor, ARMOR_SETS, ARMOR_LABEL } from './armor-wear.js';
 import { backpedal, smoothYaw, createLocoState, stepLoco, createLoco, switchAction, BACK_SPEED } from './locomotion.js';
 import {
   buildMap1, getCurrentZone, STORY_PAGE,
@@ -342,6 +343,21 @@ function selectLocomotion(next) {
   const host = { get active() { return activeAction; }, set active(v) { activeAction = v; } };
   switchAction(THREE, host, next, { fade: 0.12 });
 }
+// Armadura por conjuntos (casco, pechera, brazos, piernas): solo con el héroe nuevo (sera_limpio), que es el que tiene el ajuste hecho.
+async function initArmor(model) {
+  try {
+    const { MeshoptDecoder } = await import('https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/meshopt_decoder.module.js');
+    const armor = await loadArmor(THREE, GLTFLoader, MeshoptDecoder, model);
+    window.__armor = armor;
+    const btn = document.getElementById('armorBtn'), panel = document.getElementById('armorPanel'); panel.innerHTML = '';
+    const mk = (label, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.addEventListener('click', e => { e.stopPropagation(); fn(b); sync(); }); panel.append(b); return b; };
+    const btns = ARMOR_SETS.map(s => mk(ARMOR_LABEL[s], () => armor.toggle(s)));
+    mk('PONER TODO', () => armor.all(true)); mk('QUITAR TODO', () => armor.all(false));
+    const sync = () => ARMOR_SETS.forEach((s, i) => btns[i].classList.toggle('on', armor.isWorn(s)));
+    sync(); btn.style.display = 'block';
+    btn.addEventListener('click', () => { panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex'; });
+  } catch (e) { console.warn('armadura no disponible', e); }
+}
 function setupLocomotion(gltf, label) {
   const model = gltf.scene;
   heroKit = gltf.kit || null;
@@ -356,6 +372,7 @@ function setupLocomotion(gltf, label) {
   }
   model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   locomotionActor.add(model);
+  if (label === 'HÉROE') initArmor(model);
   locomotionMixer = new THREE.AnimationMixer(model);
   const clips = gltf.animations || [];
   for (const c of clips) clipMap.set(normName(c.name), c);

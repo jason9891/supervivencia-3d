@@ -5,6 +5,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { UalRetargeter, mixamoClip } from './retarget.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { loadArmor, ARMOR_SETS, ARMOR_LABEL } from './armor-wear.js';
 
 const HERO_URL = './assets/characters/hero/sera_limpio.glb';
 const HERO_DIR = './assets/characters/hero/';
@@ -200,6 +202,11 @@ $('tl').oninput = (e) => { if (!action) return; setPlaying(false); const d = act
   });
   hipsRestY = hero.getObjectByName('mixamorigHips').position.y;
   mixer = new THREE.AnimationMixer(hero);
+  loadArmor(THREE, GLTFLoader, MeshoptDecoder, hero).then((armor) => {            // armadura por conjuntos para ver las animaciones con ella
+    const row = $('armorRow'); const lbl = document.createElement('span'); lbl.textContent = 'ARMADURA'; lbl.style.cssText = 'font-size:10px;color:#c4a574'; row.append(lbl);
+    const bs = ARMOR_SETS.map((s) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = ARMOR_LABEL[s]; b.onclick = () => { armor.toggle(s); sync(); }; row.append(b); return b; });
+    const sync = () => ARMOR_SETS.forEach((s, i) => bs[i].classList.toggle('on', armor.isWorn(s))); sync(); window.__armor = armor;
+  }).catch((e) => console.warn('armadura no disponible', e));
 
   const cat = await (await fetch(CATALOG, { cache: 'no-cache' })).json();
   for (const s of cat.sources) {

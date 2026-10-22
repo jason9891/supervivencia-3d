@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Bake de la armadura</title></head>
+<body style="font:14px system-ui;background:#111;color:#eee;padding:16px">
+<p>Ajusta <code>assets/characters/hero/armadura.glb</code> (16 piezas sueltas, otra escala) al cuerpo de <code>sera_limpio.glb</code> y la deja con piel
+(pesos copiados del vértice más cercano del cuerpo) en <code>armadura-sera.glb</code>, en 4 conjuntos: casco, pechera, brazos, piernas.
+Se corre con <code>python3 tools/bake-armor.py</code>. Estado: <b id="s">…</b></p>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+const log = (m) => { document.getElementById('s').textContent = m; console.log(m); };
+
+// Conjuntos (índices de tripo_part_N) y zona del cuerpo de sera (en reposo, X lateral, Y arriba, Z al frente) a la que se ajusta cada pieza.
+// Las piezas del lado izquierdo (X<0 en el marco de sera) usan el espejo de la zona.
+const SETS = { casco: [3], pechera: [0, 11, 12], brazos: [4, 5, 10, 13, 14, 15], piernas: [1, 2, 6, 7, 8, 9] };
+const FIT = {
+  3:  { x: [-0.12, 0.12], y: [1.56, 1.91], z: [-0.135, 0.17] },
+  0:  { x: [-0.23, 0.23],   y: [0.93, 1.545], z: [-0.19, 0.18] },
+  11: { x: [-0.115, 0.115], y: [1.535, 1.655], z: [-0.125, 0.055] },
+  12: { x: [-0.13, 0.13],   y: [1.48, 1.56], z: [-0.14, 0.07] },
+  13: { x: [0.10, 0.34],    y: [1.38, 1.60], z: [-0.19, 0.13] },     // hombrera (10 = espejo)
+  15: { x: [0.22, 0.45],    y: [1.33, 1.53], z: [-0.17, 0.07] },     // brazo (14)
+  5:  { x: [0.45, 0.93],    y: [1.31, 1.49], z: [-0.16, 0.04] },     // antebrazo y guantelete (4)
+  1:  { x: [0.01, 0.225],   y: [0.54, 0.95], z: [-0.15, 0.17] },     // muslo (2)
+  7:  { x: [0.07, 0.235],   y: [0.10, 0.57], z: [-0.14, 0.06] },     // espinilla y rodilla (9)
+  6:  { x: [0.085, 0.24],   y: [-0.02, 0.14], z: [-0.14, 0.21] },  // bota (8)
+};
+const MIRROR = { 10: 13, 14: 15, 4: 5, 2: 1, 9: 7, 8: 6 };
+const MARGIN = window.__margin || 1;
+
+window.__bake = async (opts = {}) => {
+  const grow = opts.grow || 1.0;                                   // 1.0 = tal cual la zona definida
+  const gl = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+  log('Cargando…');
+  const arm = await gl.loadAsync('../assets/characters/hero/armadura.glb');
+  const sera = await new GLTFLoader().loadAsync('../assets/characters/hero/sera_limpio.glb');
+  sera.scene.updateMatrixWorld(true);
+  let body; sera.scene.traverse((o) => { if (o.isSkinnedMesh) body = o; });
+  body.skeleton.update();
+
+  // cuerpo de sera en reposo (mundo) + pesos, con rejilla espacial para buscar el vértice más cercano
+  const bp = body.geometry.attributes.position, bsi = body.geometry.attributes.skinIndex, bsw = body.geometry.attributes.skinWeight, n = bp.count;
+  const W = new Float32Array(n * 3), v = new THREE.Vector3();
+  for (let i = 0; i < n; i++) { v.fromBufferAttribute(bp, i); body.applyBoneTransform(i, v); W.set([v.x, v.y, v.z], i * 3); }
+  const CELL = 0.04, grid = new Map(), key = (x, y, z) => x + ',' + y + ',' + z;
+  for (let i = 0; i < n; i++) { const k = key(Math.floor(W[i * 3] / CELL), Math.floor(W[i * 3 + 1] / CELL), Math.floor(W[i * 3 + 2] / CELL)); (grid.get(k) || grid.set(k, []).get(k)).push(i); }
+  const nearest = (x, y, z) => {
+    const cx = Math.floor(x / CELL), cy = Math.floor(y / CELL), cz = Math.floor(z / CELL); let best = -1, bd = 1e9;
+    for (let r = 1; r <= 8 && best < 0; r++) for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) for (let dz = -r; dz <= r; dz++) {
+      const a = grid.get(key(cx + dx, cy + dy, cz + dz)); if (!a) continue;
+      for (const i of a) { const d = (W[i * 3] - x) ** 2 + (W[i * 3 + 1] - y) ** 2 + (W[i * 3 + 2] - z) ** 2; if (d < bd) { bd = d; best = i; } }
+    }
+    return best;
+  };
+
+  // normales del cuerpo en reposo (soldadas por posición para que las costuras UV no las partan)
+  const BN = new Float32Array(n * 3), bidx = body.geometry.index.array, wacc = new Map(), wk = (i) => Math.round(W[i * 3] * 5e3) + ',' + Math.round(W[i * 3 + 1] * 5e3) + ',' + Math.round(W[i * 3 + 2] * 5e3);
+  { const a = new THREE.Vector3(), b2 = new THREE.Vector3(), c = new THREE.Vector3();
+    for (let t = 0; t < bidx.length; t += 3) {
+      a.fromArray(W, bidx[t] * 3); b2.fromArray(W, bidx[t + 1] * 3).sub(a); c.fromArray(W, bidx[t + 2] * 3).sub(a); b2.cross(c);
+      for (let k = 0; k < 3; k++) { const key2 = wk(bidx[t + k]); const e = wacc.get(key2) || wacc.set(key2, [0, 0, 0]).get(key2); e[0] += b2.x; e[1] += b2.y; e[2] += b2.z; }
+    }
+    for (let i = 0; i < n; i++) { const e = wacc.get(wk(i)), l = Math.hypot(e[0], e[1], e[2]) || 1; BN[i * 3] = e[0] / l; BN[i * 3 + 1] = e[1] / l; BN[i * 3 + 2] = e[2] / l; } }
+
+  // esqueleto de sera en reposo: inversas de las matrices del mundo (el vértice de la armadura ya está en coordenadas de reposo)
+  const bones = body.skeleton.bones, inv = bones.map((b) => b.matrixWorld.clone().invert());
+  const skeleton = new THREE.Skeleton(bones, inv);
+
+  const out = new THREE.Group(); out.name = 'armadura';
+  let rootBone = bones[0]; while (rootBone.parent && rootBone.parent.isBone) rootBone = rootBone.parent;
+  console.log('huesos ' + bones.length + ', raíz ' + rootBone.name + ', padre ' + (rootBone.parent && rootBone.parent.type));
+  out.add(rootBone);
+  const pieces = new Map(); arm.scene.traverse((o) => { if (o.isMesh) pieces.set(+o.name.replace('tripo_part_', ''), o); });
+  const report = [];
+  for (const [setName, ids] of Object.entries(SETS)) for (const id of ids) {
+    const src = pieces.get(id), g = src.geometry.clone();
+    src.updateMatrixWorld(true);
+    // marco de la armadura (x al frente, z lateral) → marco de sera (z al frente, x lateral): (x,y,z) → (−z, y, x)
+    const R = new THREE.Matrix4().set(0, 0, -1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1);
+    g.applyMatrix4(src.matrixWorld.clone().premultiply(R));
+    g.computeBoundingBox(); const bb = g.boundingBox, mir = MIRROR[id] !== undefined, f = FIT[mir ? MIRROR[id] : id];
+    const t = { x: f.x.slice(), y: f.y.slice(), z: f.z.slice() };
+    if (mir) t.x = [-f.x[1], -f.x[0]];
+    const ctr = (a) => (a[0] + a[1]) / 2, half = (a) => (a[1] - a[0]) / 2 * grow;
+    const sc = new THREE.Vector3(half(t.x) / ((bb.max.x - bb.min.x) / 2), half(t.y) / ((bb.max.y - bb.min.y) / 2), half(t.z) / ((bb.max.z - bb.min.z) / 2));
+    const c0 = bb.getCenter(new THREE.Vector3()), c1 = new THREE.Vector3(ctr(t.x), ctr(t.y), ctr(t.z));
+    const M = new THREE.Matrix4().makeTranslation(c1.x, c1.y, c1.z).multiply(new THREE.Matrix4().makeScale(sc.x, sc.y, sc.z)).multiply(new THREE.Matrix4().makeTranslation(-c0.x, -c0.y, -c0.z));
+    g.applyMatrix4(M);                                              // también reorienta las normales (inversa traspuesta)
+    // la armadura no debe quedar dentro del cuerpo: los vértices que quedan bajo la piel se empujan hacia afuera (desplazamiento suavizado entre vecinos)
+    { const p0 = g.attributes.position, m0 = p0.count, D = new Float32Array(m0 * 3), margin = opts.margin ?? 0.022, maxPush = 0.09;
+      for (let i = 0; i < m0; i++) {
+        const x = p0.getX(i), y = p0.getY(i), z = p0.getZ(i), j = nearest(x, y, z); if (j < 0) continue;
+        const sd = (x - W[j * 3]) * BN[j * 3] + (y - W[j * 3 + 1]) * BN[j * 3 + 1] + (z - W[j * 3 + 2]) * BN[j * 3 + 2];
+        const push = Math.min(maxPush, Math.max(0, margin - sd)); D[i * 3] = BN[j * 3] * push; D[i * 3 + 1] = BN[j * 3 + 1] * push; D[i * 3 + 2] = BN[j * 3 + 2] * push;
+      }
+      // vecinos por triángulo, con vértices soldados por posición
+      const canon = new Int32Array(m0), ck = new Map(); for (let i = 0; i < m0; i++) { const k2 = Math.round(p0.getX(i) * 1e4) + ',' + Math.round(p0.getY(i) * 1e4) + ',' + Math.round(p0.getZ(i) * 1e4); canon[i] = ck.has(k2) ? ck.get(k2) : (ck.set(k2, i), i); }
+      const idx = g.index ? g.index.array : Uint32Array.from({ length: m0 }, (_, i) => i), nb = new Map();
+      for (let t = 0; t < idx.length; t += 3) for (let k = 0; k < 3; k++) { const a = canon[idx[t + k]], b2 = canon[idx[t + (k + 1) % 3]]; (nb.get(a) || nb.set(a, new Set()).get(a)).add(b2); (nb.get(b2) || nb.set(b2, new Set()).get(b2)).add(a); }
+      for (let it = 0; it < 6; it++) {
+        const N2 = new Float32Array(D);
+        for (const [a, set] of nb) for (let k = 0; k < 3; k++) { let sum = D[a * 3 + k]; for (const b2 of set) sum += D[b2 * 3 + k]; const avg = sum / (set.size + 1); N2[a * 3 + k] = Math.max(D[a * 3 + k] * 0.0, avg, 0) * 0 + avg; }
+        D.set(N2);
+      }
+      for (let i = 0; i < m0; i++) { const c = canon[i]; p0.setXYZ(i, p0.getX(i) + D[c * 3], p0.getY(i) + D[c * 3 + 1], p0.getZ(i) + D[c * 3 + 2]); }
+    }
+    // piel: pesos del vértice más cercano del cuerpo
+    const p = g.attributes.position, m = p.count, SI = new Uint16Array(m * 4), SW = new Float32Array(m * 4);
+    for (let i = 0; i < m; i++) { const j = nearest(p.getX(i), p.getY(i), p.getZ(i)); for (let k = 0; k < 4; k++) { SI[i * 4 + k] = bsi.getComponent(j, k); SW[i * 4 + k] = bsw.getComponent(j, k); } }
+    g.setAttribute('skinIndex', new THREE.BufferAttribute(SI, 4)); g.setAttribute('skinWeight', new THREE.BufferAttribute(SW, 4));
+    g.computeBoundingSphere();
+    const mat = src.material; mat.side = THREE.DoubleSide;
+    if (mat.map) mat.map.userData.mimeType = 'image/jpeg';
+    const sm = new THREE.SkinnedMesh(g, mat); sm.name = setName + '_' + id; sm.frustumCulled = false; sm.userData.set = setName;
+    out.add(sm); sm.bind(skeleton, new THREE.Matrix4());
+    report.push(`${sm.name} escala ${sc.x.toFixed(2)},${sc.y.toFixed(2)},${sc.z.toFixed(2)}`);
+  }
+  out.updateMatrixWorld(true);
+  log('Exportando…');
+  const glb = await new Promise((res, rej) => new GLTFExporter().parse(out, res, rej, { binary: true, onlyVisible: false }));
+  const bytes = new Uint8Array(glb); let s = ''; const CH = 0x8000;
+  for (let i = 0; i < bytes.length; i += CH) s += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+  log('Listo: ' + (bytes.length / 1e6).toFixed(1) + ' MB');
+  return { glb64: btoa(s), meta: { sets: SETS, bytes: bytes.length, report } };
+};
+window.__ready = true;
+</script></body></html>

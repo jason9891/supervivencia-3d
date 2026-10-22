@@ -1,0 +1,47 @@
+{
+ "sets": {
+  "casco": [
+   3
+  ],
+  "pechera": [
+   0,
+   11,
+   12
+  ],
+  "brazos": [
+   4,
+   5,
+   10,
+   13,
+   14,
+   15
+  ],
+  "piernas": [
+   1,
+   2,
+   6,
+   7,
+   8,
+   9
+  ]
+ },
+ "bytes": 2219704,
+ "report": [
+  "casco_3 escala 2.45,2.42,2.59",
+  "pechera_0 escala 1.87,1.74,2.27",
+  "pechera_11 escala 1.91,2.06,1.64",
+  "pechera_12 escala 1.94,1.62,1.63",
+  "brazos_4 escala 2.48,1.85,2.02",
+  "brazos_5 escala 2.48,1.85,2.01",
+  "brazos_10 escala 2.19,1.70,2.44",
+  "brazos_13 escala 2.19,1.70,2.48",
+  "brazos_14 escala 3.53,2.98,3.18",
+  "brazos_15 escala 3.48,2.99,3.15",
+  "piernas_1 escala 2.35,1.88,3.39",
+  "piernas_2 escala 2.35,1.87,3.38",
+  "piernas_6 escala 2.20,2.29,2.13",
+  "piernas_7 escala 2.28,2.44,2.36",
+  "piernas_8 escala 2.20,2.25,2.13",
+  "piernas_9 escala 2.29,2.44,2.29"
+ ]
+}
