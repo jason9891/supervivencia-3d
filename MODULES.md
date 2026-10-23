@@ -102,3 +102,4 @@ El lab junta todas las animaciones del repo: UAL 1, UAL 2 y Jordan (lista en `as
 
 ### Armadura 2 (armadura_2.glb → armadura2-sera.glb)
 `python3 tools/bake-armor.py armadura_2` hornea el caballero completo en T (5 piezas: pechera, piernas, 2 brazos, casco) con un ajuste uniforme a sera_limpio, simplificado a ~137k triángulos y con piel. `armor-wear.js` la usa por defecto (`ARMOR_URL`); la anterior sigue como `armadura-sera.glb`. Al llevar armadura, el cuerpo bajo cada conjunto se encoge 14 mm y se tiñe de tela (`under`/`setShrink`).
+`armor-wear.js` también oculta la piel por partes (`BODY_PARTS`: cabeza, torso, brazos, antebrazos, manos, muslos, piernas, pies): `hidePart/togglePart/autoHide/hideAllBody`, guardado en localStorage `armor-hide-v1` (lo que se elige en clips-lab vale también en el juego). clips-lab tiene los botones OCULTAR PIEL, TODA la armadura y el deslizador ENCOGER CUERPO.
