@@ -10,6 +10,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { MeshoptSimplifier } from './vendor/meshopt_simplifier.js';
 const log = (m) => { document.getElementById('s').textContent = m; console.log(m); };
 
 // Conjuntos (índices de tripo_part_N) y zona del cuerpo de sera (en reposo, X lateral, Y arriba, Z al frente) a la que se ajusta cada pieza.
@@ -27,6 +29,10 @@ const FIT = {
   7:  { x: [0.07, 0.235],   y: [0.10, 0.57], z: [-0.14, 0.06] },     // espinilla y rodilla (9)
   6:  { x: [0.085, 0.24],   y: [-0.02, 0.14], z: [-0.14, 0.21] },  // bota (8)
 };
+// armadura_2: caballero completo en T (5 piezas: 0 torso+faldón, 1 piernas+botas, 2/4 brazos, 3 casco), misma escala que sera (≈ su altura) → una sola transformación uniforme + ajustes finos
+const SETS2 = { casco: [3], pechera: [0], brazos: [2, 4], piernas: [1] };
+const TRIS2 = { 0: 50000, 1: 36000, 2: 18000, 4: 18000, 3: 16000 };       // triángulos tras simplificar (de ~1M)
+const TWEAK2 = {};                                                        // id → {dx,dy,dz,s} (en metros / factor) sobre el ajuste global
 const MIRROR = { 10: 13, 14: 15, 4: 5, 2: 1, 9: 7, 8: 6 };
 const MARGIN = window.__margin || 1;
 
@@ -34,7 +40,9 @@ window.__bake = async (opts = {}) => {
   const grow = opts.grow || 1.0;                                   // 1.0 = tal cual la zona definida
   const gl = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
   log('Cargando…');
-  const arm = await gl.loadAsync('../assets/characters/hero/armadura.glb');
+  const A2 = opts.src === 'armadura_2', SETSX = A2 ? SETS2 : SETS;
+  const arm = await gl.loadAsync('../assets/characters/hero/' + (opts.src || 'armadura') + '.glb');
+  if (A2) await MeshoptSimplifier.ready;
   const sera = await new GLTFLoader().loadAsync('../assets/characters/hero/sera_limpio.glb');
   sera.scene.updateMatrixWorld(true);
   let body; sera.scene.traverse((o) => { if (o.isSkinnedMesh) body = o; });
@@ -74,20 +82,49 @@ window.__bake = async (opts = {}) => {
   out.add(rootBone);
   const pieces = new Map(); arm.scene.traverse((o) => { if (o.isMesh) pieces.set(+o.name.replace('tripo_part_', ''), o); });
   const report = [];
-  for (const [setName, ids] of Object.entries(SETS)) for (const id of ids) {
-    const src = pieces.get(id), g = src.geometry.clone();
+  const RR = new THREE.Matrix4().set(0, 0, -1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1);
+  let GM = null;                                                  // ajuste global de armadura_2
+  if (A2) {
+    const box = new THREE.Box3(); arm.scene.updateMatrixWorld(true);
+    pieces.forEach((o) => { const b = new THREE.Box3().setFromObject(o); box.union(b); });
+    const h = box.max.y - box.min.y, s = (opts.height || 1.9) / h, cz = (box.min.z + box.max.z) / 2, cx = (box.min.x + box.max.x) / 2;
+    // armadura: x al frente, z lateral; sera: pies en y≈opts.foot, centrada en X (lateral) y su torso en Z
+    GM = new THREE.Matrix4().makeTranslation(opts.dz ?? 0, opts.foot ?? -0.02, 0).multiply(new THREE.Matrix4().makeScale(s, s, s)).multiply(new THREE.Matrix4().makeTranslation(-cx, -box.min.y, -cz));
+    report.push(`global: alto ${h.toFixed(3)} escala ${s.toFixed(3)}`);
+  }
+  for (const [setName, ids] of Object.entries(SETSX)) for (const id of ids) {
+    const src = pieces.get(id); let g = src.geometry.clone();
     src.updateMatrixWorld(true);
+    if (A2) {                                                      // simplificar (uv + normales como atributos) antes de pasar a mundo
+      { const q = new THREE.BufferGeometry(), cnt = g.attributes.position.count;   // la malla viene cuantizada/intercalada: pasar a Float32 normales
+        for (const [nm, k] of [['position', 3], ['normal', 3], ['uv', 2]]) { const a = g.attributes[nm], F = new Float32Array(cnt * k); for (let i = 0; i < cnt; i++) for (let c = 0; c < k; c++) F[i * k + c] = a.getComponent(i, c); q.setAttribute(nm, new THREE.BufferAttribute(F, k)); }
+        const ix = g.index ? Uint32Array.from(g.index.array) : Uint32Array.from({ length: cnt }, (_, i) => i); q.setIndex(new THREE.BufferAttribute(ix, 1)); g = q; }
+      g = mergeVertices(g, 1e-5); const nv0 = g.attributes.position.count, pos = g.attributes.position.array, uv = g.attributes.uv.array, nor = g.attributes.normal.array;
+      const attr = new Float32Array(nv0 * 5); for (let i = 0; i < nv0; i++) attr.set([uv[i * 2], uv[i * 2 + 1], nor[i * 3], nor[i * 3 + 1], nor[i * 3 + 2]], i * 5);
+      const [simp, err] = MeshoptSimplifier.simplifyWithAttributes(Uint32Array.from(g.index.array), pos, 3, attr, 5, [1, 1, 0.4, 0.4, 0.4], null, TRIS2[id] * 3, 0.05, ['Prune']);
+      const remap = new Int32Array(nv0).fill(-1); let nv = 0; for (let i = 0; i < simp.length; i++) if (remap[simp[i]] < 0) remap[simp[i]] = nv++;
+      const P = new Float32Array(nv * 3), UV = new Float32Array(nv * 2), N = new Float32Array(nv * 3);
+      for (let o = 0; o < nv0; o++) { const k = remap[o]; if (k < 0) continue; P.set(pos.subarray(o * 3, o * 3 + 3), k * 3); UV.set(uv.subarray(o * 2, o * 2 + 2), k * 2); N.set(nor.subarray(o * 3, o * 3 + 3), k * 3); }
+      const I = new Uint32Array(simp.length); for (let i = 0; i < simp.length; i++) I[i] = remap[simp[i]];
+      g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setAttribute('uv', new THREE.BufferAttribute(UV, 2)); g.setAttribute('normal', new THREE.BufferAttribute(N, 3)); g.setIndex(new THREE.BufferAttribute(I, 1));
+      report.push(`pieza ${id}: ${nv0} vért → ${simp.length / 3} tris (error ${err.toFixed(4)})`);
+    }
     // marco de la armadura (x al frente, z lateral) → marco de sera (z al frente, x lateral): (x,y,z) → (−z, y, x)
     const R = new THREE.Matrix4().set(0, 0, -1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1);
+    let sc = new THREE.Vector3(1, 1, 1);
+    if (A2) {                                                      // armadura_2: marco (x al frente, z lateral) → sera, un solo ajuste uniforme (+ tweak por pieza)
+      g.applyMatrix4(src.matrixWorld.clone().premultiply(GM).premultiply(R));
+      const tw = opts.tweak?.[id] || TWEAK2[id]; if (tw) { g.computeBoundingBox(); const c = g.boundingBox.getCenter(new THREE.Vector3()); g.applyMatrix4(new THREE.Matrix4().makeTranslation(c.x + (tw.dx || 0), c.y + (tw.dy || 0), c.z + (tw.dz || 0)).multiply(new THREE.Matrix4().makeScale(tw.sx || tw.s || 1, tw.sy || tw.s || 1, tw.sz || tw.s || 1)).multiply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z))); }
+    } else {
     g.applyMatrix4(src.matrixWorld.clone().premultiply(R));
     g.computeBoundingBox(); const bb = g.boundingBox, mir = MIRROR[id] !== undefined, f = FIT[mir ? MIRROR[id] : id];
     const t = { x: f.x.slice(), y: f.y.slice(), z: f.z.slice() };
     if (mir) t.x = [-f.x[1], -f.x[0]];
     const ctr = (a) => (a[0] + a[1]) / 2, half = (a) => (a[1] - a[0]) / 2 * grow;
-    const sc = new THREE.Vector3(half(t.x) / ((bb.max.x - bb.min.x) / 2), half(t.y) / ((bb.max.y - bb.min.y) / 2), half(t.z) / ((bb.max.z - bb.min.z) / 2));
+    sc = new THREE.Vector3(half(t.x) / ((bb.max.x - bb.min.x) / 2), half(t.y) / ((bb.max.y - bb.min.y) / 2), half(t.z) / ((bb.max.z - bb.min.z) / 2));
     const c0 = bb.getCenter(new THREE.Vector3()), c1 = new THREE.Vector3(ctr(t.x), ctr(t.y), ctr(t.z));
     const M = new THREE.Matrix4().makeTranslation(c1.x, c1.y, c1.z).multiply(new THREE.Matrix4().makeScale(sc.x, sc.y, sc.z)).multiply(new THREE.Matrix4().makeTranslation(-c0.x, -c0.y, -c0.z));
-    g.applyMatrix4(M);                                              // también reorienta las normales (inversa traspuesta)
+    g.applyMatrix4(M); }                                              // también reorienta las normales (inversa traspuesta)
     // la armadura no debe quedar dentro del cuerpo: los vértices que quedan bajo la piel se empujan hacia afuera (desplazamiento suavizado entre vecinos)
     { const p0 = g.attributes.position, m0 = p0.count, D = new Float32Array(m0 * 3), margin = opts.margin ?? 0.022, maxPush = 0.09;
       for (let i = 0; i < m0; i++) {

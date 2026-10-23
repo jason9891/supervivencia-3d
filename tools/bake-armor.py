@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Hornea assets/characters/hero/armadura.glb sobre sera_limpio.glb → armadura-sera.glb (4 conjuntos: casco, pechera, brazos, piernas).
 Uso: python3 tools/bake-armor.py     (requiere playwright + chromium y `three` en node_modules, igual que bake-hero.py)"""
-import base64, json, os, threading, http.server, functools
+import base64, json, os, sys, threading, http.server, functools
 from playwright.sync_api import sync_playwright
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 THREE = os.environ.get('THREE_DIR', os.path.join(ROOT, 'node_modules', 'three')) + '/'
@@ -12,12 +12,16 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
 srv = http.server.ThreadingHTTPServer(('127.0.0.1', 0), functools.partial(Quiet, directory=ROOT))
 threading.Thread(target=srv.serve_forever, daemon=True).start()
 with sync_playwright() as p:
-    b = p.chromium.launch(executable_path=CHROMIUM, args=['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'])
+    b = p.chromium.launch(executable_path=CHROMIUM, args=['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--js-flags=--max-old-space-size=4096'])
     pg = b.new_page(); pg.set_default_timeout(300000)
     pg.on('pageerror', lambda e: print('error de página:', e)); pg.on('console', lambda m: print(' ·', m.text[:160]))
     pg.route('**/cdn.jsdelivr.net/npm/three@0.170.0/**', lambda r: r.fulfill(path=THREE + r.request.url.split('three@0.170.0/')[1]))
     pg.goto(f'http://127.0.0.1:{srv.server_address[1]}/tools/bake-armor.html'); pg.wait_for_function('window.__ready')
-    res = pg.evaluate('o => window.__bake(o)', {'grow': float(os.environ.get('GROW', '1'))})
-    open(os.path.join(OUT, 'armadura-sera.glb'), 'wb').write(base64.b64decode(res['glb64']))
-    json.dump(res['meta'], open(os.path.join(OUT, 'armadura-sera.meta.json'), 'w'), indent=1)
+    opts = {'grow': float(os.environ.get('GROW', '1'))}
+    opts.update(json.loads(os.environ.get('OPTS', '{}')))                    # p. ej. OPTS='{"height":1.88,"dz":0.02,"tweak":{"3":{"dy":0.01}}}'
+    name = 'armadura-sera'
+    if len(sys.argv) > 1: opts['src'] = sys.argv[1]; name = sys.argv[1].replace('_', '') + '-sera' if sys.argv[1] != 'armadura' else name   # python3 tools/bake-armor.py armadura_2 → armadura2-sera.glb
+    res = pg.evaluate('o => window.__bake(o)', opts)
+    open(os.path.join(OUT, name + '.glb'), 'wb').write(base64.b64decode(res['glb64']))
+    json.dump(res['meta'], open(os.path.join(OUT, name + '.meta.json'), 'w'), indent=1)
     print(round(res['meta']['bytes'] / 1e6, 2), 'MB'); print('\n'.join(res['meta']['report'])); b.close()

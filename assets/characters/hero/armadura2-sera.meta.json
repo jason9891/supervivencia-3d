@@ -1,0 +1,42 @@
+{
+ "sets": {
+  "casco": [
+   3
+  ],
+  "pechera": [
+   0,
+   11,
+   12
+  ],
+  "brazos": [
+   4,
+   5,
+   10,
+   13,
+   14,
+   15
+  ],
+  "piernas": [
+   1,
+   2,
+   6,
+   7,
+   8,
+   9
+  ]
+ },
+ "bytes": 6891740,
+ "report": [
+  "global: alto 1.000 escala 1.900",
+  "pieza 3: 37172 v\u00e9rt \u2192 16000 tris (error 0.0009)",
+  "casco_3 escala 1.00,1.00,1.00",
+  "pieza 0: 237767 v\u00e9rt \u2192 50000 tris (error 0.0007)",
+  "pechera_0 escala 1.00,1.00,1.00",
+  "pieza 2: 56129 v\u00e9rt \u2192 17999 tris (error 0.0006)",
+  "brazos_2 escala 1.00,1.00,1.00",
+  "pieza 4: 56332 v\u00e9rt \u2192 17999 tris (error 0.0006)",
+  "brazos_4 escala 1.00,1.00,1.00",
+  "pieza 1: 129699 v\u00e9rt \u2192 35999 tris (error 0.0004)",
+  "piernas_1 escala 1.00,1.00,1.00"
+ ]
+}
