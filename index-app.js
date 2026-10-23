@@ -330,6 +330,7 @@ addM(actor, new THREE.CapsuleGeometry(0.24, 0.45, 6, 10), skin, [0, 1.5, 0]);
 addM(actor, new THREE.SphereGeometry(0.22, 12, 10), skin, [0, 1.85, 0]);
 const locomotionActor = new THREE.Group(); scene.add(locomotionActor); locomotionActor.visible = false;
 let locomotionMixer = null, walkAction = null, runAction = null, idleAction = null, activeAction = null;
+let comboClips = null;                                             // ataques del grupo «ataque» del GLB (se encadenan)
 let attackAction = null, attacking = false, armed = false, heroKit = null, comboI = 0, lastAtk = 0;
 let attackUntil = 0;
 const clipMap = new Map(), locoState = createLocoState(); let loco = null, visYaw = 0;
@@ -360,7 +361,8 @@ async function initArmor(model) {
 }
 function setupLocomotion(gltf, label) {
   const model = gltf.scene;
-  heroKit = gltf.kit || null;
+  heroKit = gltf.kit || null; comboClips = gltf.combo && gltf.combo.length ? gltf.combo : null;
+  window.__clipCats = gltf.categories || null; window.__triggerClips = gltf.triggers || [];   // animaciones «mapa»: las dispara el mapa con window.playTrigger(nombre)
   model.updateMatrixWorld(true);
   const bounds = new THREE.Box3().setFromObject(model);
   const size = bounds.getSize(new THREE.Vector3());
@@ -401,7 +403,7 @@ function setupLocomotion(gltf, label) {
 loadHeroFbx(THREE, GLTFLoader).catch(e => { console.warn('héroe nuevo no disponible, uso el anterior', e); return loadHero(THREE, GLTFLoader); })
   .then(i => {
     setBoot(85, 'Animaciones del caballero…');
-    setupLocomotion({ scene: i.model, animations: i.clips, kit: i.kit }, i.source === 'fbx' ? 'HÉROE' : i.source === 'hero' ? 'HUMANO' : 'MANIQUÍ');
+    setupLocomotion({ scene: i.model, animations: i.clips, kit: i.kit, combo: i.combo, categories: i.categories, triggers: i.triggers }, i.source === 'fbx' ? 'HÉROE' : i.source === 'hero' ? 'HUMANO' : 'MANIQUÍ');
     bootState.hero = true;
     setBoot(95, 'Preparando cinemática…');
     tryStartIntro();
@@ -433,6 +435,11 @@ function attack() {
     if (now - lastAtk > 1.6) comboI = 0;
     const st = heroKit.combo[comboI++ % heroKit.combo.length]; lastAtk = now;
     act = locomotionMixer.clipAction(clipMap.get(st.key)); dur = st.dur * 0.92; hitMs = st.hit * 1000;
+  } else if (comboClips && locomotionMixer) {                  // héroe nuevo: combo con los clips marcados «ataque» en clips-lab
+    if (now - lastAtk > 1.6) comboI = 0;
+    const st = comboClips[comboI++ % comboClips.length]; lastAtk = now;
+    const c = clipMap.get(normName(st.key));
+    if (c) { act = locomotionMixer.clipAction(c); dur = st.dur * 0.9; hitMs = st.hit * 1000; }
   } else if (!act && locomotionMixer) {
     for (const n of ['sword attack', 'sword regular a', 'melee hook', 'attack']) {
       const c = clipMap.get(n);
@@ -463,6 +470,17 @@ function attack() {
   if (activeAction && activeAction !== act) activeAction.crossFadeTo(act, 0.08, false);
   activeAction = act;
 }
+/** Dispara una animación del grupo «mapa» (la usa un disparador del mapa): window.playTrigger('death01'). Bloquea el movimiento mientras dura. */
+window.playTrigger = (name) => {
+  if (!locomotionMixer) return false;
+  const c = clipMap.get(normName(name)); if (!c) return false;
+  const act = locomotionMixer.clipAction(c), now = performance.now() / 1000;
+  attackAction = act; act.setLoop(THREE.LoopOnce, 1); act.clampWhenFinished = true;
+  attacking = true; attackUntil = now + c.duration; playerHitArmed = false;
+  act.reset(); act.setEffectiveWeight(1); act.play(); if (activeAction && activeAction !== act) activeAction.crossFadeTo(act, 0.1, false);
+  activeAction = act;
+  return true;
+};
 window.__dbg = () => ({ clip: activeAction && activeAction.getClip().name, attacking, armed, kit: !!heroKit, x: player.x, y: player.y, z: player.z });   // para pruebas
 function toggleArm() { if (introPlaying || gateCinePlaying) return; armed = !armed; document.getElementById('arm').classList.toggle('on', armed); }
 document.getElementById('atk').addEventListener('pointerdown', e => { e.preventDefault(); attack(); });

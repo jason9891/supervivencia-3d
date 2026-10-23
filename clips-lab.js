@@ -6,6 +6,7 @@ import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { UalRetargeter, mixamoClip } from './retarget.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { CATS, CAT_LABEL, CAT_TITLE, guessCategory, encodeName } from './clip-categories.js';
 import { loadArmor, ARMOR_SETS, ARMOR_LABEL, PART_LABEL } from './armor-wear.js';
 
 const HERO_URL = './assets/characters/hero/sera_limpio.glb';
@@ -62,7 +63,7 @@ const friendly = (f) => norm(f.replace(/\.fbx$/i, '').replace(/^sword and shield
 function addItem(src, clipName, name) {
   const key = src.id + ':' + clipName; let n = name, i = 2; const used = new Set([...items.values()].map((x) => x.name));
   while (used.has(n)) n = name + ' ' + i++;
-  items.set(key, { key, src, clipName, name: n, sel: false, dur: null, cache: null });
+  items.set(key, { key, src, clipName, name: n, sel: false, dur: null, cache: null, cat: guessCategory(n) });
 }
 
 async function loadSource(src) {
@@ -121,12 +122,17 @@ async function play(item) {
 }
 
 // ---------- lista ----------
-const visible = () => [...items.values()].filter((it) => tab === 'all' || (tab === 'sel' ? it.sel : it.src.id === tab));
+let catFilter = 'todas';                                           // filtro por grupo en la pestaña ★
+const visible = () => [...items.values()].filter((it) => tab === 'all' || (tab === 'sel' ? it.sel && (catFilter === 'todas' || it.cat === catFilter) : it.src.id === tab));
 function renderTabs() {
   const box = $('tabs'); box.innerHTML = '';
   const nSel = [...items.values()].filter((i) => i.sel).length;
   const defs = [['all', 'TODAS'], ...[...sources.values()].map((s) => [s.id, s.label.replace(' ', '') + ' ' + [...items.values()].filter((i) => i.src === s).length]), ['sel', '★ ' + nSel]];
   for (const [id, label] of defs) { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.classList.toggle('on', tab === id); b.onclick = () => { tab = id; renderTabs(); renderList(); }; box.append(b); }
+  if (tab === 'sel') {                                             // filtro por grupo: TODOS · BÁSICAS · ATAQUE · MAPA (con el número de clips)
+    const cnt = (c) => [...items.values()].filter((i) => i.sel && (c === 'todas' || i.cat === c)).length;
+    for (const c of ['todas', ...CATS]) { const b = document.createElement('button'); b.type = 'button'; b.textContent = (c === 'todas' ? 'TODOS' : CAT_LABEL[c]) + ' ' + cnt(c); b.title = CAT_TITLE[c] || ''; b.classList.toggle('on', catFilter === c); b.style.cssText = 'margin-left:8px;border-color:#8fbf6a'; b.onclick = () => { catFilter = c; renderTabs(); renderList(); }; box.append(b); }
+  }
   $('bExp').textContent = '⬇ CREAR GLB (' + nSel + ')'; $('bExp').disabled = !nSel;
 }
 function renderList() {
@@ -140,6 +146,8 @@ function renderList() {
     if (tab === 'sel') {
       const t = document.createElement('input'); t.type = 'text'; t.value = it.name; t.onchange = () => { it.name = t.value.trim() || it.name; it.cache = null; saveSel(); };
       row.append(t);
+      const cb = document.createElement('button'); cb.type = 'button'; cb.textContent = CAT_LABEL[it.cat]; cb.title = 'Grupo: toca para cambiar (básica → ataque → mapa)'; cb.className = 'cat ' + it.cat;
+      cb.onclick = () => { it.cat = CATS[(CATS.indexOf(it.cat) + 1) % CATS.length]; saveSel(); renderTabs(); renderList(); }; row.append(cb);
     }
     const b = document.createElement('button'); b.type = 'button'; b.className = 'nm'; b.textContent = tab === 'sel' ? '▶' : it.name; b.style.flex = tab === 'sel' ? 'none' : '1'; b.onclick = () => play(it); row.append(b);
     const s = document.createElement('span'); s.className = 'src'; s.textContent = it.src.id; row.append(s);
@@ -150,11 +158,11 @@ function renderList() {
 }
 
 // ---------- selección ----------
-const selData = () => [...items.values()].filter((i) => i.sel).map((i) => ({ key: i.key, source: i.src.id, clip: i.clipName, name: i.name }));
+const selData = () => [...items.values()].filter((i) => i.sel).map((i) => ({ key: i.key, source: i.src.id, clip: i.clipName, name: i.name, cat: i.cat }));
 function saveSel() { try { localStorage.setItem(LS, JSON.stringify(selData())); } catch (e) { /* sin almacenamiento */ } }
 function applySel(list) {
   for (const it of items.values()) it.sel = false;
-  for (const s of list || []) { const it = items.get(s.key); if (it) { it.sel = true; if (s.name) it.name = s.name; it.cache = null; } }
+  for (const s of list || []) { const it = items.get(s.key); if (it) { it.sel = true; if (s.name) it.name = s.name; it.cat = s.cat || guessCategory(it.name); it.cache = null; } }
   renderTabs(); renderList();
 }
 function download(name, blob) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); setTimeout(() => { a.remove(); URL.revokeObjectURL(a.href); }, 2000); }
@@ -169,13 +177,13 @@ $('bExp').onclick = async () => {
   $('bExp').disabled = true;
   try {
     const clips = []; let n = 0;
-    for (const it of chosen) { status(`Preparando ${++n}/${chosen.length}: ${it.name}`); const c = await buildClip(it); const cc = c.clone(); cc.name = it.name; clips.push(cc); }
+    for (const it of chosen) { status(`Preparando ${++n}/${chosen.length}: ${it.name}`); const c = await buildClip(it); const cc = c.clone(); cc.name = encodeName(it.name, it.cat); clips.push(cc); }
     if (new Set(clips.map((c) => c.name)).size !== clips.length) throw new Error('Hay nombres repetidos: renómbralos en la pestaña ★.');
     if (action) { action.stop(); } mixer.stopAllAction(); mixer.uncacheRoot(hero); restorePose();
     status('Creando GLB…');
     const glb = await new Promise((res, rej) => new GLTFExporter().parse(hero, res, rej, { binary: true, animations: clips, onlyVisible: false }));
     download('sera_limpio-anim.glb', new Blob([glb], { type: 'model/gltf-binary' }));
-    status(`GLB creado: ${(glb.byteLength / 1e6).toFixed(1)} MB · ${clips.length} animaciones. Súbelo a assets/characters/hero/.`);
+    status(`GLB creado: ${(glb.byteLength / 1e6).toFixed(1)} MB · ${clips.length} animaciones (${CATS.map((c) => chosen.filter((i) => i.cat === c).length + ' ' + CAT_LABEL[c].toLowerCase()).join(' · ')}). Súbelo a assets/characters/hero/.`);
   } catch (e) { showErr('No se pudo crear el GLB: ' + (e.message || e)); } finally { $('bExp').disabled = false; if (cur) play(cur); }
 };
 
