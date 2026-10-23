@@ -13,8 +13,9 @@ const REGION = [/^(Head|HeadTop_End)$/, /^(Hips|Spine\d?|Neck|(Left|Right)Should
 export const BODY_PARTS = ['cabeza', 'torso', 'brazos', 'antebrazos', 'manos', 'muslos', 'piernas', 'pies'];
 export const PART_LABEL = { cabeza: 'CABEZA', torso: 'TORSO', brazos: 'BRAZOS', antebrazos: 'ANTEBRAZOS', manos: 'MANOS', muslos: 'MUSLOS', piernas: 'PIERNAS', pies: 'PIES' };
 const PART_RE = [/^(Head|HeadTop_End)$/, /^(Hips|Spine\d?|Neck|(Left|Right)Shoulder)$/, /^(Left|Right)Arm$/, /^(Left|Right)ForeArm$/, /^(Left|Right)Hand/, /^(Left|Right)UpLeg$/, /^(Left|Right)Leg$/, /^(Left|Right)(Foot|ToeBase|Toe_End)$/];
-const LSH = 'armor-hide-v1';
-const AUTO_HIDE = { pechera: ['torso'], brazos: ['brazos', 'antebrazos'], piernas: ['muslos', 'piernas'] };   // lo que tapa cada conjunto (cabeza y manos quedan: se ven por la visera y los guanteletes abiertos)
+const LSH = 'armor-hide-v2';                                       // ocultar a mano (extra a lo automático)
+export const GLARE = { knee: 0.04, slope: 0.18 };                  // las texturas traen brillos horneados muy claros: sobre la luz del juego se queman («despintado»); se comprimen por encima de «knee» (lineal)
+const AUTO_HIDE = { pechera: ['torso'], brazos: ['brazos', 'antebrazos'], piernas: ['muslos', 'piernas', 'pies'] };   // piel que desaparece con cada conjunto (la cabeza y las manos siempre se ven)
 const TINT_AMT = [0, 1, 1, 1];                                  // el casco solo encoge: por la visera se ve la cara
 
 /** Prepara el cuerpo del héroe: atributo de región por vértice + shader que lo encoge y tiñe según los conjuntos puestos. */
@@ -51,7 +52,17 @@ export async function loadArmor(THREE, GLTFLoader, MeshoptDecoder, hero, { url =
   if (MeshoptDecoder && MeshoptDecoder.ready) await MeshoptDecoder.ready;
   const loader = new GLTFLoader(); if (MeshoptDecoder) loader.setMeshoptDecoder(MeshoptDecoder);
   const gltf = await new Promise((res, rej) => loader.load(url, res, undefined, rej));
-  const uni = prepareBody(THREE, hero);
+  const uni = prepareBody(THREE, hero), glareU = [];
+  const tameGlare = (mat) => {                                    // comprime los brillos horneados de la textura (por encima de GLARE.knee, en lineal)
+    if (mat.userData.glare) return; mat.userData.glare = true;
+    const u = { uGlare: { value: GLARE.slope }, uKnee: { value: GLARE.knee } }; glareU.push(u);
+    mat.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, u);
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uGlare; uniform float uKnee;')
+        .replace('#include <map_fragment>', '#include <map_fragment>\n{ float l = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)); float t = uKnee + max(l - uKnee, 0.0) * uGlare; diffuseColor.rgb *= min(1.0, t / max(l, 1e-4)); }');
+    };
+    mat.customProgramCacheKey = () => 'armor-glare'; mat.needsUpdate = true;
+  };
   const heroBones = new Map(); hero.traverse((o) => { if (o.isBone) heroBones.set(o.name, o); });
   const root = new THREE.Group(); root.name = 'armadura'; hero.add(root);
   const sets = Object.fromEntries(ARMOR_SETS.map((s) => [s, []]));
@@ -62,7 +73,7 @@ export async function loadArmor(THREE, GLTFLoader, MeshoptDecoder, hero, { url =
     m.removeFromParent();
     m.bind(new THREE.Skeleton(bones, m.skeleton.boneInverses), new THREE.Matrix4());   // vértices en reposo del mundo, bindMatrix = I (modo «attached»)
     m.userData.armor = true; m.frustumCulled = false; m.castShadow = true; m.receiveShadow = true;
-    for (const mat of [].concat(m.material)) mat.side = THREE.DoubleSide;
+    for (const mat of [].concat(m.material)) { mat.side = THREE.DoubleSide; tameGlare(mat); }
     const set = m.userData.set || m.name.split('_')[0];
     (sets[set] || (sets[set] = [])).push(m); root.add(m);
   }
@@ -70,22 +81,26 @@ export async function loadArmor(THREE, GLTFLoader, MeshoptDecoder, hero, { url =
   try { state = JSON.parse(localStorage.getItem(LS) || '{}'); } catch (e) { /* sin almacenamiento */ }
   if (worn) state = { ...state, ...worn };
   let hidden = {};
+  const autoSet = () => { const h = new Set(); for (const k of ARMOR_SETS) if (state[k]) (AUTO_HIDE[k] || []).forEach((q) => h.add(q)); return h; };
+  const applyHide = () => { const a = autoSet(); BODY_PARTS.forEach((q, i) => { uni.uHide.value[i] = a.has(q) || hidden[q] ? 1 : 0; }); };
   try { hidden = JSON.parse(localStorage.getItem(LSH) || '{}'); } catch (e) { /* sin almacenamiento */ }
   const api = {
     root, sets, under: uni,                                    // under.uShrink.value (m) y under.uTint.value ajustables
     setShrink(mm) { uni.uShrink.value = mm / 1000; },
     isWorn: (s) => !!state[s],
-    wear(s, v) { state[s] = !!v; for (const m of sets[s] || []) m.visible = !!v; const i = ARMOR_SETS.indexOf(s); if (i >= 0) uni.uWorn.value.setComponent(i, v ? 1 : 0); try { localStorage.setItem(LS, JSON.stringify(state)); } catch (e) { /* nada */ } return !!v; },
+    wear(s, v) { state[s] = !!v; for (const m of sets[s] || []) m.visible = !!v; const i = ARMOR_SETS.indexOf(s); if (i >= 0) uni.uWorn.value.setComponent(i, v ? 1 : 0); applyHide(); try { localStorage.setItem(LS, JSON.stringify(state)); } catch (e) { /* nada */ } return !!v; },
     toggle(s) { return api.wear(s, !state[s]); },
-    parts: BODY_PARTS, isHidden: (p) => !!hidden[p],
-    hidePart(p, v) { hidden[p] = !!v; const i = BODY_PARTS.indexOf(p); if (i >= 0) uni.uHide.value[i] = v ? 1 : 0; try { localStorage.setItem(LSH, JSON.stringify(hidden)); } catch (e) { /* nada */ } return !!v; },
-    togglePart: (p) => api.hidePart(p, !hidden[p]),
-    /** oculta la piel que tapan los conjuntos puestos (y muestra la de los que no) */
-    autoHide() { const h = new Set(); for (const s of ARMOR_SETS) if (state[s]) (AUTO_HIDE[s] || []).forEach((p) => h.add(p)); for (const p of BODY_PARTS) api.hidePart(p, h.has(p)); },
-    hideAllBody(v) { for (const p of BODY_PARTS) api.hidePart(p, v); },
+    parts: BODY_PARTS,
+    /** ¿se ve la piel de esta parte? (oculta si un conjunto puesto la tapa o si se ocultó a mano) */
+    isHidden: (p) => autoSet().has(p) || !!hidden[p],
+    isAutoHidden: (p) => autoSet().has(p),
+    hidePart(p, v) { hidden[p] = !!v; applyHide(); try { localStorage.setItem(LSH, JSON.stringify(hidden)); } catch (e) { /* nada */ } return !!v; },
+    togglePart: (p) => api.hidePart(p, !hidden[p] && !autoSet().has(p)),
+    hideAllBody(v) { for (const p of BODY_PARTS) hidden[p] = !!v; applyHide(); try { localStorage.setItem(LSH, JSON.stringify(hidden)); } catch (e) { /* nada */ } },
+    setGlare(slope) { for (const u of glareU) u.uGlare.value = slope; },
     all(v) { for (const s of ARMOR_SETS) api.wear(s, v); },
   };
   for (const s of ARMOR_SETS) api.wear(s, !!state[s]);
-  for (const p of BODY_PARTS) api.hidePart(p, !!hidden[p]);
+  applyHide();
   return api;
 }

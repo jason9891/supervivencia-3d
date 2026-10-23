@@ -217,15 +217,14 @@ $('tl').oninput = (e) => { if (!action) return; setPlaying(false); const d = act
     const bAll = mk(row, 'TODA', () => armor.all(!ARMOR_SETS.every((s) => armor.isWorn(s))));
     // piel que se oculta (antebrazos, muslos…) para que no asome ni atraviese la armadura
     const row2 = row.cloneNode(false); row2.id = 'bodyRow'; row.after(row2);
-    const l2 = document.createElement('span'); l2.textContent = 'OCULTAR PIEL'; l2.style.cssText = lbl.style.cssText; row2.append(l2);
+    const l2 = document.createElement('span'); l2.textContent = 'PIEL OCULTA'; l2.style.cssText = lbl.style.cssText; row2.append(l2);
     const ps = armor.parts.map((p) => mk(row2, PART_LABEL[p], () => armor.togglePart(p)));
-    mk(row2, 'AUTO', () => armor.autoHide());
     mk(row2, 'TODO EL CUERPO', () => armor.hideAllBody(!armor.parts.every((p) => armor.isHidden(p))));
     const row3 = row.cloneNode(false); row3.id = 'shrinkRow'; row2.after(row3);
     const l3 = document.createElement('span'); l3.style.cssText = lbl.style.cssText; row3.append(l3);
     const sl = document.createElement('input'); sl.type = 'range'; sl.min = 0; sl.max = 30; sl.step = 1; sl.value = Math.round(armor.under.uShrink.value * 1000); sl.style.width = '160px';
     sl.oninput = () => { armor.setShrink(+sl.value); l3.textContent = 'ENCOGER CUERPO ' + sl.value + ' mm'; }; sl.oninput(); row3.append(sl);
-    const sync = () => { ARMOR_SETS.forEach((s, i) => bs[i].classList.toggle('on', armor.isWorn(s))); bAll.classList.toggle('on', ARMOR_SETS.every((s) => armor.isWorn(s))); armor.parts.forEach((p, i) => ps[i].classList.toggle('on', armor.isHidden(p))); };
+    const sync = () => { ARMOR_SETS.forEach((s, i) => bs[i].classList.toggle('on', armor.isWorn(s))); bAll.classList.toggle('on', ARMOR_SETS.every((s) => armor.isWorn(s))); armor.parts.forEach((p, i) => { ps[i].classList.toggle('on', armor.isHidden(p)); ps[i].title = armor.isAutoHidden(p) ? 'oculta por la armadura puesta' : ''; ps[i].style.opacity = armor.isAutoHidden(p) ? 0.7 : 1; }); };
     sync(); window.__armor = armor;
   }).catch((e) => console.warn('armadura no disponible', e));
 
