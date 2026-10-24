@@ -112,3 +112,7 @@ clips-lab, clasificación: cada animación tiene ENVIAR A (BÁS / ATQ / MAPA; to
 
 ### Tabla de movimiento (hero-moves.js)
 Una sola tabla de roles → clips: `MOVES` (idle, walk, run, salto; juego desarmado y armado con el botón ARMA, el armado cae al desarmado si falta un clip) y `ATTACKS` (puñetazos sin armas; armado usa el grupo «ataque» del GLB y, si no trae grupos, `ATTACKS.armado`). `locomotion.stepLoco(…, moves)` y `index-app.js attack()` la usan; sin ella todo funciona como antes. `?skipintro` en la URL salta la intro (pruebas).
+
+### Encaramiento (lock-on estilo Blade) y acciones del mapa
+`index-app.js`: con un enemigo despierto a ≤6 m (`enemyRt.lockTarget()`) el personaje gira hacia él y el joystick/teclas van en ejes del personaje (adelante = acercarse, atrás = retroceder mirándolo, lados = rodearlo con `sas strafe`; retroceso caminando/corriendo con `sas walk (2)` / `sas run (2)`). Botón ENCARAR lo activa/desactiva (libre = modo tanque con joystick). Los ritmos de cada clip salen de `CLIP_SPEED` (hero-moves.js). `nav.js`/`enemy-runtime.js`: si la pared separa al enemigo de ti y la puerta queda lejos, busca la ruta en un área mayor.
+Acciones puntuales (`ACTIONS` en hero-moves.js, `doAction` en index-app): recoger, palanca, abrir con llave… reproducen su clip y el efecto (item que desaparece, puente que baja) cae a mitad de la animación. `window.__actions()` lista qué acciones tienen clip y cuáles FALTAN.

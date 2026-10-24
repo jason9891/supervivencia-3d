@@ -42,3 +42,22 @@ export function movesFor(armed, has, speeds = null) {
 export function comboFrom(names, clip) {
   return names.map((n) => ({ n, c: clip(n) })).filter((x) => x.c).map((x) => ({ key: x.n, dur: x.c.duration, hit: x.c.duration * 0.4 }));
 }
+
+// Acciones puntuales (una vez): qué clip toca cada una; se usa el primero que exista en el GLB. Si ninguno existe, la acción ocurre sin animación
+// y queda como «falta» en window.__actions() (lista de huecos de animación).
+export const ACTIONS = {
+  pickup: ['fixing kneeling', 'pickup table'],      // recoger del piso (llave, comida, nota)
+  lever: ['interact', 'push loop'],                 // accionar palanca
+  unlock: ['interact', 'pickup table'],             // abrir con llave
+  chest: ['chest open'],                            // abrir cofre
+  climb: ['climbup 1m'],                            // trepar un escalón alto
+  hurt: ['sas impact', 'hit chest', 'hit knockback'],
+  block: ['sas block', 'sword block'],
+  death: ['sas death', 'death01'],
+  roll: ['roll'],
+  crouch: ['sas crouch idle', 'crouch idle loop'],
+};
+export function actionClip(kind, has) {
+  const n = (ACTIONS[kind] || []).find((x) => has(x));
+  return n ? normName(n) : undefined;
+}

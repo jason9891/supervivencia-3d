@@ -3,7 +3,7 @@ import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/
 import { createPlayer, stepPlayer, WALK_SPEED, RUN_SPEED } from './course.js';
 import { loadHero } from './hero.js';
 import { loadHeroFbx } from './hero-fbx.js';
-import { movesFor, comboFrom, ATTACKS } from './hero-moves.js';
+import { movesFor, comboFrom, ATTACKS, ACTIONS, actionClip } from './hero-moves.js';
 const wrapPi = a => ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
 let lockOn = true;                                   // ENCARAR: con un enemigo encima el personaje lo mira y te mueves según su frente (como el lock de Blade)
 const LOCK_TURN = 10, STRAFE_WALK = 2.2, STRAFE_RUN = 3.6, BACK_RUN = 3.6;
@@ -490,7 +490,15 @@ window.playTrigger = (name) => {
   activeAction = act;
   return true;
 };
-window.__game = { player, get enemyRt() { return enemyRt; }, WALLS, get lockOn() { return lockOn; }, get keys() { return keys; }, setLock: v => { lockOn = v; } };   // para pruebas
+window.__game = { doAction, player, get enemyRt() { return enemyRt; }, WALLS, get lockOn() { return lockOn; }, get keys() { return keys; }, setLock: v => { lockOn = v; } };   // para pruebas
+/** Acción puntual con animación (recoger, palanca, abrir…): reproduce el clip, bloquea el movimiento mientras dura y llama a `fx` a mitad (cuando la mano llega). Sin clip: `fx` al instante. */
+function doAction(kind, fx) {
+  const has = n => clipMap.has(normName(n)), name = locomotionMixer ? actionClip(kind, has) : null;
+  if (!name || !window.playTrigger(name)) { if (fx) fx(); return false; }
+  const c = clipMap.get(name); if (fx) setTimeout(fx, c.duration * 450);
+  return true;
+}
+window.__actions = () => Object.fromEntries(Object.keys(ACTIONS).map(k => [k, actionClip(k, n => clipMap.has(normName(n))) || 'FALTA']));   // qué acciones tienen animación en el GLB
 window.__dbg = () => ({ clip: activeAction && activeAction.getClip().name, attacking, armed, kit: !!heroKit, x: player.x, y: player.y, z: player.z });   // para pruebas
 function toggleArm() { if (introPlaying || gateCinePlaying) return; armed = !armed; document.getElementById('arm').classList.toggle('on', armed); }
 document.getElementById('atk').addEventListener('pointerdown', e => { e.preventDefault(); attack(); });
@@ -672,21 +680,27 @@ function animate() {
   if (!pageRead && distanceToPage(player.x, player.y, player.z) < 2.2) { showStoryPage(); syncInventory(); }
   if (!hasKey && distanceToKey(player.x, player.y, player.z) < 1.8) {
     hasKey = true;
-    if (mapData.keyMesh) mapData.keyMesh.visible = false;
-    document.getElementById('hint').textContent = 'Llave obtenida';
-    tryUnlockTowerDoor(mapData, hasKey);
-    syncInventory();
+    doAction('pickup', () => {
+      if (mapData.keyMesh) mapData.keyMesh.visible = false;
+      document.getElementById('hint').textContent = 'Llave obtenida';
+      tryUnlockTowerDoor(mapData, hasKey);
+      syncInventory();
+    });
   }
   if (!foodTaken && distanceToFood(player.x, player.y, player.z) < 1.6) {
     foodTaken = true;
-    if (mapData.foodMesh) mapData.foodMesh.visible = false;
-    document.getElementById('hint').textContent = 'Comida en el establo...';
-    syncInventory();
+    doAction('pickup', () => {
+      if (mapData.foodMesh) mapData.foodMesh.visible = false;
+      document.getElementById('hint').textContent = 'Comida en el establo...';
+      syncInventory();
+    });
   }
   if (!leverPulled && distanceToLever(player.x, player.y, player.z) < 2.0) {
     leverPulled = true;
-    pullLever(mapData);
-    document.getElementById('hint').textContent = 'El puente levadizo baja...';
+    doAction('lever', () => {
+      pullLever(mapData);
+      document.getElementById('hint').textContent = 'El puente levadizo baja...';
+    });
   }
 
   if (introPlaying && bootState.started && introT < INTRO.walkDur) {
