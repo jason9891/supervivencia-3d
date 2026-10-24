@@ -7,7 +7,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { UalRetargeter, mixamoClip } from './retarget.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { CATS, CAT_LABEL, CAT_TITLE, guessCategory, encodeName } from './clip-categories.js';
-import { loadArmor, ARMOR_SETS, ARMOR_LABEL, PART_LABEL } from './armor-wear.js';
+import { loadArmor, ARMOR_SETS, ARMOR_LABEL, PART_LABEL, VARIANTS, VARIANT_LABEL } from './armor-wear.js';
 
 const HERO_URL = './assets/characters/hero/sera_limpio.glb';
 const HERO_DIR = './assets/characters/hero/';
@@ -214,6 +214,7 @@ $('tl').oninput = (e) => { if (!action) return; setPlaying(false); const d = act
     const row = $('armorRow'); const lbl = document.createElement('span'); lbl.textContent = 'ARMADURA'; lbl.style.cssText = 'font-size:10px;color:#c4a574'; row.append(lbl);
     const mk = (row, text, fn, on) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = text; b.onclick = () => { fn(); sync(); }; row.append(b); return b; };
     const bs = ARMOR_SETS.map((s) => mk(row, ARMOR_LABEL[s], () => armor.toggle(s)));
+    const vb = VARIANTS.map((v) => mk(row, VARIANT_LABEL[v], () => armor.setVariant(v)));     // metal: oscuro · hierro · latón
     const bAll = mk(row, 'TODA', () => armor.all(!ARMOR_SETS.every((s) => armor.isWorn(s))));
     // piel que se oculta (antebrazos, muslos…) para que no asome ni atraviese la armadura
     const row2 = row.cloneNode(false); row2.id = 'bodyRow'; row.after(row2);
@@ -224,7 +225,7 @@ $('tl').oninput = (e) => { if (!action) return; setPlaying(false); const d = act
     const l3 = document.createElement('span'); l3.style.cssText = lbl.style.cssText; row3.append(l3);
     const sl = document.createElement('input'); sl.type = 'range'; sl.min = 0; sl.max = 30; sl.step = 1; sl.value = Math.round(armor.under.uShrink.value * 1000); sl.style.width = '160px';
     sl.oninput = () => { armor.setShrink(+sl.value); l3.textContent = 'ENCOGER CUERPO ' + sl.value + ' mm'; }; sl.oninput(); row3.append(sl);
-    const sync = () => { ARMOR_SETS.forEach((s, i) => bs[i].classList.toggle('on', armor.isWorn(s))); bAll.classList.toggle('on', ARMOR_SETS.every((s) => armor.isWorn(s))); armor.parts.forEach((p, i) => { ps[i].classList.toggle('on', armor.isHidden(p)); ps[i].title = armor.isAutoHidden(p) ? 'oculta por la armadura puesta' : ''; ps[i].style.opacity = armor.isAutoHidden(p) ? 0.7 : 1; }); };
+    const sync = () => { VARIANTS.forEach((v, i) => vb[i].classList.toggle('on', armor.variant === v)); ARMOR_SETS.forEach((s, i) => bs[i].classList.toggle('on', armor.isWorn(s))); bAll.classList.toggle('on', ARMOR_SETS.every((s) => armor.isWorn(s))); armor.parts.forEach((p, i) => { ps[i].classList.toggle('on', armor.isHidden(p)); ps[i].title = armor.isAutoHidden(p) ? 'oculta por la armadura puesta' : ''; ps[i].style.opacity = armor.isAutoHidden(p) ? 0.7 : 1; }); };
     sync(); window.__armor = armor;
   }).catch((e) => console.warn('armadura no disponible', e));
 

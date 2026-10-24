@@ -13,6 +13,16 @@ const REGION = [/^(Head|HeadTop_End)$/, /^(Hips|Spine\d?|Neck|(Left|Right)Should
 export const BODY_PARTS = ['cabeza', 'torso', 'brazos', 'antebrazos', 'manos', 'muslos', 'piernas', 'pies'];
 export const PART_LABEL = { cabeza: 'CABEZA', torso: 'TORSO', brazos: 'BRAZOS', antebrazos: 'ANTEBRAZOS', manos: 'MANOS', muslos: 'MUSLOS', piernas: 'PIERNAS', pies: 'PIES' };
 const PART_RE = [/^(Head|HeadTop_End)$/, /^(Hips|Spine\d?|Neck|(Left|Right)Shoulder)$/, /^(Left|Right)Arm$/, /^(Left|Right)ForeArm$/, /^(Left|Right)Hand/, /^(Left|Right)UpLeg$/, /^(Left|Right)Leg$/, /^(Left|Right)(Foot|ToeBase|Toe_End)$/];
+// variantes de metal: la misma textura recoloreada en el shader (los brillos y la luz siguen siendo los de la textura).
+// v = scale · (l / ref)^exp  sobre la luminancia ya comprimida; tint colorea; patina = cuánto verdín en las zonas más oscuras (óxido del latón).
+export const VARIANTS = ['oscuro', 'hierro', 'laton'];
+export const VARIANT_LABEL = { oscuro: 'OSCURO', hierro: 'HIERRO', laton: 'LATÓN' };
+const VAR_DEF = {
+  oscuro: { on: 0, scale: 1, exp: 1, tint: [1, 1, 1], patina: 0, sheen: 0 },
+  hierro: { on: 1, scale: 0.78, exp: 0.74, tint: [0.80, 0.87, 1.0], patina: 0, sheen: 0.55 },          // acero gris plomo, metal tradicional
+  laton:  { on: 1, scale: 0.72, exp: 0.74, tint: [1.0, 0.47, 0.20], patina: 0.8, sheen: 0.5 },          // cobrizo envejecido con verdín en los huecos
+};
+const LSV = 'armor-variant-v1';
 const LSH = 'armor-hide-v2';                                       // ocultar a mano (extra a lo automático)
 export const GLARE = { knee: 0.04, slope: 0.18 };                  // las texturas traen brillos horneados muy claros: sobre la luz del juego se queman («despintado»); se comprimen por encima de «knee» (lineal)
 const AUTO_HIDE = { pechera: ['torso'], brazos: ['brazos', 'antebrazos'], piernas: ['muslos', 'piernas', 'pies'] };   // piel que desaparece con cada conjunto (la cabeza y las manos siempre se ven)
@@ -52,14 +62,15 @@ export async function loadArmor(THREE, GLTFLoader, MeshoptDecoder, hero, { url =
   if (MeshoptDecoder && MeshoptDecoder.ready) await MeshoptDecoder.ready;
   const loader = new GLTFLoader(); if (MeshoptDecoder) loader.setMeshoptDecoder(MeshoptDecoder);
   const gltf = await new Promise((res, rej) => loader.load(url, res, undefined, rej));
-  const uni = prepareBody(THREE, hero), glareU = [];
+  const uni = prepareBody(THREE, hero), glareU = [], varU = { uVarOn: { value: 0 }, uVarScale: { value: 1 }, uVarExp: { value: 1 }, uVarTint: { value: new THREE.Color(1, 1, 1) }, uPatina: { value: 0 }, uSheen: { value: 0 } };
   const tameGlare = (mat) => {                                    // comprime los brillos horneados de la textura (por encima de GLARE.knee, en lineal)
     if (mat.userData.glare) return; mat.userData.glare = true;
     const u = { uGlare: { value: GLARE.slope }, uKnee: { value: GLARE.knee } }; glareU.push(u);
     mat.onBeforeCompile = (sh) => {
-      Object.assign(sh.uniforms, u);
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uGlare; uniform float uKnee;')
-        .replace('#include <map_fragment>', '#include <map_fragment>\n{ float l = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)); float t = uKnee + max(l - uKnee, 0.0) * uGlare; diffuseColor.rgb *= min(1.0, t / max(l, 1e-4)); }');
+      Object.assign(sh.uniforms, u, varU);
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uGlare; uniform float uKnee; uniform float uVarOn, uVarScale, uVarExp, uPatina, uSheen; uniform vec3 uVarTint; ')
+        .replace('#include <map_fragment>', '#include <map_fragment>\nfloat armL0; { float l = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)); float t = uKnee + max(l - uKnee, 0.0) * uGlare; diffuseColor.rgb *= min(1.0, t / max(l, 1e-4));\n  if (uVarOn > 0.5) { float v = uVarScale * pow(max(l, 1e-5) / 0.35, uVarExp); vec3 c = uVarTint * v; c = mix(c, vec3(0.22, 0.46, 0.36) * v * 0.9, uPatina * (1.0 - smoothstep(0.003, 0.02, l))); diffuseColor.rgb = c; armL0 = 1.0; } }')
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  if (uSheen > 0.0) { float fr = pow(1.0 - abs(dot(normalize(normal), normalize(vViewPosition))), 2.0); float sky = 0.35 + 0.65 * clamp(normal.y * 0.5 + 0.5, 0.0, 1.0); totalEmissiveRadiance += diffuseColor.rgb * uSheen * sky * (0.25 + 0.75 * fr); }');
     };
     mat.customProgramCacheKey = () => 'armor-glare'; mat.needsUpdate = true;
   };
@@ -97,10 +108,14 @@ export async function loadArmor(THREE, GLTFLoader, MeshoptDecoder, hero, { url =
     hidePart(p, v) { hidden[p] = !!v; applyHide(); try { localStorage.setItem(LSH, JSON.stringify(hidden)); } catch (e) { /* nada */ } return !!v; },
     togglePart: (p) => api.hidePart(p, !hidden[p] && !autoSet().has(p)),
     hideAllBody(v) { for (const p of BODY_PARTS) hidden[p] = !!v; applyHide(); try { localStorage.setItem(LSH, JSON.stringify(hidden)); } catch (e) { /* nada */ } },
+    variant: 'oscuro', variants: VARIANTS,
+    setVariant(name) { const d = VAR_DEF[name]; if (!d) return; api.variant = name; varU.uVarOn.value = d.on; varU.uVarScale.value = d.scale; varU.uVarExp.value = d.exp; varU.uVarTint.value.setRGB(...d.tint); varU.uPatina.value = d.patina; varU.uSheen.value = d.sheen || 0; try { localStorage.setItem(LSV, name); } catch (e) { /* nada */ } return name; },
     setGlare(slope) { for (const u of glareU) u.uGlare.value = slope; },
     all(v) { for (const s of ARMOR_SETS) api.wear(s, v); },
   };
   for (const s of ARMOR_SETS) api.wear(s, !!state[s]);
   applyHide();
+  let v0 = 'oscuro'; try { v0 = localStorage.getItem(LSV) || 'oscuro'; } catch (e) { /* nada */ }
+  api.setVariant(VAR_DEF[v0] ? v0 : 'oscuro');
   return api;
 }

@@ -3,7 +3,7 @@ import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/
 import { createPlayer, stepPlayer, WALK_SPEED, RUN_SPEED } from './course.js';
 import { loadHero } from './hero.js';
 import { loadHeroFbx } from './hero-fbx.js';
-import { loadArmor, ARMOR_SETS, ARMOR_LABEL } from './armor-wear.js';
+import { loadArmor, ARMOR_SETS, ARMOR_LABEL, VARIANTS, VARIANT_LABEL } from './armor-wear.js';
 import { backpedal, smoothYaw, createLocoState, stepLoco, createLoco, switchAction, BACK_SPEED } from './locomotion.js';
 import {
   buildMap1, getCurrentZone, STORY_PAGE,
@@ -354,7 +354,8 @@ async function initArmor(model) {
     const mk = (label, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.addEventListener('click', e => { e.stopPropagation(); fn(b); sync(); }); panel.append(b); return b; };
     const btns = ARMOR_SETS.map(s => mk(ARMOR_LABEL[s], () => armor.toggle(s)));
     mk('PONER TODO', () => armor.all(true)); mk('QUITAR TODO', () => armor.all(false));
-    const sync = () => ARMOR_SETS.forEach((s, i) => btns[i].classList.toggle('on', armor.isWorn(s)));
+    const vbs = VARIANTS.map(v => mk('METAL ' + VARIANT_LABEL[v], () => armor.setVariant(v)));        // la misma armadura en 3 metales
+    const sync = () => { ARMOR_SETS.forEach((s, i) => btns[i].classList.toggle('on', armor.isWorn(s))); VARIANTS.forEach((v, i) => vbs[i].classList.toggle('on', armor.variant === v)); };
     sync(); btn.style.display = 'block';
     btn.addEventListener('click', () => { panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex'; });
   } catch (e) { console.warn('armadura no disponible', e); }
