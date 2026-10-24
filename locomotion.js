@@ -32,27 +32,29 @@ export function createLocoState() { return { grounded: true, airTime: 0, sinceLa
 
 // Avanza el estado un frame y devuelve la animación pedida: { key, name, rate, start?, once? }.
 // names: { idle, walk, run, jumpStart, jumpLoop, jumpLand } (nombres normalizados; alguno puede faltar → se cae al siguiente).
-export function stepLoco(s, { grounded, moving, running, back }, dt, has = () => true) {
+export function stepLoco(s, { grounded, moving, running, back }, dt, has = () => true, moves = null) {   // moves = { idle, walk, run, jumpStart, jumpLoop, jumpLand } (hero-moves.js); sin él, la búsqueda por nombres de siempre
   const was = s.grounded;
   s.grounded = grounded;
   if (!grounded) { s.airTime = was ? 0 : s.airTime + dt; s.sinceLand = 1e9; }
   else { if (!was) { s.sinceLand = 0; s.landedFrom = s.airTime; } else s.sinceLand += dt; s.airTime = 0; }
   const pick = (name, extra = {}) => ({ key: name + (extra.rate < 0 ? '-rev' : ''), name, rate: 1, ...extra });
   const first = (...names) => names.find(n => has(n));
-  const walk = first('walk loop', 'walk formal loop', 'walk') ?? first('idle loop', 'idle');
-  const run = first('jog fwd loop', 'sprint loop', 'run') ?? walk;
-  const idle = first('idle loop', 'idle standing', 'idle') ?? walk;
+  const mv = moves || {};
+  const walk = mv.walk ?? first('walk loop', 'walk formal loop', 'walk') ?? first('idle loop', 'idle');
+  const run = mv.run ?? first('jog fwd loop', 'sprint loop', 'run') ?? walk;
+  const idle = mv.idle ?? first('idle loop', 'idle standing', 'idle') ?? walk;
+  const jStart = mv.jumpStart ?? 'jump start', jLoop = mv.jumpLoop ?? 'jump loop', jLand = mv.jumpLand ?? 'jump land';
 
   if (!grounded) {
-    if (s.airTime < AIR.LOOP_AFTER && has('jump start')) return pick('jump start', { rate: AIR.START_RATE, start: AIR.START_AT, once: true });
+    if (s.airTime < AIR.LOOP_AFTER && has(jStart)) return pick(jStart, { rate: AIR.START_RATE, start: AIR.START_AT, once: true });
     // Preferir jump loop; si no hay, idle (nunca dejar el mixer sin clip → evita pose en T / brazos abiertos).
-    return pick(first('jump loop', 'jump start') ?? idle);
+    return pick(first(jLoop, jStart) ?? idle);
   }
   if (moving) {
     if (back) return has('walk back') ? pick('walk back') : pick(walk, { rate: BACK_RATE });   // con clip propio (héroe FBX) se reproduce hacia adelante
     return pick(running ? run : walk);
   }
-  if (s.sinceLand < AIR.LAND_SPAN && s.landedFrom > 0.2 && has('jump land')) return pick('jump land', { rate: AIR.LAND_RATE, once: true });
+  if (s.sinceLand < AIR.LAND_SPAN && s.landedFrom > 0.2 && has(jLand)) return pick(jLand, { rate: AIR.LAND_RATE, once: true });
   return pick(idle);
 }
 

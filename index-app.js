@@ -3,6 +3,7 @@ import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/
 import { createPlayer, stepPlayer, WALK_SPEED, RUN_SPEED } from './course.js';
 import { loadHero } from './hero.js';
 import { loadHeroFbx } from './hero-fbx.js';
+import { movesFor, comboFrom, ATTACKS } from './hero-moves.js';
 import { loadArmor, ARMOR_SETS, ARMOR_LABEL, VARIANTS, VARIANT_LABEL } from './armor-wear.js';
 import { backpedal, smoothYaw, createLocoState, stepLoco, createLoco, switchAction, BACK_SPEED } from './locomotion.js';
 import {
@@ -184,7 +185,7 @@ function tryStartIntro() {
   document.body.classList.add('intro-lock');
   setTimeout(() => {
     if (bootEl) bootEl.classList.add('hide');
-    introT = 0;
+    introT = /[?&]skipintro\b/.test(location.search) ? INTRO_DUR : 0;     // ?skipintro salta la intro (pruebas)
     introPlaying = true;
     placeIntroStart();
     tryPlayIntroAudio();
@@ -362,7 +363,7 @@ async function initArmor(model) {
 }
 function setupLocomotion(gltf, label) {
   const model = gltf.scene;
-  heroKit = gltf.kit || null; comboClips = gltf.combo && gltf.combo.length ? gltf.combo : null;
+  heroKit = gltf.kit || null; comboClips = gltf.combo && gltf.combo.length ? gltf.combo : (label === 'HÉROE' ? [] : null);
   window.__clipCats = gltf.categories || null; window.__triggerClips = gltf.triggers || [];   // animaciones «mapa»: las dispara el mapa con window.playTrigger(nombre)
   model.updateMatrixWorld(true);
   const bounds = new THREE.Box3().setFromObject(model);
@@ -436,11 +437,15 @@ function attack() {
     if (now - lastAtk > 1.6) comboI = 0;
     const st = heroKit.combo[comboI++ % heroKit.combo.length]; lastAtk = now;
     act = locomotionMixer.clipAction(clipMap.get(st.key)); dur = st.dur * 0.92; hitMs = st.hit * 1000;
-  } else if (comboClips && locomotionMixer) {                  // héroe nuevo: combo con los clips marcados «ataque» en clips-lab
-    if (now - lastAtk > 1.6) comboI = 0;
-    const st = comboClips[comboI++ % comboClips.length]; lastAtk = now;
-    const c = clipMap.get(normName(st.key));
-    if (c) { act = locomotionMixer.clipAction(c); dur = st.dur * 0.9; hitMs = st.hit * 1000; }
+  } else if (comboClips && locomotionMixer) {                  // héroe nuevo: armado = combo del grupo «ataque»; sin armas = puñetazos
+    const byName = n => clipMap.get(normName(n));
+    const list = armed ? (comboClips.length ? comboClips : comboFrom(ATTACKS.armado, byName)) : comboFrom(ATTACKS.desarmado, byName);
+    if (list.length) {
+      if (now - lastAtk > 1.6) comboI = 0;
+      const st = list[comboI++ % list.length]; lastAtk = now;
+      const c = clipMap.get(normName(st.key));
+      if (c) { act = locomotionMixer.clipAction(c); dur = st.dur * 0.9; hitMs = st.hit * 1000; }
+    }
   } else if (!act && locomotionMixer) {
     for (const n of ['sword attack', 'sword regular a', 'melee hook', 'attack']) {
       const c = clipMap.get(n);
@@ -688,7 +693,7 @@ function animate() {
       moving,
       running: introWalk ? false : running,
       back: introWalk ? false : backNow,
-    }, dt, n => clipMap.has(n));
+    }, dt, n => clipMap.has(n), comboClips ? movesFor(armed, n => clipMap.has(normName(n))) : null);   // héroe nuevo: tabla de movimiento por roles (hero-moves.js)
     if (heroKit) heroKit.adjust(pk, { armed, walk: WALK_SPEED, run: RUN_SPEED, back: WALK_SPEED * BACK_SPEED });
     if (!attacking && loco) loco.apply(pk);
     if (introWalk && locomotionMixer.timeScale !== 0.72) locomotionMixer.timeScale = 0.72;
