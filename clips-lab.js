@@ -6,13 +6,13 @@ import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { UalRetargeter, mixamoClip } from './retarget.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { CATS, CAT_LABEL, CAT_TITLE, guessCategory, encodeName } from './clip-categories.js';
+import { CATS, CAT_LABEL, CAT_TITLE, guessCategory, encodeName, decodeName } from './clip-categories.js';
 import { loadArmor, ARMOR_SETS, ARMOR_LABEL, PART_LABEL, VARIANTS, VARIANT_LABEL } from './armor-wear.js';
 
 const HERO_URL = './assets/characters/hero/sera_limpio.glb';
 const HERO_DIR = './assets/characters/hero/';
 const CATALOG = './assets/characters/clips-catalog.json';
-const LS = 'clipslab-sel-v1';
+const LS = 'clipslab-sel-v2';                                      // v2: cada clip lleva su grupo; sin grupo = sin clasificar
 const $ = (id) => document.getElementById(id);
 const errBox = $('err');
 const showErr = (m) => { errBox.style.display = 'block'; errBox.textContent += m + '\n'; };
@@ -122,34 +122,33 @@ async function play(item) {
 }
 
 // ---------- lista ----------
-let catFilter = 'todas';                                           // filtro por grupo en la pestaña ★
-const visible = () => [...items.values()].filter((it) => tab === 'all' || (tab === 'sel' ? it.sel && (catFilter === 'todas' || it.cat === catFilter) : it.src.id === tab));
+// Cada animación se «envía a» uno de los 3 grupos (básica · ataque · mapa); lo que no está en ninguno queda «sin clasificar» y no entra al GLB.
+let srcF = 'todas';                                                // filtro por fuente (UAL1, UAL2, JORDAN, MIXAMO)
+const SHORT = { basica: 'BÁS', ataque: 'ATQ', mapa: 'MAPA' };
+const inGroup = (c) => [...items.values()].filter((i) => (srcF === 'todas' || i.src.id === srcF) && (c === 'all' || (c === 'sin' ? !i.cat : i.cat === c)));
+const visible = () => inGroup(tab);
+function setCat(it, c) { it.cat = c; it.sel = !!c; it.cache = null; saveSel(); renderTabs(); renderList(); }
 function renderTabs() {
   const box = $('tabs'); box.innerHTML = '';
-  const nSel = [...items.values()].filter((i) => i.sel).length;
-  const defs = [['all', 'TODAS'], ...[...sources.values()].map((s) => [s.id, s.label.replace(' ', '') + ' ' + [...items.values()].filter((i) => i.src === s).length]), ['sel', '★ ' + nSel]];
-  for (const [id, label] of defs) { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.classList.toggle('on', tab === id); b.onclick = () => { tab = id; renderTabs(); renderList(); }; box.append(b); }
-  if (tab === 'sel') {                                             // filtro por grupo: TODOS · BÁSICAS · ATAQUE · MAPA (con el número de clips)
-    const cnt = (c) => [...items.values()].filter((i) => i.sel && (c === 'todas' || i.cat === c)).length;
-    for (const c of ['todas', ...CATS]) { const b = document.createElement('button'); b.type = 'button'; b.textContent = (c === 'todas' ? 'TODOS' : CAT_LABEL[c]) + ' ' + cnt(c); b.title = CAT_TITLE[c] || ''; b.classList.toggle('on', catFilter === c); b.style.cssText = 'margin-left:8px;border-color:#8fbf6a'; b.onclick = () => { catFilter = c; renderTabs(); renderList(); }; box.append(b); }
-  }
+  const all = [...items.values()], nSel = all.filter((i) => i.cat).length;
+  const chip = (label, on, fn, extra) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.classList.toggle('on', on); if (extra) b.style.cssText = extra; b.onclick = fn; box.append(b); return b; };
+  for (const [id, label] of [['all', 'TODAS'], ['sin', 'SIN CLASIFICAR'], ...CATS.map((c) => [c, { basica: 'BÁSICAS', ataque: 'ATAQUES', mapa: 'MAPA' }[c]])]) chip(label + ' ' + inGroup(id).length, tab === id, () => { tab = id; renderTabs(); renderList(); });
+  const br = document.createElement('div'); br.style.cssText = 'flex-basis:100%;height:0'; box.append(br);
+  for (const [id, label] of [['todas', 'TODAS LAS FUENTES'], ...[...sources.values()].map((x) => [x.id, x.label.replace(' ', '')])]) chip(label, srcF === id, () => { srcF = id; renderTabs(); renderList(); }, 'font-size:9px;padding:5px 7px;border-color:#7a6a4a');
   $('bExp').textContent = '⬇ CREAR GLB (' + nSel + ')'; $('bExp').disabled = !nSel;
 }
 function renderList() {
   const box = $('list'), top = box.scrollTop; box.innerHTML = ''; let lastSrc = null;
+  const hd = document.createElement('div'); hd.className = 'grp'; hd.textContent = 'ENVIAR A → BÁS = básicas (siempre activas) · ATQ = ataques (combo) · MAPA = disparadores · toca otra vez para quitarla'; box.append(hd);
   for (const it of visible()) {
-    if (tab === 'all' && it.src !== lastSrc) { const h = document.createElement('div'); h.className = 'grp'; h.textContent = it.src.label + (it.src.mb ? ` · ${it.src.mb} MB` : ''); box.append(h); lastSrc = it.src; }
+    if ((tab === 'all' || tab === 'sin') && it.src !== lastSrc) { const h = document.createElement('div'); h.className = 'grp'; h.textContent = it.src.label + (it.src.mb ? ` · ${it.src.mb} MB` : ''); box.append(h); lastSrc = it.src; }
     const row = document.createElement('div'); row.className = 'item' + (cur === it ? ' cur' : '');
-    const ck = document.createElement('input'); ck.type = 'checkbox'; ck.checked = it.sel; ck.title = 'Usar en el GLB';
-    ck.onchange = () => { it.sel = ck.checked; saveSel(); renderTabs(); if (tab === 'sel') renderList(); };
-    row.append(ck);
-    if (tab === 'sel') {
+    if (it.cat) {                                                   // clasificada: nombre editable (es el nombre que lleva en el GLB)
       const t = document.createElement('input'); t.type = 'text'; t.value = it.name; t.onchange = () => { it.name = t.value.trim() || it.name; it.cache = null; saveSel(); };
       row.append(t);
-      const cb = document.createElement('button'); cb.type = 'button'; cb.textContent = CAT_LABEL[it.cat]; cb.title = 'Grupo: toca para cambiar (básica → ataque → mapa)'; cb.className = 'cat ' + it.cat;
-      cb.onclick = () => { it.cat = CATS[(CATS.indexOf(it.cat) + 1) % CATS.length]; saveSel(); renderTabs(); renderList(); }; row.append(cb);
     }
-    const b = document.createElement('button'); b.type = 'button'; b.className = 'nm'; b.textContent = tab === 'sel' ? '▶' : it.name; b.style.flex = tab === 'sel' ? 'none' : '1'; b.onclick = () => play(it); row.append(b);
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'nm'; b.textContent = it.cat ? '▶' : it.name; b.style.flex = it.cat ? 'none' : '1'; b.onclick = () => play(it); row.append(b);
+    for (const c of CATS) { const cb = document.createElement('button'); cb.type = 'button'; cb.textContent = SHORT[c]; cb.title = 'Enviar a ' + CAT_TITLE[c]; cb.className = 'cat ' + c + (it.cat === c ? ' act' : ''); cb.onclick = () => setCat(it, it.cat === c ? null : c); row.append(cb); }
     const s = document.createElement('span'); s.className = 'src'; s.textContent = it.src.id; row.append(s);
     const d = document.createElement('span'); d.className = 'du'; d.textContent = it.dur ? it.dur.toFixed(2) + 's' : '–'; row.append(d);
     box.append(row);
@@ -158,12 +157,23 @@ function renderList() {
 }
 
 // ---------- selección ----------
-const selData = () => [...items.values()].filter((i) => i.sel).map((i) => ({ key: i.key, source: i.src.id, clip: i.clipName, name: i.name, cat: i.cat }));
+const selData = () => [...items.values()].filter((i) => i.cat).map((i) => ({ key: i.key, source: i.src.id, clip: i.clipName, name: i.name, cat: i.cat }));
 function saveSel() { try { localStorage.setItem(LS, JSON.stringify(selData())); } catch (e) { /* sin almacenamiento */ } }
 function applySel(list) {
-  for (const it of items.values()) it.sel = false;
+  for (const it of items.values()) { it.sel = false; it.cat = null; }
   for (const s of list || []) { const it = items.get(s.key); if (it) { it.sel = true; if (s.name) it.name = s.name; it.cat = s.cat || guessCategory(it.name); it.cache = null; } }
   renderTabs(); renderList();
+}
+/** Primera vez (o sin nada guardado): parte de lo que ya tiene sera_limpio-anim.glb — sus clips y el grupo escrito en el nombre. Solo se lee el JSON del encabezado del GLB. */
+async function defaultsFromGlb() {
+  try {
+    const url = HERO_DIR + 'sera_limpio-anim.glb';
+    let r = await fetch(url, { headers: { Range: 'bytes=0-599999' }, cache: 'no-cache' }); let buf = await r.arrayBuffer();
+    let dv = new DataView(buf); const jl = dv.getUint32(12, true);
+    if (20 + jl > buf.byteLength) { r = await fetch(url, { cache: 'no-cache' }); buf = await r.arrayBuffer(); }
+    const json = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 20, jl)));
+    return (json.animations || []).map((a) => decodeName(a.name));
+  } catch (e) { console.warn('sin GLB de partida', e); return []; }
 }
 function download(name, blob) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); setTimeout(() => { a.remove(); URL.revokeObjectURL(a.href); }, 2000); }
 
@@ -227,6 +237,9 @@ $('tl').oninput = (e) => { if (!action) return; setPlaying(false); const d = act
     sl.oninput = () => { armor.setShrink(+sl.value); l3.textContent = 'ENCOGER CUERPO ' + sl.value + ' mm'; }; sl.oninput(); row3.append(sl);
     const sync = () => { VARIANTS.forEach((v, i) => vb[i].classList.toggle('on', armor.variant === v)); ARMOR_SETS.forEach((s, i) => bs[i].classList.toggle('on', armor.isWorn(s))); bAll.classList.toggle('on', ARMOR_SETS.every((s) => armor.isWorn(s))); armor.parts.forEach((p, i) => { ps[i].classList.toggle('on', armor.isHidden(p)); ps[i].title = armor.isAutoHidden(p) ? 'oculta por la armadura puesta' : ''; ps[i].style.opacity = armor.isAutoHidden(p) ? 0.7 : 1; }); };
     sync(); window.__armor = armor;
+    const rows = [row, row2, row3], tg = document.createElement('button'); tg.type = 'button'; tg.style.cssText = 'align-self:center';    // los controles de armadura ocupan mucho: plegados por defecto
+    const fold = (open) => { rows.forEach((r) => { r.style.display = open ? '' : 'none'; }); tg.textContent = 'ARMADURA ' + (open ? '▴' : '▾'); tg.classList.toggle('on', open); };
+    tg.onclick = () => fold(rows[0].style.display === 'none'); const trow = row.cloneNode(false); trow.id = 'armorFold'; trow.append(tg); row.before(trow); fold(false);
   }).catch((e) => console.warn('armadura no disponible', e));
 
   const cat = await (await fetch(CATALOG, { cache: 'no-cache' })).json();
@@ -237,9 +250,15 @@ $('tl').oninput = (e) => { if (!action) return; setPlaying(false); const d = act
   const man = await (await fetch(HERO_DIR + 'manifest.json', { cache: 'no-cache' })).json();
   const mx = { id: 'mixamo', label: 'MIXAMO', type: 'fbx', url: HERO_DIR, state: 'ok', raw: new Map() }; sources.set('mixamo', mx);
   for (const f of man.anims) addItem(mx, f, friendly(f));
-  try { applySel(JSON.parse(localStorage.getItem(LS) || '[]')); } catch (e) { /* nada guardado */ }
-  renderTabs(); renderList();
-  status(`sera_limpio listo · ${items.size} animaciones de ${sources.size} fuentes. Toca el nombre para verla, marca ☑ las que usarás y pulsa CREAR GLB.`);
+  let saved = null; try { saved = JSON.parse(localStorage.getItem(LS) || localStorage.getItem('clipslab-sel-v1') || 'null'); } catch (e) { /* nada guardado */ }
+  let from = 'guardado';
+  if (!saved || !saved.length) {                                       // sin selección propia: partir de las animaciones que ya tiene el GLB del repo
+    const d = await defaultsFromGlb(), byName = new Map([...items.values()].map((i) => [i.name, i])); saved = []; let miss = 0;
+    for (const x of d) { const it = byName.get(x.name); if (it) saved.push({ key: it.key, name: it.name, cat: x.cat }); else miss++; }
+    from = `las ${saved.length} del GLB del repo` + (miss ? ` (${miss} sin fuente)` : '');
+  }
+  applySel(saved); tab = items.size && [...items.values()].some((i) => i.cat) ? 'basica' : 'all'; renderTabs(); renderList(); saveSel();
+  status(`sera_limpio listo · ${items.size} animaciones, ${[...items.values()].filter((i) => i.cat).length} clasificadas (${from}). Usa ENVIAR A en cada una; lo no clasificado no entra al GLB.`);
   window.__lab = { items, sources, play, buildClip, restorePose, get hero() { return hero; }, get mixer() { return mixer; }, get action() { return action; }, scene };
   window.__ready = true;
 })().catch((e) => showErr('No se pudo iniciar: ' + (e.message || e)));
