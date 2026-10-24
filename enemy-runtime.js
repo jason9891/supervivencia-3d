@@ -278,7 +278,12 @@ export async function createEnemyRuntime(opts) {
     const nav = unit.nav || (unit.nav = { path: null, t: 0 });
     nav.t += dt;
     if (lineClear(e.x, e.z, player.x, player.z, blockedAt, 0.3)) { nav.path = null; return null; }
-    if (!nav.path || nav.t > REPLAN) { nav.path = findPath(e.x, e.z, player.x, player.z, blockedAt); nav.t = 0; }
+    if (!nav.path || nav.t > (nav.far ? REPLAN * 3 : REPLAN)) {
+      let path = findPath(e.x, e.z, player.x, player.z, blockedAt); nav.far = false;
+      // sin camino dentro de la zona cercana (p. ej. la puerta está lejos de la pared que los separa): se busca en un área mucho mayor y más gruesa
+      if (path && !path.reached) { const wide = findPath(e.x, e.z, player.x, player.z, blockedAt, { cell: 0.6, pad: 26, maxNodes: 40000 }); if (wide && (wide.reached || !path.length)) path = wide; nav.far = true; }
+      nav.path = path; nav.t = 0;
+    }
     if (!nav.path || !nav.path.length) return null;
     return nextWaypoint(nav.path, e.x, e.z, 0.6);
   }
@@ -565,7 +570,7 @@ export async function createEnemyRuntime(opts) {
     update,
     tryPlayerHit,
     resolveAgainstPlayer,
-    lockTarget, faceTarget, assistFacing,
+    lockTarget, faceTarget, assistFacing, activate,
     hideHud() { hud.show(null, 0, 0); },
     get activated() { return activated; },
     get units() { return units; },

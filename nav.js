@@ -66,6 +66,7 @@ export function findPath(sx, sz, gx, gz, blocked, { cell = 0.4, pad = 7, maxNode
     const prev = out.length > 1 ? out[out.length - 2] : { x: sx, z: sz };
     if (lineClear(prev.x, prev.z, gx, gz, blocked)) out[out.length - 1] = { x: gx, z: gz };
   }
+  out.reached = goal >= 0;                               // false = no hay camino dentro de la zona: la ruta lleva solo lo más cerca que se pudo llegar
   return out;
 }
 

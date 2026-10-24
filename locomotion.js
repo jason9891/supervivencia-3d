@@ -32,7 +32,7 @@ export function createLocoState() { return { grounded: true, airTime: 0, sinceLa
 
 // Avanza el estado un frame y devuelve la animación pedida: { key, name, rate, start?, once? }.
 // names: { idle, walk, run, jumpStart, jumpLoop, jumpLand } (nombres normalizados; alguno puede faltar → se cae al siguiente).
-export function stepLoco(s, { grounded, moving, running, back }, dt, has = () => true, moves = null) {   // moves = { idle, walk, run, jumpStart, jumpLoop, jumpLand } (hero-moves.js); sin él, la búsqueda por nombres de siempre
+export function stepLoco(s, { grounded, moving, running, back, strafe = 0 }, dt, has = () => true, moves = null) {   // moves = { idle, walk, run, jumpStart, jumpLoop, jumpLand } (hero-moves.js); sin él, la búsqueda por nombres de siempre
   const was = s.grounded;
   s.grounded = grounded;
   if (!grounded) { s.airTime = was ? 0 : s.airTime + dt; s.sinceLand = 1e9; }
@@ -50,9 +50,19 @@ export function stepLoco(s, { grounded, moving, running, back }, dt, has = () =>
     // Preferir jump loop; si no hay, idle (nunca dejar el mixer sin clip → evita pose en T / brazos abiertos).
     return pick(first(jLoop, jStart) ?? idle);
   }
+  const rt = mv.rates || {}, R = (role, d = 1) => rt[role] ?? d;
   if (moving) {
-    if (back) return has('walk back') ? pick('walk back') : pick(walk, { rate: BACK_RATE });   // con clip propio (héroe FBX) se reproduce hacia adelante
-    return pick(running ? run : walk);
+    if (strafe && !back) {                                          // encarando (lock): paso lateral con su clip (derecha = +1)
+      const role = (running ? 'strafeRun' : 'strafe') + (strafe > 0 ? 'R' : 'L');
+      if (mv[role]) return pick(mv[role], { rate: R(role) });
+    }
+    if (back) {                                                     // retroceso: clip propio (caminando o corriendo) o el de caminar al revés
+      if (running && mv.backRun) return pick(mv.backRun, { rate: R('backRun') });
+      if (mv.back) return pick(mv.back, { rate: R('back') });
+      return has('walk back') ? pick('walk back') : pick(walk, { rate: BACK_RATE });
+    }
+    const role = running ? 'run' : 'walk';
+    return pick(running ? run : walk, { rate: R(role) });
   }
   if (s.sinceLand < AIR.LAND_SPAN && s.landedFrom > 0.2 && has(jLand)) return pick(jLand, { rate: AIR.LAND_RATE, once: true });
   return pick(idle);

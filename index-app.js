@@ -4,6 +4,9 @@ import { createPlayer, stepPlayer, WALK_SPEED, RUN_SPEED } from './course.js';
 import { loadHero } from './hero.js';
 import { loadHeroFbx } from './hero-fbx.js';
 import { movesFor, comboFrom, ATTACKS } from './hero-moves.js';
+const wrapPi = a => ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+let lockOn = true;                                   // ENCARAR: con un enemigo encima el personaje lo mira y te mueves según su frente (como el lock de Blade)
+const LOCK_TURN = 10, STRAFE_WALK = 2.2, STRAFE_RUN = 3.6, BACK_RUN = 3.6;
 import { loadArmor, ARMOR_SETS, ARMOR_LABEL, VARIANTS, VARIANT_LABEL } from './armor-wear.js';
 import { backpedal, smoothYaw, createLocoState, stepLoco, createLoco, switchAction, BACK_SPEED } from './locomotion.js';
 import {
@@ -487,9 +490,12 @@ window.playTrigger = (name) => {
   activeAction = act;
   return true;
 };
+window.__game = { player, get enemyRt() { return enemyRt; }, WALLS, get lockOn() { return lockOn; }, get keys() { return keys; }, setLock: v => { lockOn = v; } };   // para pruebas
 window.__dbg = () => ({ clip: activeAction && activeAction.getClip().name, attacking, armed, kit: !!heroKit, x: player.x, y: player.y, z: player.z });   // para pruebas
 function toggleArm() { if (introPlaying || gateCinePlaying) return; armed = !armed; document.getElementById('arm').classList.toggle('on', armed); }
 document.getElementById('atk').addEventListener('pointerdown', e => { e.preventDefault(); attack(); });
+const lockBtnEl = document.getElementById('lockBtn');
+if (lockBtnEl) lockBtnEl.addEventListener('pointerdown', e => { e.preventDefault(); lockOn = !lockOn; lockBtnEl.classList.toggle('on', lockOn); });
 document.getElementById('arm').addEventListener('pointerdown', e => { e.preventDefault(); toggleArm(); });
 
 const joy = { x: 0, y: 0, active: false };
@@ -612,32 +618,48 @@ function animate() {
   if (gateCinePlaying) updateGateCine(dt);
 
   let f = 0, side = 0, intentFwd = 0, intentSide = 0, tank = false;
-  let lockFacing = null;
+  let lockFacing = null, lockStrafe = 0, lockBack = false, lockUnit = null;
   if (!mapOverview && !introPlaying && !gateCinePlaying) {
-    if (joy.active && (Math.abs(joy.x) > 0.12 || Math.abs(joy.y) > 0.12)) {
+    // entrada del jugador en ejes del personaje: rawF adelante(+)/atrás(-), rawS derecha(+)/izquierda(-)
+    let rawF, rawS, analog = false;
+    if (joy.active && (Math.abs(joy.x) > 0.12 || Math.abs(joy.y) > 0.12)) { rawF = joy.y; rawS = joy.x; analog = true; }
+    else { rawF = (keys.w || keys.arrowup ? 1 : 0) - (keys.s || keys.arrowdown ? 1 : 0); rawS = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0); }
+    lockUnit = (lockOn && enemyRt && enemyRt.lockTarget) ? enemyRt.lockTarget() : null;
+    if (lockUnit) {
+      // ENCARANDO: el personaje mira al enemigo; adelante/atrás/lados son los suyos (acercarse, retroceder, rodearlo)
+      const want = Math.atan2(lockUnit.data.x - player.x, lockUnit.data.z - player.z);
+      player.facing += wrapPi(want - player.facing) * Math.min(1, dt * LOCK_TURN);
+      lockFacing = player.facing;
+      const m = Math.hypot(rawF, rawS); if (m > 1) { rawF /= m; rawS /= m; }
+      const sn = Math.sin(player.facing), cs = Math.cos(player.facing);
+      side = sn * rawF - cs * rawS;                     // componente X del mundo (derecha del personaje = (-cos, sin))
+      f = cs * rawF + sn * rawS;                        // componente Z del mundo
+      intentFwd = rawF; intentSide = rawS; tank = true;
+      lockBack = rawF < -0.25 && Math.abs(rawS) < Math.abs(rawF) * 0.7;
+      lockStrafe = !lockBack && Math.abs(rawS) > 0.3 && Math.abs(rawS) >= Math.abs(rawF) * 0.5 ? Math.sign(rawS) : 0;
+    } else if (analog) {                                // libre con joystick: modo tanque (izq./der. gira, arriba/abajo avanza o retrocede)
       if (Math.abs(joy.x) > 0.18) player.facing -= joy.x * 1.15 * dt;
       lockFacing = player.facing;
       const fwd = joy.y; intentFwd = fwd; tank = true;
       side = Math.sin(player.facing) * fwd;
       f = Math.cos(player.facing) * fwd;
     } else {
-      f = (keys.w || keys.arrowup ? 1 : 0) - (keys.s || keys.arrowdown ? 1 : 0);
-      side = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
-      intentFwd = f; intentSide = side;
+      f = rawF; side = rawS; intentFwd = f; intentSide = side;
     }
   }
   const running = !!(runToggle || keys.shift);
   const speed = running ? RUN_SPEED : WALK_SPEED;
 
   const canMove = !introPlaying && !gateCinePlaying && !attacking && !mapOverview;
-  const backNow = canMove && player.grounded && backpedal({ fwd: intentFwd, strafe: intentSide, facing: player.facing, tank });
+  const backNow = canMove && player.grounded && (lockUnit ? lockBack : backpedal({ fwd: intentFwd, strafe: intentSide, facing: player.facing, tank }));
+  const strafeNow = canMove && player.grounded && lockUnit ? lockStrafe : 0;
   const keepFacing = player.facing;
-  stepPlayer(player, course, { f: mapOverview ? 0 : f, side: mapOverview ? 0 : side, speed: backNow ? Math.min(speed, WALK_SPEED * BACK_SPEED) : speed, running: running && !backNow, jump: mapOverview ? false : jumpQueued, canMove }, dt);
+  stepPlayer(player, course, { f: mapOverview ? 0 : f, side: mapOverview ? 0 : side, speed: backNow ? (lockUnit && running ? BACK_RUN : Math.min(speed, WALK_SPEED * BACK_SPEED)) : (strafeNow ? (running ? STRAFE_RUN : STRAFE_WALK) : speed), running: running && !backNow && !strafeNow, jump: mapOverview ? false : jumpQueued, canMove }, dt);
   if (lockFacing !== null) player.facing = lockFacing; else if (backNow) player.facing = keepFacing;
   if (!mapOverview) jumpQueued = false;
   resolveWallCollisions(player);
   if (enemyRt && enemyRt.resolveAgainstPlayer) enemyRt.resolveAgainstPlayer(player);
-  if (enemyRt && enemyRt.assistFacing && !joy.active && !introPlaying && !mapOverview && player.grounded) enemyRt.assistFacing(dt);   // quieto y con un enemigo encima: lo encara
+  if (enemyRt && enemyRt.assistFacing && !lockUnit && !joy.active && !introPlaying && !mapOverview && player.grounded) enemyRt.assistFacing(dt);   // quieto y con un enemigo encima: lo encara
   resolveWallCollisions(player);
   resolveGround(player);
 
@@ -693,7 +715,8 @@ function animate() {
       moving,
       running: introWalk ? false : running,
       back: introWalk ? false : backNow,
-    }, dt, n => clipMap.has(n), comboClips ? movesFor(armed, n => clipMap.has(normName(n))) : null);   // héroe nuevo: tabla de movimiento por roles (hero-moves.js)
+      strafe: introWalk ? 0 : strafeNow,
+    }, dt, n => clipMap.has(n), comboClips ? movesFor(armed, n => clipMap.has(normName(n)), { walk: WALK_SPEED, run: RUN_SPEED, back: WALK_SPEED * BACK_SPEED, backRun: BACK_RUN, strafeR: STRAFE_WALK, strafeL: STRAFE_WALK, strafeRunR: STRAFE_RUN, strafeRunL: STRAFE_RUN }) : null);   // héroe nuevo: tabla de movimiento por roles (hero-moves.js)
     if (heroKit) heroKit.adjust(pk, { armed, walk: WALK_SPEED, run: RUN_SPEED, back: WALK_SPEED * BACK_SPEED });
     if (!attacking && loco) loco.apply(pk);
     if (introWalk && locomotionMixer.timeScale !== 0.72) locomotionMixer.timeScale = 0.72;

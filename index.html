@@ -16,6 +16,9 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 #jump{position:fixed;z-index:20;right:max(20px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 28px);width:84px;height:84px;border:2px solid #f3d7a0;border-radius:50%;background:#762b23;color:#fff4df;font:bold 15px system-ui;box-shadow:0 5px 22px #000b;touch-action:none}
 #atk{position:fixed;z-index:20;right:max(116px,calc(env(safe-area-inset-right) + 104px));bottom:calc(env(safe-area-inset-bottom) + 40px);width:72px;height:72px;border:2px solid #d8a8a0;border-radius:50%;background:#5a1f1a;color:#fff4df;font:bold 13px system-ui;box-shadow:0 5px 18px #000b;touch-action:none}
 #arm{position:fixed;z-index:20;right:max(116px,calc(env(safe-area-inset-right) + 104px));bottom:calc(env(safe-area-inset-bottom) + 126px);width:68px;height:54px;border:1px solid #c4c9c0;border-radius:14px;background:#27352fe8;color:#fff;font:bold 13px system-ui;touch-action:none}
+#lockBtn{position:fixed;z-index:20;right:max(116px,calc(env(safe-area-inset-right) + 104px));bottom:calc(env(safe-area-inset-bottom) + 190px);width:68px;height:40px;border:1px solid #c4c9c0;border-radius:12px;background:#27352fe8;color:#fff;font:bold 11px system-ui;touch-action:none}
+#lockBtn.on{background:#5a2a22;border-color:#f0a898}
+body.intro-lock #lockBtn{pointer-events:none!important;opacity:.35}
 #arm.on{background:#6b5a22;border-color:#f3d7a0}
 #run.on{background:#6b5a22;border-color:#f3d7a0}
 #joyBase{position:fixed;z-index:20;left:max(16px,env(safe-area-inset-left));bottom:calc(env(safe-area-inset-bottom) + 20px);width:128px;height:128px;border-radius:50%;background:radial-gradient(circle at 50% 50%,#2a3238cc,#1a1e22e8);border:2px solid #aab4b488;box-shadow:0 4px 18px #000a;touch-action:none}
@@ -64,7 +67,7 @@ body.intro-lock #joyBase,body.intro-lock #atk,body.intro-lock #arm,body.intro-lo
 <div id="joyBase" aria-label="Joystick">
   <div id="joyKnob"></div>
 </div>
-<button id="atk">ATACAR</button><button id="arm">ARMA</button><button id="run">CORRER</button><button id="jump">⬆<br>SALTAR</button>
+<button id="atk">ATACAR</button><button id="arm">ARMA</button><button id="lockBtn" class="on">ENCARAR</button><button id="run">CORRER</button><button id="jump">⬆<br>SALTAR</button>
 <div id="error"></div>
 <div id="story"><div class="box"><h3 id="storyTitle"></h3><p id="storyText"></p><button id="storyClose">Cerrar</button></div></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
