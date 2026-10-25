@@ -30,6 +30,11 @@ body.intro-lock #lockBtn{pointer-events:none!important;opacity:.35}
 #mapView.on{background:#3a4a2a;border-color:#8fbf6a}
 #characterLab{position:fixed;z-index:25;top:calc(env(safe-area-inset-top) + 8px);right:12px;padding:9px 11px;border:1px solid #c4a574;border-radius:9px;background:#211d17ee;color:#f3d7a0;font:bold 11px system-ui;letter-spacing:.04em;touch-action:manipulation}
 #armorBtn{position:fixed;z-index:25;top:calc(env(safe-area-inset-top) + 52px);left:12px;padding:9px 11px;border:1px solid #c4a574;border-radius:9px;background:#211d17ee;color:#f3d7a0;font:bold 11px system-ui;letter-spacing:.04em;display:none}
+#invBtn{position:fixed;z-index:25;top:calc(env(safe-area-inset-top) + 52px);left:112px;padding:9px 11px;border:1px solid #c4a574;border-radius:9px;background:#211d17ee;color:#f3d7a0;font:bold 11px system-ui;letter-spacing:.04em}
+#invPanel{position:fixed;z-index:25;top:calc(env(safe-area-inset-top) + 94px);left:12px;display:none;flex-direction:column;gap:6px;padding:8px;max-height:60vh;overflow:auto;border:1px solid #c4a57488;border-radius:10px;background:#16130fee;color:#f3d7a0;font:11px system-ui;min-width:190px}
+#invPanel h4{margin:4px 0 0;font:bold 10px system-ui;letter-spacing:.08em;color:#c4a574}
+#invPanel button{padding:8px 10px;border:1px solid #c4a574;border-radius:8px;background:#211d17;color:#f3d7a0;font:bold 11px system-ui;text-align:left}
+#invPanel button.on{background:#3a4a2a;border-color:#8fbf6a;color:#e8f4d8}
 #armorPanel{position:fixed;z-index:25;top:calc(env(safe-area-inset-top) + 94px);left:12px;display:none;flex-direction:column;gap:6px;padding:8px;border:1px solid #c4a57488;border-radius:10px;background:#16130fee}
 #armorPanel button{padding:9px 12px;border:1px solid #c4a574;border-radius:8px;background:#211d17;color:#f3d7a0;font:bold 11px system-ui;text-align:left;min-width:120px}
 #armorPanel button.on{background:#3a4a2a;border-color:#8fbf6a;color:#e8f4d8}
@@ -59,7 +64,7 @@ body.intro-lock #joyBase,body.intro-lock #atk,body.intro-lock #arm,body.intro-lo
 </div>
 <div id="stat"></div>
 <button type="button" id="mapView">VISTA · MAPA</button>
-<button type="button" id="armorBtn">ARMADURA</button><div id="armorPanel"></div>
+<button type="button" id="armorBtn">ARMADURA</button><button type="button" id="invBtn">INVENTARIO</button><div id="armorPanel"></div><div id="invPanel"></div>
 <button type="button" id="characterLab" onclick="location.href='./character-lab.html'">VISUAL · PERSONAJE</button>
 <button type="button" id="enemyLab" onclick="location.href='./enemy-lab.html'">ENEMIGO · PRUEBAS</button>
 <button type="button" id="combatLab" onclick="location.href='./combat-lab.html'">COMBATE · PRUEBAS</button>

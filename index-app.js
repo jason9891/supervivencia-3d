@@ -3,6 +3,9 @@ import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/
 import { createPlayer, stepPlayer, WALK_SPEED, RUN_SPEED } from './course.js';
 import { loadHero } from './hero.js';
 import { loadHeroFbx } from './hero-fbx.js';
+import { loadWeapons } from './weapon-wear.js';
+import { WEAPON_MODEL } from './equipment.js';
+import { WEAPONS } from './combat.js';
 import { movesFor, comboFrom, ATTACKS, ACTIONS, actionClip } from './hero-moves.js';
 const wrapPi = a => ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
 let lockOn = true;                                   // ENCARAR: con un enemigo encima el personaje lo mira y te mueves según su frente (como el lock de Blade)
@@ -349,6 +352,30 @@ function selectLocomotion(next) {
   switchAction(THREE, host, next, { fade: 0.12 });
 }
 // Armadura por conjuntos (casco, pechera, brazos, piernas): solo con el héroe nuevo (sera_limpio), que es el que tiene el ajuste hecho.
+let weaponRig = null;
+/** Arma en la mano del héroe nuevo + panel INVENTARIO (arma equipada y objetos). La espada ya viene en el modo pruebas: se ve al desenfundar (ARMA) y se prueban los combos. */
+async function initWeapon(model) {
+  try {
+    const { MeshoptDecoder } = await import('https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/meshopt_decoder.module.js');
+    weaponRig = await loadWeapons(THREE, GLTFLoader, MeshoptDecoder, model); window.__weapon = weaponRig;
+    await weaponRig.set(inv.equip.weapon); weaponRig.draw(armed);
+    const btn = document.getElementById('invBtn'), panel = document.getElementById('invPanel');
+    const render = () => {
+      panel.innerHTML = '';
+      const h = t => { const e = document.createElement('h4'); e.textContent = t; panel.append(e); };
+      const b = (t, on, fn) => { const e = document.createElement('button'); e.type = 'button'; e.textContent = t; e.classList.toggle('on', on); e.addEventListener('click', ev => { ev.stopPropagation(); fn(); render(); }); panel.append(e); };
+      h('ARMA EQUIPADA (ARMA la desenfunda)');
+      b('Sin arma (puños)', !weaponRig.current, async () => { await weaponRig.set(null); });
+      for (const id of inv.unlocked.weapon.filter(i => WEAPON_MODEL[i])) b((WEAPONS[id] ? WEAPONS[id].name : id), inv.equip.weapon === id && !!weaponRig.current, async () => { inv.equip.weapon = id; Inv.save(inv, invStore); await weaponRig.set(id); render(); });
+      const items = Inv.listItems(inv); h('OBJETOS');
+      if (!items.length) { const e = document.createElement('div'); e.textContent = 'Nada todavía (llave, notas, comida)'; panel.append(e); }
+      for (const it of items) { const e = document.createElement('div'); e.textContent = it.name + (it.count > 1 ? ' ×' + it.count : ''); e.title = it.desc || ''; panel.append(e); }
+    };
+    render(); btn.style.display = 'block';
+    btn.addEventListener('click', () => { const open = panel.style.display === 'flex'; panel.style.display = open ? 'none' : 'flex'; if (!open) { render(); document.getElementById('armorPanel').style.display = 'none'; } });
+    document.getElementById('armorBtn').addEventListener('click', () => { panel.style.display = 'none'; });
+  } catch (e) { console.warn('arma no disponible', e); }
+}
 async function initArmor(model) {
   try {
     const { MeshoptDecoder } = await import('https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/meshopt_decoder.module.js');
@@ -379,7 +406,7 @@ function setupLocomotion(gltf, label) {
   }
   model.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   locomotionActor.add(model);
-  if (label === 'HÉROE') initArmor(model);
+  if (label === 'HÉROE') { initArmor(model); initWeapon(model); }
   locomotionMixer = new THREE.AnimationMixer(model);
   const clips = gltf.animations || [];
   for (const c of clips) clipMap.set(normName(c.name), c);
@@ -446,6 +473,7 @@ function attack() {
     if (list.length) {
       if (now - lastAtk > 1.6) comboI = 0;
       const st = list[comboI++ % list.length]; lastAtk = now;
+      document.getElementById('hint').textContent = (armed ? 'COMBO ' : 'PUÑOS ') + ((comboI - 1) % list.length + 1) + '/' + list.length + ' · ' + st.key;
       const c = clipMap.get(normName(st.key));
       if (c) { act = locomotionMixer.clipAction(c); dur = st.dur * 0.9; hitMs = st.hit * 1000; }
     }
@@ -490,7 +518,7 @@ window.playTrigger = (name) => {
   activeAction = act;
   return true;
 };
-window.__game = { doAction, player, get enemyRt() { return enemyRt; }, WALLS, get lockOn() { return lockOn; }, get keys() { return keys; }, setLock: v => { lockOn = v; } };   // para pruebas
+window.__game = { doAction, getGroundHeight, camera, get actor() { return locomotionActor; }, player, get enemyRt() { return enemyRt; }, WALLS, get lockOn() { return lockOn; }, get keys() { return keys; }, setLock: v => { lockOn = v; } };   // para pruebas
 /** Acción puntual con animación (recoger, palanca, abrir…): reproduce el clip, bloquea el movimiento mientras dura y llama a `fx` a mitad (cuando la mano llega). Sin clip: `fx` al instante. */
 function doAction(kind, fx) {
   const has = n => clipMap.has(normName(n)), name = locomotionMixer ? actionClip(kind, has) : null;
@@ -500,7 +528,7 @@ function doAction(kind, fx) {
 }
 window.__actions = () => Object.fromEntries(Object.keys(ACTIONS).map(k => [k, actionClip(k, n => clipMap.has(normName(n))) || 'FALTA']));   // qué acciones tienen animación en el GLB
 window.__dbg = () => ({ clip: activeAction && activeAction.getClip().name, attacking, armed, kit: !!heroKit, x: player.x, y: player.y, z: player.z });   // para pruebas
-function toggleArm() { if (introPlaying || gateCinePlaying) return; armed = !armed; document.getElementById('arm').classList.toggle('on', armed); }
+function toggleArm() { if (introPlaying || gateCinePlaying) return; armed = !armed; document.getElementById('arm').classList.toggle('on', armed); if (weaponRig) weaponRig.draw(armed); }
 document.getElementById('atk').addEventListener('pointerdown', e => { e.preventDefault(); attack(); });
 const lockBtnEl = document.getElementById('lockBtn');
 if (lockBtnEl) lockBtnEl.addEventListener('pointerdown', e => { e.preventDefault(); lockOn = !lockOn; lockBtnEl.classList.toggle('on', lockOn); });
@@ -615,6 +643,11 @@ camera.position.set(INTRO.midX + 0.6, 3.2, INTRO.camMidZ);
 camera.lookAt(player.x, player.y + 1.05, player.z);
 document.addEventListener('contextmenu', e => e.preventDefault());
 
+/** Igual que resolveGround del mapa, pero en el aire no se «monta» en lo que queda encima (una plataforma a ≤0.85 m por encima de los pies —aunque quedara sobre la cabeza— teletransportaba al personaje 1.8 m de golpe al final del salto). */
+function resolveGroundSafe(p) {
+  const gy = getGroundHeight(p.x, p.z, p.grounded ? p.y : p.y - 0.75);   // andando se sube un escalón de ≤0.85 m; en el aire solo se aterriza en lo que ya está a los pies
+  if (p.y <= gy + 0.7 && p.vy <= 0.7) { p.y = gy; p.vy = 0; p.grounded = true; p.jumping = false; p.coyote = 0.12; p.airTime = 0; }
+}
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.04);
@@ -662,14 +695,14 @@ function animate() {
   const backNow = canMove && player.grounded && (lockUnit ? lockBack : backpedal({ fwd: intentFwd, strafe: intentSide, facing: player.facing, tank }));
   const strafeNow = canMove && player.grounded && lockUnit ? lockStrafe : 0;
   const keepFacing = player.facing;
-  stepPlayer(player, course, { f: mapOverview ? 0 : f, side: mapOverview ? 0 : side, speed: backNow ? (lockUnit && running ? BACK_RUN : Math.min(speed, WALK_SPEED * BACK_SPEED)) : (strafeNow ? (running ? STRAFE_RUN : STRAFE_WALK) : speed), running: running && !backNow && !strafeNow, jump: mapOverview ? false : jumpQueued, canMove }, dt);
+  stepPlayer(player, course, { f: mapOverview ? 0 : f, side: mapOverview ? 0 : side, speed: backNow ? (armed && running ? BACK_RUN : Math.min(speed, WALK_SPEED * BACK_SPEED)) : (strafeNow ? (running ? STRAFE_RUN : STRAFE_WALK) : speed), running: running && !backNow && !strafeNow, jump: mapOverview ? false : jumpQueued, canMove }, dt);
   if (lockFacing !== null) player.facing = lockFacing; else if (backNow) player.facing = keepFacing;
   if (!mapOverview) jumpQueued = false;
   resolveWallCollisions(player);
   if (enemyRt && enemyRt.resolveAgainstPlayer) enemyRt.resolveAgainstPlayer(player);
   if (enemyRt && enemyRt.assistFacing && !lockUnit && !joy.active && !introPlaying && !mapOverview && player.grounded) enemyRt.assistFacing(dt);   // quieto y con un enemigo encima: lo encara
   resolveWallCollisions(player);
-  resolveGround(player);
+  resolveGroundSafe(player);
 
   // La reja cae sola cuando cruzas x = 36.5 viniendo de la rampa (checkGateTrigger, dentro de resolveWallCollisions): la cinemática arranca en ese instante.
   if (!gateClosed && mapData.gate && mapData.gate.userData.closed) {

@@ -9,7 +9,9 @@ export const MOVES = {
 };
 // Roles que solo existen en el juego Mixamo «sword and shield» (los usa también el desarmado): retroceso, retroceso corriendo y pasos laterales.
 // Sentido verificado en los FBX: 'sas strafe' y '(4)' van hacia la DERECHA del personaje, '(2)' y '(3)' hacia la IZQUIERDA; walk (2) / run (2) son hacia atrás.
-export const MOVES_SAS = { back: ['sas walk (2)'], backRun: ['sas run (2)'], strafeR: ['sas strafe'], strafeL: ['sas strafe (2)'], strafeRunR: ['sas strafe (4)'], strafeRunL: ['sas strafe (3)'] };
+export const MOVES_SAS = { back: ['sas walk (2)'], backRun: ['sas run (2)'], strafeR: ['sas strafe'], strafeL: ['sas strafe (2)'], strafeRunR: ['sas strafe (4)'], strafeRunL: ['sas strafe (3)'],
+  jumpRun: ['sas jump'], jumpStand: ['sas jump (2)'] };          // saltos de un solo clip (despegue+aire+caída): corriendo / caminando o quieto
+export const JUMP_RATE = { jumpRun: 0.98, jumpStand: 1.14 };      // duración del clip (0.83 s / 0.97 s) entre lo que dura el salto del juego (2·JUMP_V/GRAVITY = 0.85 s)
 // Velocidad a la que recorre cada clip a rate 1 (m/s, medida del desplazamiento de la cadera): rate = velocidad del juego / esta velocidad → los pies no patinan.
 export const CLIP_SPEED = { walk: 1.57, run: 4.6, back: 1.2, backRun: 4.8, strafeR: 1.54, strafeL: 1.54, strafeRunR: 3.6, strafeRunL: 3.6 };
 export const ATTACKS = {
@@ -27,8 +29,9 @@ export function movesFor(armed, has, speeds = null) {
     const cands = [...(armed ? MOVES.armado[role] || [] : []), ...MOVES.desarmado[role]];
     out[role] = cands.find(has);
   }
-  for (const role of Object.keys(MOVES_SAS)) out[role] = (!armed && (role === 'back' || role === 'backRun')) ? undefined : MOVES_SAS[role].find(has);   // desarmado retrocede con su caminar al revés; los pasos laterales solo existen en la guardia
+  for (const role of Object.keys(MOVES_SAS)) out[role] = (!armed && (role === 'back' || role === 'backRun' || role === 'jumpRun' || role === 'jumpStand')) ? undefined : MOVES_SAS[role].find(has);   // desarmado retrocede con su caminar al revés; los pasos laterales solo existen en la guardia
   for (const k of Object.keys(out)) if (typeof out[k] === 'string') out[k] = normName(out[k]);   // el mixer/loco busca por nombre normalizado
+  if (armed) for (const k of Object.keys(JUMP_RATE)) if (out[k]) out.rates[k] = JUMP_RATE[k];
   if (speeds) {                                                    // ritmo de cada clip según la velocidad real del juego (solo los de Mixamo; los UAL ya van a 1)
     for (const role of Object.keys(CLIP_SPEED)) {
       const sas = (role === 'walk' || role === 'run') ? armed : true;

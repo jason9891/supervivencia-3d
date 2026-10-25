@@ -35,6 +35,7 @@ export function createLocoState() { return { grounded: true, airTime: 0, sinceLa
 export function stepLoco(s, { grounded, moving, running, back, strafe = 0 }, dt, has = () => true, moves = null) {   // moves = { idle, walk, run, jumpStart, jumpLoop, jumpLand } (hero-moves.js); sin él, la búsqueda por nombres de siempre
   const was = s.grounded;
   s.grounded = grounded;
+  if (was && !grounded) s.jumpKind = (moving && running) ? 'jumpRun' : 'jumpStand';   // tipo de salto: se decide al despegar
   if (!grounded) { s.airTime = was ? 0 : s.airTime + dt; s.sinceLand = 1e9; }
   else { if (!was) { s.sinceLand = 0; s.landedFrom = s.airTime; } else s.sinceLand += dt; s.airTime = 0; }
   const pick = (name, extra = {}) => ({ key: name + (extra.rate < 0 ? '-rev' : ''), name, rate: 1, ...extra });
@@ -45,12 +46,14 @@ export function stepLoco(s, { grounded, moving, running, back, strafe = 0 }, dt,
   const idle = mv.idle ?? first('idle loop', 'idle standing', 'idle') ?? walk;
   const jStart = mv.jumpStart ?? 'jump start', jLoop = mv.jumpLoop ?? 'jump loop', jLand = mv.jumpLand ?? 'jump land';
 
+  const rt = mv.rates || {}, R = (role, d = 1) => rt[role] ?? d;
+  const wholeJump = mv[s.jumpKind || 'jumpStand'];               // salto de un solo clip (Mixamo); si no, los 3 tiempos de UAL: jump start → jump loop → jump land
   if (!grounded) {
+    if (wholeJump) return pick(wholeJump, { rate: R(s.jumpKind || 'jumpStand'), once: true });
     if (s.airTime < AIR.LOOP_AFTER && has(jStart)) return pick(jStart, { rate: AIR.START_RATE, start: AIR.START_AT, once: true });
     // Preferir jump loop; si no hay, idle (nunca dejar el mixer sin clip → evita pose en T / brazos abiertos).
     return pick(first(jLoop, jStart) ?? idle);
   }
-  const rt = mv.rates || {}, R = (role, d = 1) => rt[role] ?? d;
   if (moving) {
     if (strafe && !back) {                                          // encarando (lock): paso lateral con su clip (derecha = +1)
       const role = (running ? 'strafeRun' : 'strafe') + (strafe > 0 ? 'R' : 'L');
@@ -64,7 +67,7 @@ export function stepLoco(s, { grounded, moving, running, back, strafe = 0 }, dt,
     const role = running ? 'run' : 'walk';
     return pick(running ? run : walk, { rate: R(role) });
   }
-  if (s.sinceLand < AIR.LAND_SPAN && s.landedFrom > 0.2 && has(jLand)) return pick(jLand, { rate: AIR.LAND_RATE, once: true });
+  if (!wholeJump && s.sinceLand < AIR.LAND_SPAN && s.landedFrom > 0.2 && has(jLand)) return pick(jLand, { rate: AIR.LAND_RATE, once: true });
   return pick(idle);
 }
 
