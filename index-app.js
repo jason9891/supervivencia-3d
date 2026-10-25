@@ -766,7 +766,7 @@ function animate() {
       running: introWalk ? false : running,
       back: introWalk ? false : backNow,
       strafe: introWalk ? 0 : strafeNow,
-    }, dt, n => clipMap.has(n), comboClips ? movesFor(armed, n => clipMap.has(normName(n)), { walk: WALK_SPEED, run: RUN_SPEED, back: WALK_SPEED * BACK_SPEED, backRun: BACK_RUN, strafeR: STRAFE_WALK, strafeL: STRAFE_WALK, strafeRunR: STRAFE_RUN, strafeRunL: STRAFE_RUN }) : null);   // héroe nuevo: tabla de movimiento por roles (hero-moves.js)
+    }, dt, n => clipMap.has(n), comboClips ? movesFor(armed && (!!lockUnit || attacking), n => clipMap.has(normName(n)), { walk: WALK_SPEED, run: RUN_SPEED, back: WALK_SPEED * BACK_SPEED, backRun: BACK_RUN, strafeR: STRAFE_WALK, strafeL: STRAFE_WALK, strafeRunR: STRAFE_RUN, strafeRunL: STRAFE_RUN }) : null);   // héroe nuevo: tabla de movimiento por roles (hero-moves.js)
     if (heroKit) heroKit.adjust(pk, { armed, walk: WALK_SPEED, run: RUN_SPEED, back: WALK_SPEED * BACK_SPEED });
     if (!attacking && loco) loco.apply(pk);
     if (introWalk && locomotionMixer.timeScale !== 0.72) locomotionMixer.timeScale = 0.72;

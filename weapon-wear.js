@@ -3,7 +3,7 @@
 import { WEAPON_MODEL, MODEL_DIR, MODEL_FIX } from './equipment.js';
 
 // Cómo se pone el modelo en el hueso de la mano derecha de Mixamo (rotación XYZ en rad, posición en m dentro del hueso). Afinado a ojo con la guardia 'sas idle'.
-export const HAND_FIX = { rot: [-0.2, Math.PI, 0], pos: [0, 0.08, 0], scale: 1 };
+export const HAND_FIX = { rot: [0, Math.PI / 2, 0], pos: [0, 0.08, 0], scale: 1 };
 
 export async function loadWeapons(THREE, GLTFLoader, MeshoptDecoder, hero, { dir = MODEL_DIR } = {}) {
   let hand = null; hero.traverse((o) => { if (o.isBone && /RightHand$/.test(o.name)) hand = o; });

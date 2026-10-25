@@ -125,3 +125,8 @@ Acciones puntuales (`ACTIONS` en hero-moves.js, `doAction` en index-app): recoge
 - `weapon-wear.js` `HAND_FIX.rot = [-0.2, π, 0]`: el filo apunta hacia delante, lejos del personaje (antes apuntaba hacia el cuerpo).
 - `hero-moves.js` `COMBOS.espada`: `sword regular a` → `b` → `c` con `dur` (bloqueo) y `hit` (impacto) por paso. Se usa cuando hay espada en mano y desenvainada.
 - `index-app.js attack()`: si se pulsa durante un golpe se guarda (`atkQueued`, 0.7 s) y se encadena al abrirse la ventana (últimos 0.2 s del golpe). Sin pulsar durante 1.6 s vuelve a A.
+
+## Ajustes (espada, huecos de armadura, guardia)
+- `weapon-wear.js` `HAND_FIX.rot = [0, π/2, 0]`: el mango sigue el eje del puño (índice↔meñique = X del hueso de la mano) y el filo sale por el lado del índice.
+- `armor-wear.js`: la piel oculta ya no deja huecos al aire — los vértices medio ocultos se hunden 4 cm bajo la armadura, solo se recorta lo totalmente oculto, y la piel cerca del hombro (0.19 m) y la ingle (0.17 m) se conserva (`KEEP_R`, parte 8 = nunca se oculta). Brillo `sheen` de hierro/latón bajado a 0.3.
+- `index-app.js`: la guardia (`sas …`) solo se usa con un enemigo encarado o atacando; con el arma en mano y libre se camina/corre normal.

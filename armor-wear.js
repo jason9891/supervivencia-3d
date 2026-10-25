@@ -19,36 +19,40 @@ export const VARIANTS = ['oscuro', 'hierro', 'laton'];
 export const VARIANT_LABEL = { oscuro: 'OSCURO', hierro: 'HIERRO', laton: 'LATÓN' };
 const VAR_DEF = {
   oscuro: { on: 0, scale: 1, exp: 1, tint: [1, 1, 1], patina: 0, sheen: 0 },
-  hierro: { on: 1, scale: 0.78, exp: 0.74, tint: [0.80, 0.87, 1.0], patina: 0, sheen: 0.55 },          // acero gris plomo, metal tradicional
-  laton:  { on: 1, scale: 0.72, exp: 0.74, tint: [1.0, 0.47, 0.20], patina: 0.8, sheen: 0.5 },          // cobrizo envejecido con verdín en los huecos
+  hierro: { on: 1, scale: 0.78, exp: 0.74, tint: [0.80, 0.87, 1.0], patina: 0, sheen: 0.3 },          // acero gris plomo, metal tradicional
+  laton:  { on: 1, scale: 0.72, exp: 0.74, tint: [1.0, 0.47, 0.20], patina: 0.8, sheen: 0.3 },          // cobrizo envejecido con verdín en los huecos
 };
 const LSV = 'armor-variant-v1';
 const LSH = 'armor-hide-v2';                                       // ocultar a mano (extra a lo automático)
 export const GLARE = { knee: 0.04, slope: 0.18 };                  // las texturas traen brillos horneados muy claros: sobre la luz del juego se queman («despintado»); se comprimen por encima de «knee» (lineal)
 const AUTO_HIDE = { pechera: ['torso'], brazos: ['brazos', 'antebrazos'], piernas: ['muslos', 'piernas', 'pies'] };   // piel que desaparece con cada conjunto (la cabeza y las manos siempre se ven)
+// piel que se conserva cerca de la articulación (hombro, ingle): la armadura no la cubre y, si se recorta, queda un hueco por el que se ve a través del cuerpo
+const KEEP_R = { 2: 0.19, 5: 0.17 };   // radio (m) desde la articulación, para los brazos (parte 2) y los muslos (parte 5)
 const TINT_AMT = [0, 1, 1, 1];                                  // el casco solo encoge: por la visera se ve la cara
 
 /** Prepara el cuerpo del héroe: atributo de región por vértice + shader que lo encoge y tiñe según los conjuntos puestos. */
 function prepareBody(THREE, hero) {
-  const uniforms = { uWorn: { value: new THREE.Vector4() }, uShrink: { value: UNDER.shrink }, uTint: { value: new THREE.Color(...UNDER.tint) }, uTintAmt: { value: new THREE.Vector4(...TINT_AMT) }, uHide: { value: new Array(8).fill(0) } };
+  const uniforms = { uWorn: { value: new THREE.Vector4() }, uShrink: { value: UNDER.shrink }, uTint: { value: new THREE.Color(...UNDER.tint) }, uTintAmt: { value: new THREE.Vector4(...TINT_AMT) }, uHide: { value: new Array(9).fill(0) } };
   hero.traverse((o) => {
     if (!o.isSkinnedMesh || o.userData.armor) return;
-    const g = o.geometry, si = g.attributes.skinIndex, sw = g.attributes.skinWeight, n = si.count, names = o.skeleton.bones.map((b) => b.name.replace(/^mixamorig/, ''));
+    const _v = new THREE.Vector3(), g = o.geometry, si = g.attributes.skinIndex, sw = g.attributes.skinWeight, n = si.count, names = o.skeleton.bones.map((b) => b.name.replace(/^mixamorig/, ''));
     const reg = names.map((nm) => REGION.findIndex((r) => r.test(nm))), A = new Float32Array(n * 4);
     for (let i = 0; i < n; i++) for (let k = 0; k < 4; k++) { const r = reg[si.getComponent(i, k)]; if (r >= 0) A[i * 4 + r] += sw.getComponent(i, k); }
     g.setAttribute('aRegW', new THREE.BufferAttribute(A, 4));
     const pr = names.map((nm) => PART_RE.findIndex((r) => r.test(nm))), P = new Float32Array(n), acc = new Float32Array(8);
-    for (let i = 0; i < n; i++) { acc.fill(0); for (let k = 0; k < 4; k++) { const r = pr[si.getComponent(i, k)]; if (r >= 0) acc[r] += sw.getComponent(i, k); } let b = 1; for (let r = 0; r < 8; r++) if (acc[r] > acc[b]) b = r; P[i] = b; }
+    for (let i = 0; i < n; i++) { acc.fill(0); for (let k = 0; k < 4; k++) { const r = pr[si.getComponent(i, k)]; if (r >= 0) acc[r] += sw.getComponent(i, k); } let b = 1; for (let r = 0; r < 8; r++) if (acc[r] > acc[b]) b = r; P[i] = b;
+      const kr = KEEP_R[b]; if (kr) { let bi = -1, bw = 0; for (let k = 0; k < 4; k++) { const c = sw.getComponent(i, k), id = si.getComponent(i, k); if (c > bw && pr[id] === b) { bw = c; bi = id; } }
+        if (bi >= 0) { _v.fromBufferAttribute(g.attributes.position, i).applyMatrix4(o.bindMatrix).applyMatrix4(o.skeleton.boneInverses[bi]); if (_v.length() < kr) P[i] = 8; } } }
     g.setAttribute('aPart', new THREE.BufferAttribute(P, 1));
     const mat = o.material = o.material.clone();
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, uniforms);
       sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute vec4 aRegW; attribute float aPart; uniform float uHide[8]; varying float vHide; uniform vec4 uWorn; uniform float uShrink; uniform vec4 uTintAmt; varying float vTint;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvHide = uHide[int(aPart + 0.5)]; float kShr = clamp(dot(aRegW, uWorn), 0.0, 1.0); transformed -= normalize(objectNormal) * uShrink * kShr; vTint = clamp(dot(aRegW * uWorn, uTintAmt), 0.0, 1.0);');
+        .replace('#include <common>', '#include <common>\nattribute vec4 aRegW; attribute float aPart; uniform float uHide[9]; varying float vHide; uniform vec4 uWorn; uniform float uShrink; uniform vec4 uTintAmt; varying float vTint;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvHide = uHide[int(aPart + 0.5)]; transformed -= normalize(objectNormal) * 0.04 * vHide; float kShr = clamp(dot(aRegW, uWorn), 0.0, 1.0); transformed -= normalize(objectNormal) * uShrink * kShr; vTint = clamp(dot(aRegW * uWorn, uTintAmt), 0.0, 1.0);');
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', '#include <common>\nvarying float vTint; varying float vHide; uniform vec3 uTint;')
-        .replace('void main() {', 'void main() {\n  if (vHide > 0.5) discard;')
+        .replace('void main() {', 'void main() {\n  if (vHide > 0.995) discard;')
         .replace('#include <map_fragment>', '#include <map_fragment>\nfloat lum = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114)); diffuseColor.rgb = mix(diffuseColor.rgb, uTint * (0.75 + 0.9 * lum), vTint);');
     };
     mat.customProgramCacheKey = () => 'armor-under';
