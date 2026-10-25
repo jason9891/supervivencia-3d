@@ -120,3 +120,8 @@ Acciones puntuales (`ACTIONS` en hero-moves.js, `doAction` en index-app): recoge
 ### Salto, espada e inventario
 `index-app.js resolveGroundSafe`: en el aire solo se aterriza en lo que ya está a los pies (antes una plataforma a ≤0.85 m por encima, aunque estuviera sobre la cabeza, teletransportaba 1.8 m al final del salto). Saltos: desarmado/UAL en 3 tiempos (`jump start` → `jump loop` → `jump land`, la caída solo si te detienes); armado, si el GLB trae `sas jump` (corriendo) y `sas jump (2)` (caminando/quieto) se usa un solo clip a ritmo del salto (0.85 s). Retroceso corriendo (`sas run (2)`) con ARMA.
 `weapon-wear.js` pone el arma elegida en la mano derecha (`HAND_FIX` = ángulo del agarre) y `index-app.js` tiene el panel INVENTARIO (arma equipada del modo pruebas —espada por defecto— y objetos); la espada se ve con ARMA y el combo de ATACAR muestra «COMBO n/total» en el aviso.
+
+## Espada: orientación y combo A→B→C
+- `weapon-wear.js` `HAND_FIX.rot = [-0.2, π, 0]`: el filo apunta hacia delante, lejos del personaje (antes apuntaba hacia el cuerpo).
+- `hero-moves.js` `COMBOS.espada`: `sword regular a` → `b` → `c` con `dur` (bloqueo) y `hit` (impacto) por paso. Se usa cuando hay espada en mano y desenvainada.
+- `index-app.js attack()`: si se pulsa durante un golpe se guarda (`atkQueued`, 0.7 s) y se encadena al abrirse la ventana (últimos 0.2 s del golpe). Sin pulsar durante 1.6 s vuelve a A.

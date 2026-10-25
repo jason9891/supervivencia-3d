@@ -6,7 +6,7 @@ import { loadHeroFbx } from './hero-fbx.js';
 import { loadWeapons } from './weapon-wear.js';
 import { WEAPON_MODEL } from './equipment.js';
 import { WEAPONS } from './combat.js';
-import { movesFor, comboFrom, ATTACKS, ACTIONS, actionClip } from './hero-moves.js';
+import { movesFor, comboFrom, COMBOS, ATTACKS, ACTIONS, actionClip } from './hero-moves.js';
 const wrapPi = a => ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
 let lockOn = true;                                   // ENCARAR: con un enemigo encima el personaje lo mira y te mueves según su frente (como el lock de Blade)
 const LOCK_TURN = 10, STRAFE_WALK = 2.2, STRAFE_RUN = 3.6, BACK_RUN = 3.6;
@@ -339,7 +339,7 @@ const locomotionActor = new THREE.Group(); scene.add(locomotionActor); locomotio
 let locomotionMixer = null, walkAction = null, runAction = null, idleAction = null, activeAction = null;
 let comboClips = null;                                             // ataques del grupo «ataque» del GLB (se encadenan)
 let attackAction = null, attacking = false, armed = false, heroKit = null, comboI = 0, lastAtk = 0;
-let attackUntil = 0;
+let attackUntil = 0, atkQueued = 0;
 const clipMap = new Map(), locoState = createLocoState(); let loco = null, visYaw = 0;
 const gltfLoader = new GLTFLoader();
 const normName = n => (n || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -460,7 +460,8 @@ function attack() {
   if (introPlaying || gateCinePlaying) return;
   if (!player.grounded) return;
   const now = performance.now() / 1000;
-  if (attacking && now < attackUntil - 0.2) return;
+  if (attacking && now < attackUntil - 0.2) { atkQueued = now; return; }   // se guarda la pulsación y se encadena al abrirse la ventana
+  atkQueued = 0;
   if (enemyRt && enemyRt.faceTarget) enemyRt.faceTarget();   // encara al enemigo más cercano antes de golpear
   let act = attackAction, dur = 0.85, hitMs = 220;
   if (heroKit && locomotionMixer && heroKit.combo.length) {   // héroe FBX: combo de golpes, el impacto cae donde lo marca cada animación
@@ -469,13 +470,14 @@ function attack() {
     act = locomotionMixer.clipAction(clipMap.get(st.key)); dur = st.dur * 0.92; hitMs = st.hit * 1000;
   } else if (comboClips && locomotionMixer) {                  // héroe nuevo: armado = combo del grupo «ataque»; sin armas = puñetazos
     const byName = n => clipMap.get(normName(n));
-    const list = armed ? (comboClips.length ? comboClips : comboFrom(ATTACKS.armado, byName)) : comboFrom(ATTACKS.desarmado, byName);
+    const wid = armed && weaponRig && weaponRig.current, swordList = wid && COMBOS[wid] ? COMBOS[wid].filter(x => byName(x.key)) : [];
+    const list = swordList.length ? swordList : armed ? (comboClips.length ? comboClips : comboFrom(ATTACKS.armado, byName)) : comboFrom(ATTACKS.desarmado, byName);
     if (list.length) {
       if (now - lastAtk > 1.6) comboI = 0;
       const st = list[comboI++ % list.length]; lastAtk = now;
       document.getElementById('hint').textContent = (armed ? 'COMBO ' : 'PUÑOS ') + ((comboI - 1) % list.length + 1) + '/' + list.length + ' · ' + st.key;
       const c = clipMap.get(normName(st.key));
-      if (c) { act = locomotionMixer.clipAction(c); dur = st.dur * 0.9; hitMs = st.hit * 1000; }
+      if (c) { act = locomotionMixer.clipAction(c); dur = swordList.length ? st.dur : st.dur * 0.9; hitMs = st.hit * 1000; }
     }
   } else if (!act && locomotionMixer) {
     for (const n of ['sword attack', 'sword regular a', 'melee hook', 'attack']) {
@@ -749,6 +751,7 @@ function animate() {
   locomotionActor.position.copy(actor.position);
   locomotionActor.rotation.y = actor.rotation.y;
 
+  if (atkQueued && attacking) { const t = performance.now() / 1000; if (t - atkQueued > 0.7) atkQueued = 0; else if (t >= attackUntil - 0.2) attack(); }
   if (attacking && performance.now() / 1000 >= attackUntil) {
     attacking = false;
     attackUntil = 0;

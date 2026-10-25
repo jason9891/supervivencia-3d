@@ -41,6 +41,15 @@ export function movesFor(armed, has, speeds = null) {
   return out;
 }
 
+/** Combos por arma: cada paso = clip, `dur` (bloqueo de movimiento), `hit` (segundo del impacto). Espada: A → B → C. */
+export const COMBOS = {
+  espada: [
+    { key: 'sword regular a', dur: 0.5, hit: 0.18 },
+    { key: 'sword regular b', dur: 0.6, hit: 0.22 },
+    { key: 'sword regular c', dur: 1.2, hit: 0.5 },
+  ],
+};
+
 /** Combo de golpes [{ key, dur, hit }] a partir de nombres de clip; `clip(nombre)` devuelve el AnimationClip o undefined. */
 export function comboFrom(names, clip) {
   return names.map((n) => ({ n, c: clip(n) })).filter((x) => x.c).map((x) => ({ key: x.n, dur: x.c.duration, hit: x.c.duration * 0.4 }));
