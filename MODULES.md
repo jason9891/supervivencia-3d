@@ -140,3 +140,8 @@ Acciones puntuales (`ACTIONS` en hero-moves.js, `doAction` en index-app): recoge
 - Mancha blanca (causa real): era la piel conservada junto al hombro (`aPart` 8) asomando por los huecos de la manga; con la luz del juego el «tejido» teñido salía casi blanco. Ahora esa piel (solo la del hombro, parte 8; la ingle es la parte 9) se oscurece ×0.22 cuando hay brazos puestos. Revisado en oscuro, hierro y latón.
 
 - Mancha blanca EN LA ARMADURA (hierro): al recolorear se usaba la luminancia sin comprimir de la textura (blancos horneados) y con la luz del juego (exposición 1.45 + luz clave 2.6) se quemaban. Ahora `LMAX` (0.16) limita la luminancia de origen al recolorear; hierro `scale` 0.68, latón 0.72, `sheen` 0.15. Medido con píxeles >185 en 7 poses de ataque/carrera: hierro 14628 → 5243 px (sin zonas blancas puras; queda el acero claro), latón/oscuro 0.
+
+## Controles de PC (teclado + ratón)
+- **W/S** avanzar/retroceder · **A/D** girar (como el joystick); con un enemigo encarado A/D lo rodean · **Shift** correr (mantener) · **Espacio** saltar · **Tab** abre/cierra INVENTARIO · **clic izquierdo** atacar (combo) · **Ctrl** (mantener) escudo/guardia (`sas block idle`; `window.__guarding`) · **M** mapa · **rueda** acerca/aleja la cámara.
+- Cámara en PC (`pointer: fine`): `camZoom` 0.62 (más cerca del personaje), rueda 0.4–1.4; en móvil sigue igual (1).
+- `index-app.js`: `keys` alimenta `rawF/rawS` como el joystick (`analog`), `guarding`/`guardAct` (mientras dura no hay movimiento), `renderer.domElement` pointerdown (ratón, botón 0) → `attack()`.

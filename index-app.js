@@ -261,9 +261,9 @@ function updateIntroCamera(dt) {
       pz + Math.cos(ang) * 2.4
     );
     const gameplay = new THREE.Vector3(
-      px - Math.sin(visYaw) * CAM_DIST,
-      py + CAM_HEIGHT,
-      pz - Math.cos(visYaw) * CAM_DIST
+      px - Math.sin(visYaw) * CAM_DIST_0,
+      py + CAM_HEIGHT_0,
+      pz - Math.cos(visYaw) * CAM_DIST_0
     );
     cam.lerpVectors(orbit, gameplay, u);
     look.set(px, py + CAM_LOOK_Y, pz);
@@ -339,7 +339,7 @@ const locomotionActor = new THREE.Group(); scene.add(locomotionActor); locomotio
 let locomotionMixer = null, walkAction = null, runAction = null, idleAction = null, activeAction = null;
 let comboClips = null;                                             // ataques del grupo «ataque» del GLB (se encadenan)
 let attackAction = null, attacking = false, armed = false, heroKit = null, comboI = 0, lastAtk = 0;
-let attackUntil = 0, atkQueued = 0;
+let attackUntil = 0, atkQueued = 0, guarding = false, guardAct = null;   // guardia (CTRL mantenido): escudo/bloqueo
 const clipMap = new Map(), locoState = createLocoState(); let loco = null, visYaw = 0;
 const gltfLoader = new GLTFLoader();
 const normName = n => (n || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -588,15 +588,23 @@ addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   keys[k] = true;
   if (k === 'm' && !e.repeat) document.getElementById('mapView')?.dispatchEvent(new PointerEvent('pointerdown'));
+  if (k === 'tab') { e.preventDefault(); if (!e.repeat) { const b = document.getElementById('invBtn'); if (b && b.style.display !== 'none') b.click(); } }   // TAB: inventario
+  if (k === ' ') { e.preventDefault(); if (!e.repeat) jumpQueued = true; }                                                                                   // ESPACIO: saltar
+  if (k === 'control' || k === 'tab' || k === ' ' || k.startsWith('arrow')) e.preventDefault();
 });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+renderer.domElement.addEventListener('pointerdown', e => { if (e.pointerType === 'mouse' && e.button === 0) { e.preventDefault(); attack(); } });   // clic izquierdo: atacar
+renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 let jumpQueued = false, camRefY = null, camGroundY = 0;
 document.getElementById('jump').addEventListener('pointerdown', e => { e.preventDefault(); if (!introPlaying && !gateCinePlaying) jumpQueued = true; });
 
 const clock = new THREE.Clock();
-const CAM_DIST = 4.2;
-const CAM_HEIGHT = 2.4;
+const CAM_DIST_0 = 4.2;
+const CAM_HEIGHT_0 = 2.4;
 const CAM_LOOK_Y = 1.35;
+let camZoom = matchMedia('(pointer: fine)').matches ? 0.62 : 1;      // PC (ratón): cámara más cerca del personaje; la rueda la acerca/aleja (0.4–1.4)
+addEventListener('wheel', e => { if (e.target.closest && e.target.closest('#invPanel, #armorPanel')) return; camZoom = Math.min(1.4, Math.max(0.4, camZoom + Math.sign(e.deltaY) * 0.06)); }, { passive: true });
 const CAM_MIN_DIST = 1.15;
 const CAM_RADIUS = 0.28;
 let mapOverview = false;
@@ -666,7 +674,7 @@ function animate() {
     // entrada del jugador en ejes del personaje: rawF adelante(+)/atrás(-), rawS derecha(+)/izquierda(-)
     let rawF, rawS, analog = false;
     if (joy.active && (Math.abs(joy.x) > 0.12 || Math.abs(joy.y) > 0.12)) { rawF = joy.y; rawS = joy.x; analog = true; }
-    else { rawF = (keys.w || keys.arrowup ? 1 : 0) - (keys.s || keys.arrowdown ? 1 : 0); rawS = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0); }
+    else { rawF = (keys.w || keys.arrowup ? 1 : 0) - (keys.s || keys.arrowdown ? 1 : 0); rawS = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0); analog = rawF !== 0 || rawS !== 0; }   // teclado = mismo manejo que el joystick (W/S avanzan, A/D giran; encarando, A/D rodean al enemigo)
     lockUnit = (lockOn && enemyRt && enemyRt.lockTarget) ? enemyRt.lockTarget() : null;
     if (lockUnit) {
       // ENCARANDO: el personaje mira al enemigo; adelante/atrás/lados son los suyos (acercarse, retroceder, rodearlo)
@@ -681,9 +689,9 @@ function animate() {
       lockBack = rawF < -0.25 && Math.abs(rawS) < Math.abs(rawF) * 0.7;
       lockStrafe = !lockBack && Math.abs(rawS) > 0.3 && Math.abs(rawS) >= Math.abs(rawF) * 0.5 ? Math.sign(rawS) : 0;
     } else if (analog) {                                // libre con joystick: modo tanque (izq./der. gira, arriba/abajo avanza o retrocede)
-      if (Math.abs(joy.x) > 0.18) player.facing -= joy.x * 1.15 * dt;
+      if (Math.abs(rawS) > 0.18) player.facing -= rawS * 1.15 * dt;
       lockFacing = player.facing;
-      const fwd = joy.y; intentFwd = fwd; tank = true;
+      const fwd = rawF; intentFwd = fwd; tank = true;
       side = Math.sin(player.facing) * fwd;
       f = Math.cos(player.facing) * fwd;
     } else {
@@ -693,7 +701,15 @@ function animate() {
   const running = !!(runToggle || keys.shift);
   const speed = running ? RUN_SPEED : WALK_SPEED;
 
-  const canMove = !introPlaying && !gateCinePlaying && !attacking && !mapOverview;
+  const guardClip = clipMap.get('sas block idle') || clipMap.get('sas block');
+  const guardNow = !!(keys.control && guardClip && locomotionMixer && !attacking && player.grounded && !mapOverview && !introPlaying && !gateCinePlaying);
+  if (guardNow !== guarding) {
+    guarding = guardNow;
+    if (guarding) { guardAct = locomotionMixer.clipAction(guardClip); guardAct.setLoop(THREE.LoopRepeat, Infinity); guardAct.reset(); guardAct.setEffectiveWeight(1); guardAct.play(); if (activeAction && activeAction !== guardAct) activeAction.crossFadeTo(guardAct, 0.12, false); activeAction = guardAct; }
+    else { if (guardAct) guardAct.fadeOut(0.12); if (loco) loco.reset(); }
+  }
+  window.__guarding = guarding;
+  const canMove = !introPlaying && !gateCinePlaying && !attacking && !mapOverview && !guarding;
   const backNow = canMove && player.grounded && (lockUnit ? lockBack : backpedal({ fwd: intentFwd, strafe: intentSide, facing: player.facing, tank }));
   const strafeNow = canMove && player.grounded && lockUnit ? lockStrafe : 0;
   const keepFacing = player.facing;
@@ -768,7 +784,7 @@ function animate() {
       strafe: introWalk ? 0 : strafeNow,
     }, dt, n => clipMap.has(n), comboClips ? movesFor(armed && (!!lockUnit || attacking), n => clipMap.has(normName(n)), { walk: WALK_SPEED, run: RUN_SPEED, back: WALK_SPEED * BACK_SPEED, backRun: BACK_RUN, strafeR: STRAFE_WALK, strafeL: STRAFE_WALK, strafeRunR: STRAFE_RUN, strafeRunL: STRAFE_RUN }) : null);   // héroe nuevo: tabla de movimiento por roles (hero-moves.js)
     if (heroKit) heroKit.adjust(pk, { armed, walk: WALK_SPEED, run: RUN_SPEED, back: WALK_SPEED * BACK_SPEED });
-    if (!attacking && loco) loco.apply(pk);
+    if (!attacking && !guarding && loco) loco.apply(pk);
     if (introWalk && locomotionMixer.timeScale !== 0.72) locomotionMixer.timeScale = 0.72;
     else if (!introWalk && locomotionMixer.timeScale !== 1) locomotionMixer.timeScale = 1;
     locomotionMixer.update(dt);
@@ -786,6 +802,7 @@ function animate() {
     camera.position.set(overview.x, overview.h, overview.z);
     camera.lookAt(overview.x, 0, overview.z);
   } else {
+    const CAM_DIST = CAM_DIST_0 * camZoom, CAM_HEIGHT = CAM_HEIGHT_0 * (0.55 + 0.45 * camZoom);
     const fx = Math.sin(visYaw), fz = Math.cos(visYaw);
     // altura de referencia de la cámara: sigue al suelo, y en el aire solo acompaña un tercio del salto (así el salto no sacude la pantalla ni «salta» al aterrizar)
     if (camRefY === null || Math.abs(player.y - camRefY) > 4) { camRefY = player.y; camGroundY = player.y; }
