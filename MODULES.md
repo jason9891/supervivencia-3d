@@ -138,3 +138,5 @@ Acciones puntuales (`ACTIONS` en hero-moves.js, `doAction` en index-app): recoge
 - Corrección: se quitó el tinte oscuro de la piel conservada y de la cadera (dejaba la ingle como un agujero negro con solo piernas puestas). `KEEP_R` de los muslos sube a 0.30 m: con piernas sin pechera la cadera/ingle se ve rellena (gris), sin huecos.
 
 - Mancha blanca (causa real): era la piel conservada junto al hombro (`aPart` 8) asomando por los huecos de la manga; con la luz del juego el «tejido» teñido salía casi blanco. Ahora esa piel (solo la del hombro, parte 8; la ingle es la parte 9) se oscurece ×0.22 cuando hay brazos puestos. Revisado en oscuro, hierro y latón.
+
+- Mancha blanca EN LA ARMADURA (hierro): al recolorear se usaba la luminancia sin comprimir de la textura (blancos horneados) y con la luz del juego (exposición 1.45 + luz clave 2.6) se quemaban. Ahora `LMAX` (0.16) limita la luminancia de origen al recolorear; hierro `scale` 0.68, latón 0.72, `sheen` 0.15. Medido con píxeles >185 en 7 poses de ataque/carrera: hierro 14628 → 5243 px (sin zonas blancas puras; queda el acero claro), latón/oscuro 0.

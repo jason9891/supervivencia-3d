@@ -19,9 +19,10 @@ export const VARIANTS = ['oscuro', 'hierro', 'laton'];
 export const VARIANT_LABEL = { oscuro: 'OSCURO', hierro: 'HIERRO', laton: 'LATÓN' };
 const VAR_DEF = {
   oscuro: { on: 0, scale: 1, exp: 1, tint: [1, 1, 1], patina: 0, sheen: 0 },
-  hierro: { on: 1, scale: 0.78, exp: 0.74, tint: [0.80, 0.87, 1.0], patina: 0, sheen: 0.3 },          // acero gris plomo, metal tradicional
-  laton:  { on: 1, scale: 0.72, exp: 0.74, tint: [1.0, 0.47, 0.20], patina: 0.8, sheen: 0.3 },          // cobrizo envejecido con verdín en los huecos
+  hierro: { on: 1, scale: 0.68, exp: 0.74, tint: [0.80, 0.87, 1.0], patina: 0, sheen: 0.15 },          // acero gris plomo, metal tradicional
+  laton:  { on: 1, scale: 0.72, exp: 0.74, tint: [1.0, 0.47, 0.20], patina: 0.8, sheen: 0.15 },          // cobrizo envejecido con verdín en los huecos
 };
+const LMAX = 0.16;   // tope de luminancia de la textura al recolorear (los blancos horneados se «queman» con la luz del juego → manchas blancas)
 const LSV = 'armor-variant-v1';
 const LSH = 'armor-hide-v2';                                       // ocultar a mano (extra a lo automático)
 export const GLARE = { knee: 0.04, slope: 0.18 };                  // las texturas traen brillos horneados muy claros: sobre la luz del juego se queman («despintado»); se comprimen por encima de «knee» (lineal)
@@ -66,14 +67,14 @@ export async function loadArmor(THREE, GLTFLoader, MeshoptDecoder, hero, { url =
   if (MeshoptDecoder && MeshoptDecoder.ready) await MeshoptDecoder.ready;
   const loader = new GLTFLoader(); if (MeshoptDecoder) loader.setMeshoptDecoder(MeshoptDecoder);
   const gltf = await new Promise((res, rej) => loader.load(url, res, undefined, rej));
-  const uni = prepareBody(THREE, hero), glareU = [], varU = { uVarOn: { value: 0 }, uVarScale: { value: 1 }, uVarExp: { value: 1 }, uVarTint: { value: new THREE.Color(1, 1, 1) }, uPatina: { value: 0 }, uSheen: { value: 0 } };
+  const uni = prepareBody(THREE, hero), glareU = [], varU = { uVarOn: { value: 0 }, uVarScale: { value: 1 }, uVarExp: { value: 1 }, uVarTint: { value: new THREE.Color(1, 1, 1) }, uPatina: { value: 0 }, uSheen: { value: 0 }, uLMax: { value: LMAX } };
   const tameGlare = (mat) => {                                    // comprime los brillos horneados de la textura (por encima de GLARE.knee, en lineal)
     if (mat.userData.glare) return; mat.userData.glare = true;
     const u = { uGlare: { value: GLARE.slope }, uKnee: { value: GLARE.knee } }; glareU.push(u);
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, u, varU);
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uGlare; uniform float uKnee; uniform float uVarOn, uVarScale, uVarExp, uPatina, uSheen; uniform vec3 uVarTint; ')
-        .replace('#include <map_fragment>', '#include <map_fragment>\nfloat armL0; if (!gl_FrontFacing) diffuseColor.rgb *= 0.12; { float l = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)); float t = uKnee + max(l - uKnee, 0.0) * uGlare; diffuseColor.rgb *= min(1.0, t / max(l, 1e-4));\n  if (uVarOn > 0.5) { float v = uVarScale * pow(max(l, 1e-5) / 0.35, uVarExp); vec3 c = uVarTint * v; c = mix(c, vec3(0.22, 0.46, 0.36) * v * 0.9, uPatina * (1.0 - smoothstep(0.003, 0.02, l))); diffuseColor.rgb = c; armL0 = 1.0; } }')
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uGlare; uniform float uKnee; uniform float uVarOn, uVarScale, uVarExp, uPatina, uSheen, uLMax; uniform vec3 uVarTint; ')
+        .replace('#include <map_fragment>', '#include <map_fragment>\nfloat armL0; if (!gl_FrontFacing) diffuseColor.rgb *= 0.12; { float l = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)); float t = uKnee + max(l - uKnee, 0.0) * uGlare; diffuseColor.rgb *= min(1.0, t / max(l, 1e-4));\n  if (uVarOn > 0.5) { float v = uVarScale * pow(clamp(l, 1e-5, uLMax) / 0.35, uVarExp); vec3 c = uVarTint * v; c = mix(c, vec3(0.22, 0.46, 0.36) * v * 0.9, uPatina * (1.0 - smoothstep(0.003, 0.02, l))); diffuseColor.rgb = c; armL0 = 1.0; } }')
         .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  if (uSheen > 0.0) { float fr = pow(1.0 - abs(dot(normalize(normal), normalize(vViewPosition))), 2.0); float sky = 0.35 + 0.65 * clamp(normal.y * 0.5 + 0.5, 0.0, 1.0); totalEmissiveRadiance += diffuseColor.rgb * uSheen * sky * (0.25 + 0.75 * fr); }');
     };
     mat.customProgramCacheKey = () => 'armor-glare'; mat.needsUpdate = true;
