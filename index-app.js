@@ -590,7 +590,7 @@ addEventListener('keydown', e => {
   if (k === 'm' && !e.repeat) document.getElementById('mapView')?.dispatchEvent(new PointerEvent('pointerdown'));
 });
 addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
-let jumpQueued = false;
+let jumpQueued = false, camRefY = null, camGroundY = 0;
 document.getElementById('jump').addEventListener('pointerdown', e => { e.preventDefault(); if (!introPlaying && !gateCinePlaying) jumpQueued = true; });
 
 const clock = new THREE.Clock();
@@ -787,17 +787,22 @@ function animate() {
     camera.lookAt(overview.x, 0, overview.z);
   } else {
     const fx = Math.sin(visYaw), fz = Math.cos(visYaw);
-    const look = new THREE.Vector3(player.x, player.y + CAM_LOOK_Y, player.z);
+    // altura de referencia de la cámara: sigue al suelo, y en el aire solo acompaña un tercio del salto (así el salto no sacude la pantalla ni «salta» al aterrizar)
+    if (camRefY === null || Math.abs(player.y - camRefY) > 4) { camRefY = player.y; camGroundY = player.y; }
+    if (player.grounded) camGroundY = player.y;
+    const refTarget = player.grounded ? player.y : camGroundY + (player.y - camGroundY) * 0.3;
+    camRefY += (refTarget - camRefY) * Math.min(1, dt * 9);
+    const look = new THREE.Vector3(player.x, camRefY + CAM_LOOK_Y, player.z);
     const ideal = new THREE.Vector3(
       player.x - fx * CAM_DIST,
-      player.y + CAM_HEIGHT,
+      camRefY + CAM_HEIGHT,
       player.z - fz * CAM_DIST
     );
     const free = cameraBlockedDist(look, ideal);
     const scale = free / CAM_DIST;
     const targetCam = new THREE.Vector3(
       player.x - fx * CAM_DIST * scale,
-      player.y + CAM_HEIGHT * (0.55 + 0.45 * scale),
+      camRefY + CAM_HEIGHT * (0.55 + 0.45 * scale),
       player.z - fz * CAM_DIST * scale
     );
     camera.position.lerp(targetCam, Math.min(1, dt * 5));

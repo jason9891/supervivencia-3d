@@ -130,3 +130,7 @@ Acciones puntuales (`ACTIONS` en hero-moves.js, `doAction` en index-app): recoge
 - `weapon-wear.js` `HAND_FIX.rot = [0, π/2, 0]`: el mango sigue el eje del puño (índice↔meñique = X del hueso de la mano) y el filo sale por el lado del índice.
 - `armor-wear.js`: la piel oculta ya no deja huecos al aire — los vértices medio ocultos se hunden 4 cm bajo la armadura, solo se recorta lo totalmente oculto, y la piel cerca del hombro (0.19 m) y la ingle (0.17 m) se conserva (`KEEP_R`, parte 8 = nunca se oculta). Brillo `sheen` de hierro/latón bajado a 0.3.
 - `index-app.js`: la guardia (`sas …`) solo se usa con un enemigo encarado o atacando; con el arma en mano y libre se camina/corre normal.
+
+## Cámara en el salto, manchas blancas, ingle
+- `index-app.js`: la cámara usa `camRefY` (sigue al suelo; en el aire acompaña solo el 30 % del salto) en vez de `player.y`: antes el punto de mira saltaba con el jugador y la cámara iba retrasada, lo que daba el «desfase» al saltar/aterrizar.
+- `armor-wear.js`: las caras traseras de la armadura (el interior visible por los huecos de la malla) se oscurecen ×0.12 → eran las «manchas blancas» al agacharse/atacar. La piel conservada junto al hombro/ingle se tiñe de tela oscura cuando hay brazos o piernas puestos, y la cadera cuenta como «piernas» para el tinte.

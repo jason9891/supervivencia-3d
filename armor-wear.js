@@ -38,6 +38,7 @@ function prepareBody(THREE, hero) {
     const _v = new THREE.Vector3(), g = o.geometry, si = g.attributes.skinIndex, sw = g.attributes.skinWeight, n = si.count, names = o.skeleton.bones.map((b) => b.name.replace(/^mixamorig/, ''));
     const reg = names.map((nm) => REGION.findIndex((r) => r.test(nm))), A = new Float32Array(n * 4);
     for (let i = 0; i < n; i++) for (let k = 0; k < 4; k++) { const r = reg[si.getComponent(i, k)]; if (r >= 0) A[i * 4 + r] += sw.getComponent(i, k); }
+    for (let i = 0; i < n; i++) for (let k = 0; k < 4; k++) if (names[si.getComponent(i, k)] === 'Hips') A[i * 4 + 3] += sw.getComponent(i, k);   // la cadera también es «piernas»: con ellas puestas la ingle se tiñe y encoge
     g.setAttribute('aRegW', new THREE.BufferAttribute(A, 4));
     const pr = names.map((nm) => PART_RE.findIndex((r) => r.test(nm))), P = new Float32Array(n), acc = new Float32Array(8);
     for (let i = 0; i < n; i++) { acc.fill(0); for (let k = 0; k < 4; k++) { const r = pr[si.getComponent(i, k)]; if (r >= 0) acc[r] += sw.getComponent(i, k); } let b = 1; for (let r = 0; r < 8; r++) if (acc[r] > acc[b]) b = r; P[i] = b;
@@ -49,7 +50,7 @@ function prepareBody(THREE, hero) {
       Object.assign(sh.uniforms, uniforms);
       sh.vertexShader = sh.vertexShader
         .replace('#include <common>', '#include <common>\nattribute vec4 aRegW; attribute float aPart; uniform float uHide[9]; varying float vHide; uniform vec4 uWorn; uniform float uShrink; uniform vec4 uTintAmt; varying float vTint;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvHide = uHide[int(aPart + 0.5)]; transformed -= normalize(objectNormal) * 0.04 * vHide; float kShr = clamp(dot(aRegW, uWorn), 0.0, 1.0); transformed -= normalize(objectNormal) * uShrink * kShr; vTint = clamp(dot(aRegW * uWorn, uTintAmt), 0.0, 1.0);');
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvHide = uHide[int(aPart + 0.5)]; transformed -= normalize(objectNormal) * 0.04 * vHide; float kShr = clamp(dot(aRegW, uWorn), 0.0, 1.0); transformed -= normalize(objectNormal) * uShrink * kShr; vTint = clamp(dot(aRegW * uWorn, uTintAmt), 0.0, 1.0); if (int(aPart + 0.5) == 8) vTint = max(vTint, step(0.5, uWorn.z + uWorn.w));');
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', '#include <common>\nvarying float vTint; varying float vHide; uniform vec3 uTint;')
         .replace('void main() {', 'void main() {\n  if (vHide > 0.995) discard;')
@@ -73,7 +74,7 @@ export async function loadArmor(THREE, GLTFLoader, MeshoptDecoder, hero, { url =
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, u, varU);
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uGlare; uniform float uKnee; uniform float uVarOn, uVarScale, uVarExp, uPatina, uSheen; uniform vec3 uVarTint; ')
-        .replace('#include <map_fragment>', '#include <map_fragment>\nfloat armL0; { float l = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)); float t = uKnee + max(l - uKnee, 0.0) * uGlare; diffuseColor.rgb *= min(1.0, t / max(l, 1e-4));\n  if (uVarOn > 0.5) { float v = uVarScale * pow(max(l, 1e-5) / 0.35, uVarExp); vec3 c = uVarTint * v; c = mix(c, vec3(0.22, 0.46, 0.36) * v * 0.9, uPatina * (1.0 - smoothstep(0.003, 0.02, l))); diffuseColor.rgb = c; armL0 = 1.0; } }')
+        .replace('#include <map_fragment>', '#include <map_fragment>\nfloat armL0; if (!gl_FrontFacing) diffuseColor.rgb *= 0.12; { float l = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)); float t = uKnee + max(l - uKnee, 0.0) * uGlare; diffuseColor.rgb *= min(1.0, t / max(l, 1e-4));\n  if (uVarOn > 0.5) { float v = uVarScale * pow(max(l, 1e-5) / 0.35, uVarExp); vec3 c = uVarTint * v; c = mix(c, vec3(0.22, 0.46, 0.36) * v * 0.9, uPatina * (1.0 - smoothstep(0.003, 0.02, l))); diffuseColor.rgb = c; armL0 = 1.0; } }')
         .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  if (uSheen > 0.0) { float fr = pow(1.0 - abs(dot(normalize(normal), normalize(vViewPosition))), 2.0); float sky = 0.35 + 0.65 * clamp(normal.y * 0.5 + 0.5, 0.0, 1.0); totalEmissiveRadiance += diffuseColor.rgb * uSheen * sky * (0.25 + 0.75 * fr); }');
     };
     mat.customProgramCacheKey = () => 'armor-glare'; mat.needsUpdate = true;
