@@ -134,3 +134,5 @@ Acciones puntuales (`ACTIONS` en hero-moves.js, `doAction` en index-app): recoge
 ## Cámara en el salto, manchas blancas, ingle
 - `index-app.js`: la cámara usa `camRefY` (sigue al suelo; en el aire acompaña solo el 30 % del salto) en vez de `player.y`: antes el punto de mira saltaba con el jugador y la cámara iba retrasada, lo que daba el «desfase» al saltar/aterrizar.
 - `armor-wear.js`: las caras traseras de la armadura (el interior visible por los huecos de la malla) se oscurecen ×0.12 → eran las «manchas blancas» al agacharse/atacar. La piel conservada junto al hombro/ingle se tiñe de tela oscura cuando hay brazos o piernas puestos, y la cadera cuenta como «piernas» para el tinte.
+
+- Corrección: se quitó el tinte oscuro de la piel conservada y de la cadera (dejaba la ingle como un agujero negro con solo piernas puestas). `KEEP_R` de los muslos sube a 0.30 m: con piernas sin pechera la cadera/ingle se ve rellena (gris), sin huecos.

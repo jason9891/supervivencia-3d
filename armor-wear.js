@@ -27,7 +27,7 @@ const LSH = 'armor-hide-v2';                                       // ocultar a 
 export const GLARE = { knee: 0.04, slope: 0.18 };                  // las texturas traen brillos horneados muy claros: sobre la luz del juego se queman («despintado»); se comprimen por encima de «knee» (lineal)
 const AUTO_HIDE = { pechera: ['torso'], brazos: ['brazos', 'antebrazos'], piernas: ['muslos', 'piernas', 'pies'] };   // piel que desaparece con cada conjunto (la cabeza y las manos siempre se ven)
 // piel que se conserva cerca de la articulación (hombro, ingle): la armadura no la cubre y, si se recorta, queda un hueco por el que se ve a través del cuerpo
-const KEEP_R = { 2: 0.19, 5: 0.17 };   // radio (m) desde la articulación, para los brazos (parte 2) y los muslos (parte 5)
+const KEEP_R = { 2: 0.19, 5: 0.30 };   // radio (m) desde la articulación, para los brazos (parte 2) y los muslos (parte 5)
 const TINT_AMT = [0, 1, 1, 1];                                  // el casco solo encoge: por la visera se ve la cara
 
 /** Prepara el cuerpo del héroe: atributo de región por vértice + shader que lo encoge y tiñe según los conjuntos puestos. */
@@ -38,7 +38,6 @@ function prepareBody(THREE, hero) {
     const _v = new THREE.Vector3(), g = o.geometry, si = g.attributes.skinIndex, sw = g.attributes.skinWeight, n = si.count, names = o.skeleton.bones.map((b) => b.name.replace(/^mixamorig/, ''));
     const reg = names.map((nm) => REGION.findIndex((r) => r.test(nm))), A = new Float32Array(n * 4);
     for (let i = 0; i < n; i++) for (let k = 0; k < 4; k++) { const r = reg[si.getComponent(i, k)]; if (r >= 0) A[i * 4 + r] += sw.getComponent(i, k); }
-    for (let i = 0; i < n; i++) for (let k = 0; k < 4; k++) if (names[si.getComponent(i, k)] === 'Hips') A[i * 4 + 3] += sw.getComponent(i, k);   // la cadera también es «piernas»: con ellas puestas la ingle se tiñe y encoge
     g.setAttribute('aRegW', new THREE.BufferAttribute(A, 4));
     const pr = names.map((nm) => PART_RE.findIndex((r) => r.test(nm))), P = new Float32Array(n), acc = new Float32Array(8);
     for (let i = 0; i < n; i++) { acc.fill(0); for (let k = 0; k < 4; k++) { const r = pr[si.getComponent(i, k)]; if (r >= 0) acc[r] += sw.getComponent(i, k); } let b = 1; for (let r = 0; r < 8; r++) if (acc[r] > acc[b]) b = r; P[i] = b;
@@ -50,7 +49,7 @@ function prepareBody(THREE, hero) {
       Object.assign(sh.uniforms, uniforms);
       sh.vertexShader = sh.vertexShader
         .replace('#include <common>', '#include <common>\nattribute vec4 aRegW; attribute float aPart; uniform float uHide[9]; varying float vHide; uniform vec4 uWorn; uniform float uShrink; uniform vec4 uTintAmt; varying float vTint;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvHide = uHide[int(aPart + 0.5)]; transformed -= normalize(objectNormal) * 0.04 * vHide; float kShr = clamp(dot(aRegW, uWorn), 0.0, 1.0); transformed -= normalize(objectNormal) * uShrink * kShr; vTint = clamp(dot(aRegW * uWorn, uTintAmt), 0.0, 1.0); if (int(aPart + 0.5) == 8) vTint = max(vTint, step(0.5, uWorn.z + uWorn.w));');
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvHide = uHide[int(aPart + 0.5)]; transformed -= normalize(objectNormal) * 0.04 * vHide; float kShr = clamp(dot(aRegW, uWorn), 0.0, 1.0); transformed -= normalize(objectNormal) * uShrink * kShr; vTint = clamp(dot(aRegW * uWorn, uTintAmt), 0.0, 1.0);');
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', '#include <common>\nvarying float vTint; varying float vHide; uniform vec3 uTint;')
         .replace('void main() {', 'void main() {\n  if (vHide > 0.995) discard;')
