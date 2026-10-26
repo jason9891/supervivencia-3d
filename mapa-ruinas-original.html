@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ruinas del desierto · mapa por sectores</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #a99d84; font: 13px/1.4 system-ui, sans-serif; color: #eee6d4; }
+  canvas { display: block; }
+  #hud { position: fixed; left: 12px; top: calc(12px + env(safe-area-inset-top, 0px)); padding: 8px 12px; border-radius: 8px;
+         background: rgba(20,16,12,.7); pointer-events: none; max-width: 330px; }
+  #hud b { font-size: 15px; }
+  #mm { position: fixed; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); width: 200px; height: 200px;
+        border-radius: 8px; background: rgba(20,16,12,.7); }
+  #diag { position: fixed; right: 12px; top: calc(12px + env(safe-area-inset-top, 0px)); width: min(360px, calc(100% - 24px));
+          background: rgba(0,0,0,.8); border-radius: 8px; font: 11px/1.4 ui-monospace, Consolas, monospace; }
+  #diag button { float: right; margin: 4px; font-size: 11px; }
+  #diag pre { margin: 0; padding: 6px 8px; max-height: 30vh; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+  #diag.min pre { display: none; }
+</style>
+</head>
+<body>
+<div id="hud">Cargando…</div>
+<canvas id="mm" width="200" height="200"></canvas>
+<div id="diag"><button id="dMin">–</button><b style="padding:6px 8px;display:block">Diagnóstico</b><pre id="dl"></pre></div>
+<script>
+(function () {   // diagnóstico mínimo, antes que todo lo demás
+  var L = [], t0 = performance.now();
+  window.DIAG = { add: function (k, s) {
+    L.push('[' + ((performance.now() - t0) / 1000).toFixed(1) + 's] [' + k + '] ' + s);
+    var e = document.getElementById('dl'); if (e) { e.textContent = L.slice(-40).join('\n'); e.scrollTop = e.scrollHeight; } } };
+  window.addEventListener('error', function (e) {
+    var t = e.target;
+    DIAG.add('ERROR', t && t !== window && (t.src || t.href) ? 'No cargó: ' + (t.src || t.href) : (e.message || 'error') + ' (línea ' + e.lineno + ')');
+  }, true);
+  document.getElementById('dMin').onclick = function () { document.getElementById('diag').classList.toggle('min'); };
+})();
+</script>
+<script>
+// =====================================================================
+// MAPA — copia desde aquí hasta «FIN DEL MAPA» a tu juego.
+//   const map = createRuinsMap(THREE);  scene.add(map.group);
+//   map.setVisible(map.sectorAt(x, z));            // solo se dibujan el sector actual y los vecinos
+//   const [nx, nz] = map.collide(x, z, radio);     // empuja al jugador fuera de muros y columnas
+//   map.spawns -> [{x, z, tier, zone}]             // enemigos: 'ligero' | 'medio' | 'pesado' | 'jefe'
+//   map.ATM[kind] -> [colorNiebla, densidad]       // atmósfera de cada tipo de sector
+// =====================================================================
+function createRuinsMap(THREE, opts) {
+  opts = opts || {};
+  const S = opts.scale || 2, W = 14, T = 1.6, H = 7;          // S = metros por unidad del plano; W = ancho de pasillos
+  let seed = (opts.seed || 11) >>> 0;
+  const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296), rr = (a, b) => a + (b - a) * rnd();
+
+  // ---- plano: salas [nombre, tipo, x0, z0, x1, z1, enemigos] y pasillos [eje, centro, desde, hasta, salaIni, salaFin] ----
+  const Z = [
+    ['Patio de acceso', 'patio', 60, 60, 170, 150, [['ligero', 4]]],
+    ['Salón de columnas I', 'columnas', 60, 230, 210, 340, [['ligero', 4], ['medio', 2]]],
+    ['Cámara de ruinas', 'ruinas', 300, 220, 430, 350, [['medio', 4]]],
+    ['Plaza del monumento', 'plaza', 260, 440, 470, 580, [['medio', 6], ['pesado', 1]]],
+    ['Santuario elevado', 'cripta', 50, 440, 170, 580, [['medio', 2], ['pesado', 2]], 4.8],
+    ['Gran salón II', 'columnas', 550, 440, 690, 580, [['medio', 4], ['pesado', 2]]],
+    ['Patio de arena', 'patio', 520, 220, 650, 350, [['ligero', 8]]],
+    ['Sala del trono', 'trono', 270, 620, 430, 690, [['medio', 3], ['pesado', 2]], 2.4],
+    ['Cámara del jefe', 'jefe', 500, 610, 690, 690, [['medio', 4], ['jefe', 1]], 4.8],
+    ['Ruinas abiertas', 'abierta', 200, 40, 420, 170, [['ligero', 6], ['medio', 2]]]
+  ].map(a => ({ name: a[0], kind: a[1], x0: a[2] * S, z0: a[3] * S, x1: a[4] * S, z1: a[5] * S, en: a[6], f: a[7] || 0, gS: [], gN: [], gW: [], gE: [] }));
+  const C = [['z', 115, 150, 230, 0, 1], ['x', 285, 210, 300, 1, 2], ['z', 365, 350, 440, 2, 3], ['x', 510, 170, 260, 4, 3],
+    ['x', 510, 470, 550, 3, 5], ['x', 285, 430, 520, 2, 6], ['z', 585, 350, 440, 6, 5], ['z', 365, 580, 620, 3, 7],
+    ['x', 655, 430, 500, 7, 8], ['z', 620, 580, 610, 5, 8], ['x', 105, 170, 200, 0, 9], ['z', 365, 170, 220, 9, 2]
+  ].map(a => ({ axis: a[0], k: a[1] * S, a: a[2] * S, b: a[3] * S, lo: a[4], hi: a[5] }));
+  const ATM = { patio: [0xb8a47c, 0.0065, 1.0, 0.9], columnas: [0xa99870, 0.008, 0.55, 0.6], ruinas: [0x9a9484, 0.009, 0.6, 0.6], plaza: [0xbfae84, 0.006, 0.9, 0.8],
+    cripta: [0x2b2622, 0.022, 0.12, 0.25], trono: [0x3a2420, 0.016, 0.25, 0.35], jefe: [0x2a2036, 0.014, 0.22, 0.3], abierta: [0xbcb39c, 0.005, 1.0, 0.9], pasillo: [0x8d8470, 0.013, 0.4, 0.45] };
+
+  // ---- sectores: 0..9 salas, 10.. pasillos; cada uno con su grupo, vecinos y listas de piezas ----
+  const nd = () => ({ blocks: [], shafts: [], parts: [], rings: [], pads: [], spires: [], arches: [], cols: [], colsB: [], torch: [], planes: [], wedges: [] });
+  const sectors = Z.map(z => ({ name: z.name, kind: z.kind, nb: [], d: nd() })).concat(C.map((c, i) => ({ name: 'Pasillo ' + (i + 1), kind: 'pasillo', nb: [c.lo, c.hi], d: nd() })));
+  C.forEach((c, i) => { sectors[c.lo].nb.push(10 + i); sectors[c.hi].nb.push(10 + i); });
+
+  // ---- colisiones: cajas alineadas a los ejes en una rejilla ----
+  const CELL = 24, OFF = 200, grid = new Map(), colliders = [];
+  function addCol(b) {
+    colliders.push(b);
+    for (let i = Math.floor((b[0] + OFF) / CELL); i <= Math.floor((b[2] + OFF) / CELL); i++)
+      for (let j = Math.floor((b[1] + OFF) / CELL); j <= Math.floor((b[3] + OFF) / CELL); j++) {
+        const k = i * 2048 + j; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(b);
+      }
+  }
+  function collide(x, z, r) {
+    for (let it = 0; it < 2; it++) {
+      const i = Math.floor((x + OFF) / CELL), j = Math.floor((z + OFF) / CELL);
+      for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
+        const l = grid.get((i + di) * 2048 + j + dj); if (!l) continue;
+        for (const b of l) {
+          const cx = Math.max(b[0], Math.min(x, b[2])), cz = Math.max(b[1], Math.min(z, b[3]));
+          const dx = x - cx, dz = z - cz, d2 = dx * dx + dz * dz;
+          if (d2 >= r * r) continue;
+          if (d2 > 1e-8) { const d = Math.sqrt(d2), k = (r - d) / d; x += dx * k; z += dz * k; }
+          else {
+            const ex = Math.min(x - b[0], b[2] - x), ez = Math.min(z - b[1], b[3] - z);
+            if (ex < ez) x += (x - b[0] < b[2] - x ? -ex - r : ex + r); else z += (z - b[1] < b[3] - z ? -ez - r : ez + r);
+          }
+        }
+      }
+    }
+    return [x, z];
+  }
+  // ---- niveles: cada rasgo es un rectángulo con altura (plataforma 'b', escalera 's', rampa 'r'); el suelo es la mayor altura que cubre el punto ----
+  const FT = [];
+  function heightAt(x, z) {
+    let h = 0;
+    for (let i = 0; i < FT.length; i++) {
+      const q = FT[i];
+      if (x < q.x0 || x > q.x1 || z < q.z0 || z > q.z1) continue;
+      let v = q.h;
+      if (q.t !== 'b') {
+        const u = q.axis === 'x' ? (x - q.x0) / (q.x1 - q.x0) : (z - q.z0) / (q.z1 - q.z0);
+        v = q.t === 'r' ? q.h0 + u * (q.h1 - q.h0) : q.h0 + Math.ceil(Math.max(u, 1e-6) * q.n) * (q.h1 - q.h0) / q.n;
+      }
+      if (v > h) h = v;
+    }
+    return h;
+  }
+  function plat(sec, x0, z0, x1, z1, h) { FT.push({ t: 'b', x0: x0, z0: z0, x1: x1, z1: z1, h: h }); sectors[sec].d.parts.push([(x0 + x1) / 2, h / 2, (z0 + z1) / 2, x1 - x0, h, z1 - z0]); }
+  function stair(sec, axis, x0, z0, x1, z1, h0, h1) {          // escalones de ~0.48 m; h0 en el inicio del eje y h1 al final
+    const n = Math.max(1, Math.round(Math.abs(h1 - h0) / 0.48)), d = sectors[sec].d;
+    FT.push({ t: 's', axis: axis, x0: x0, z0: z0, x1: x1, z1: z1, h0: h0, h1: h1, n: n });
+    for (let k = 1; k <= n; k++) {
+      const top = h0 + k * (h1 - h0) / n; if (top < 0.05) continue;
+      if (axis === 'x') { const sx = (x1 - x0) / n; d.parts.push([x0 + (k - 0.5) * sx, top / 2, (z0 + z1) / 2, sx, top, z1 - z0]); }
+      else { const sz = (z1 - z0) / n; d.parts.push([(x0 + x1) / 2, top / 2, z0 + (k - 0.5) * sz, x1 - x0, top, sz]); }
+    }
+  }
+  function ramp(sec, axis, x0, z0, x1, z1, h0, h1) {           // rampa lisa (cuña) entre dos alturas
+    FT.push({ t: 'r', axis: axis, x0: x0, z0: z0, x1: x1, z1: z1, h0: h0, h1: h1 });
+    const up = h1 >= h0, rot = axis === 'x' ? (up ? 0 : Math.PI) : (up ? -Math.PI / 2 : Math.PI / 2);
+    sectors[sec].d.wedges.push([(x0 + x1) / 2, Math.min(h0, h1), (z0 + z1) / 2, axis === 'x' ? x1 - x0 : z1 - z0, Math.abs(h1 - h0), axis === 'x' ? z1 - z0 : x1 - x0, rot]);
+  }
+  function dais(sec, cx, cz, w2, d2, top, base) {              // plataforma con escaleras por los cuatro lados
+    const n = Math.max(1, Math.round(Math.abs(top - base) / 0.48)), L = n * 1.4, x0 = cx - w2 / 2, x1 = cx + w2 / 2, z0 = cz - d2 / 2, z1 = cz + d2 / 2;
+    plat(sec, x0, z0, x1, z1, top);
+    stair(sec, 'z', x0, z0 - L, x1, z0, base, top); stair(sec, 'z', x0, z1, x1, z1 + L, top, base);
+    stair(sec, 'x', x0 - L, z0, x0, z1, base, top); stair(sec, 'x', x1, z0, x1 + L, z1, top, base);
+  }
+  function gallery(sec, x0, z0, x1, z1, top, base, along, inner) {   // pasarela elevada con parapeto y escalera en un extremo
+    const n = Math.max(1, Math.round((top - base) / 0.48)), L = n * 1.4;
+    if (along === 'x') { stair(sec, 'x', x0, z0, x0 + L, z1, base, top); plat(sec, x0 + L, z0, x1, z1, top); x0 += L; }
+    else { stair(sec, 'z', x0, z0, x1, z0 + L, base, top); plat(sec, x0, z0 + L, x1, z1, top); z0 += L; }
+    const e = inner === 'z0' ? [x0, z0, x1, z0 + 0.8] : inner === 'z1' ? [x0, z1 - 0.8, x1, z1] : inner === 'x0' ? [x0, z0, x0 + 0.8, z1] : [x1 - 0.8, z0, x1, z1];
+    sectors[sec].d.parts.push([(e[0] + e[2]) / 2, top + 0.55, (e[1] + e[3]) / 2, e[2] - e[0], 1.1, e[3] - e[1]]); addCol(e);
+  }
+  const hit = (x, z, r) => { const p = collide(x, z, r); return Math.abs(p[0] - x) + Math.abs(p[1] - z) > 1e-6; };
+
+  // ---- piezas: muros claros (bloques de altura irregular), dinteles, columnas con diseño ----
+  function wall(axis, fixed, s0, s1, sec, tall, F) {
+    F = F || 0;
+    const n = Math.max(1, Math.round((s1 - s0) / 4)), len = (s1 - s0) / n, d = sectors[sec].d.blocks;
+    for (let i = 0; i < n; i++) {
+      const h = (tall === false || rnd() < 0.16 ? rr(2.5, 5) : rr(H - 0.6, H + 0.4)) + F, m = s0 + (i + 0.5) * len;   // los muros arrancan en el suelo y suben hasta el piso + altura
+      d.push(axis === 'x' ? [m, h / 2, fixed, len + 0.05, h, T] : [fixed, h / 2, m, T, h, len + 0.05]);
+    }
+    addCol(axis === 'x' ? [s0, fixed - T / 2, s1, fixed + T / 2] : [fixed - T / 2, s0, fixed + T / 2, s1]);
+  }
+  function run(axis, fixed, a, b, gaps, sec, F) {                  // muro con huecos de puerta + arco sobre cada hueco
+    const gs = gaps.slice().sort((p, q) => p[0] - q[0]); let cur = a;
+    for (const g of gs) { if (g[0] > cur) wall(axis, fixed, cur, g[0], sec, true, F); cur = Math.max(cur, g[1]); }
+    if (cur < b) wall(axis, fixed, cur, b, sec, true, F);
+    for (const g of gs) { const m = (g[0] + g[1]) / 2; sectors[sec].d.arches.push(axis === 'x' ? [m, fixed, 0, F || 0] : [fixed, m, Math.PI / 2, F || 0]); }
+  }
+  function column(x, z, kind, sec) {
+    const d = sectors[sec].d, y = heightAt(x, z);
+    if (kind === 'fallen') { d.shafts.push([x, y + 0.8, z, 1.6, rr(5, 9), 1.6, rnd() * 3.14, Math.PI / 2]); return; }
+    (kind === 'full' ? d.cols : d.colsB).push([x, z, rnd() * 6.28, y]);
+    addCol([x - 1, z - 1, x + 1, z + 1]);
+  }
+
+  // ---- construcción: pasillos (puertas en las salas) y perímetro de cada sala ----
+  C.forEach((c, i) => {                                           // pasillos: escalera central si unen salas de distinto nivel
+    const g = [c.k - W / 2, c.k + W / 2], id = 10 + i, fl = Z[c.lo].f, fh = Z[c.hi].f, F = Math.max(fl, fh), zx = c.axis === 'z';
+    if (zx) { Z[c.lo].gN.push(g); Z[c.hi].gS.push(g); wall('z', c.k - W / 2, c.a, c.b, id, true, F); wall('z', c.k + W / 2, c.a, c.b, id, true, F); }
+    else { Z[c.lo].gE.push(g); Z[c.hi].gW.push(g); wall('x', c.k - W / 2, c.a, c.b, id, true, F); wall('x', c.k + W / 2, c.a, c.b, id, true, F); }
+    const seg = (s0, s1, h) => {
+      const r = zx ? [c.k - W / 2, s0, c.k + W / 2, s1] : [s0, c.k - W / 2, s1, c.k + W / 2];
+      if (h > 0) FT.push({ t: 'b', x0: r[0], z0: r[1], x1: r[2], z1: r[3], h: h });
+      sectors[id].d.planes.push([r[0], r[1], r[2], r[3], h]);
+    };
+    if (fl === fh) seg(c.a, c.b, fl);
+    else {
+      const n = Math.max(1, Math.round(Math.abs(fh - fl) / 0.48)), L = n * 1.4, m = (c.a + c.b) / 2;
+      seg(c.a, m - L / 2, fl); seg(m + L / 2, c.b, fh);
+      if (zx) stair(id, 'z', c.k - W / 2, m - L / 2, c.k + W / 2, m + L / 2, fl, fh); else stair(id, 'x', m - L / 2, c.k - W / 2, m + L / 2, c.k + W / 2, fl, fh);
+    }
+  });
+  Z.forEach((z, i) => {                                           // salas: piso elevado + muros desde el suelo
+    if (z.kind === 'abierta') return;
+    if (z.f > 0) FT.push({ t: 'b', x0: z.x0, z0: z.z0, x1: z.x1, z1: z.z1, h: z.f });
+    sectors[i].d.planes.push([z.x0, z.z0, z.x1, z.z1, z.f]);
+    run('x', z.z0, z.x0 - T / 2, z.x1 + T / 2, z.gS, i, z.f); run('x', z.z1, z.x0 - T / 2, z.x1 + T / 2, z.gN, i, z.f);
+    run('z', z.x0, z.z0 + T / 2, z.z1 - T / 2, z.gW, i, z.f); run('z', z.x1, z.z0 + T / 2, z.z1 - T / 2, z.gE, i, z.f);
+  });
+
+  // ---- decoración y desniveles por tipo de sala ----
+  function decorate(i) {
+    const z = Z[i], d = sectors[i].d, f = z.f, w = z.x1 - z.x0, dp = z.z1 - z.z0, cx = (z.x0 + z.x1) / 2, cz = (z.z0 + z.z1) / 2, ax = w >= dp;
+    const R = Math.min(w, dp) * 0.36;
+    const flat = (x, zz) => [[0, 0], [3, 3], [-3, 3], [3, -3], [-3, -3]].every(o => Math.abs(heightAt(x + o[0], zz + o[1]) - f) < 0.01);
+    const free = (x, zz) => Math.abs(x - cx) > 18 && Math.abs(zz - cz) > 18 && flat(x, zz);
+    const scatter = (n, kind) => { for (let t = 0, k = 0; k < n && t < 300; t++) { const x = rr(z.x0 + 25, z.x1 - 25), zz = rr(z.z0 + 25, z.z1 - 25); if (free(x, zz)) { column(x, zz, kind, i); k++; } } };
+    const chunks = n => { for (let t = 0, k = 0; k < n && t < 400; t++) {
+      const x = rr(z.x0 + 25, z.x1 - 25), zz = rr(z.z0 + 25, z.z1 - 25), len = rr(8, 22), hz = rnd() < 0.5, ex = hz ? x + len : x, ez = hz ? zz : zz + len;
+      if (free(x, zz) && free(ex, ez) && (z.kind !== 'abierta' || !((x < z.x0 + 60 && Math.abs(zz - cz) < 14) || (Math.abs(x - 365 * S) < 14 && zz > z.z1 - 60)))) {
+        if (hz) wall('x', zz, x, ex, i, false, f); else wall('z', x, zz, ez, i, false, f); k++; } } };
+    const ring = n => { for (let k = 0; k < n; k++) column(cx + R * Math.cos(k / n * 6.283), cz + R * Math.sin(k / n * 6.283), 'full', i); };
+    if (z.kind === 'columnas') {
+      if (i === 1) gallery(i, z.x0 + 1.2, z.z1 - 19.2, z.x1 - 1.2, z.z1 - 1.2, f + 3.2, f, 'x', 'z0');       // galería elevada junto al muro norte
+      else gallery(i, z.x1 - 19.2, z.z0 + 20, z.x1 - 1.2, z.z1 - 20, f + 3.2, f, 'z', 'x0');               // galería junto al muro este
+      for (const fr of [0.28, 0.72]) for (let p = 14; p < (ax ? w : dp) - 10; p += 16)
+        column(ax ? z.x0 + p : z.x0 + w * fr, ax ? z.z0 + dp * fr : z.z0 + p, rnd() < 0.15 ? 'broken' : 'full', i);
+    } else if (z.kind === 'patio') {
+      dais(i, cx, cz, i === 0 ? 60 : 44, i === 0 ? 50 : 44, f + 1.2, f);
+      [[16, 16], [w - 16, 16], [16, dp - 16], [w - 16, dp - 16]].forEach(a => column(z.x0 + a[0], z.z0 + a[1], 'full', i));
+      scatter(3, 'fallen'); scatter(2, 'broken');
+    } else if (z.kind === 'ruinas') {
+      plat(i, cx - 80, cz - 70, cx - 40, cz - 35, f + 1.4); stair(i, 'x', cx - 40, cz - 70, cx - 40 + 4.2, cz - 35, f + 1.4, f);
+      plat(i, cx + 45, cz + 40, cx + 85, cz + 75, f + 1.9); ramp(i, 'x', cx + 85, cz + 40, cx + 99, cz + 75, f + 1.9, f);
+      chunks(8); scatter(8, 'broken'); scatter(4, 'fallen');
+    } else if (z.kind === 'plaza') {
+      dais(i, cx, cz, 22, 22, f + 2.4, f); d.spires.push([cx, cz, f + 2.4]); addCol([cx - 2, cz - 2, cx + 2, cz + 2]);
+      ring(8); scatter(4, 'fallen'); d.pads.push([cx, cz, R * 0.6, f]);
+    } else if (z.kind === 'cripta') {
+      for (let x = z.x0 + 20; x < z.x1 - 20; x += 22) for (let zz = z.z0 + 20; zz < z.z1 - 20; zz += 22) if (Math.abs(zz - cz) > 10) column(x, zz, 'full', i);
+    } else if (z.kind === 'trono') {
+      const dz0 = z.z1 - 21, dz1 = z.z1 - 7;
+      plat(i, cx - 17, dz0, cx + 17, dz1, f + 1.2); stair(i, 'z', cx - 17, dz0 - 4.2, cx + 17, dz0, f, f + 1.2);
+      d.parts.push([cx, f + 3.2, z.z1 - 17, 4, 4, 3], [cx, f + 5.5, z.z1 - 18.2, 5, 7, 1]); addCol([cx - 2.5, z.z1 - 19, cx + 2.5, z.z1 - 15]);
+      for (let p = 14; p < dp - 20; p += 16) { column(z.x0 + 16, z.z0 + p, 'full', i); column(z.x1 - 16, z.z0 + p, 'full', i); }
+    } else if (z.kind === 'jefe') {
+      const top = f + 1.5, x0 = cx - 30, x1 = cx + 30, z0 = cz - 25, z1 = cz + 25;
+      plat(i, x0, z0, x1, z1, top);
+      stair(i, 'z', x0, z0 - 4.2, x1, z0, f, top); stair(i, 'z', x0, z1, x1, z1 + 4.2, top, f);
+      ramp(i, 'x', x0 - 12, z0, x0, z1, f, top); ramp(i, 'x', x1, z0, x1 + 12, z1, top, f);
+      ring(10); d.pads.push([cx, cz, 20, top], [cx, cz, 8, top + 0.05]);
+    } else if (z.kind === 'abierta') {
+      dais(i, z.x0 + 250, z.z1 - 70, 24, 24, f + 4.8, f);                                                  // mirador
+      plat(i, z.x0 + 110, z.z0 + 45, z.x0 + 150, z.z0 + 75, f + 1.6); ramp(i, 'x', z.x0 + 96, z.z0 + 45, z.x0 + 110, z.z0 + 75, f, f + 1.6);
+      chunks(12); scatter(10, 'broken'); scatter(6, 'fallen'); scatter(4, 'full');
+    }
+  }
+  Z.forEach((z, i) => decorate(i));
+
+  // ---- antorchas: una pieza visible por antorcha; la luz real la reparte el visor entre las más cercanas ----
+  const torches = [];
+  const torch = (x, z, sec) => { const y = heightAt(x, z) + 3.2; sectors[sec].d.torch.push([x, y, z]); torches.push({ x: x, y: y + 0.5, z: z, sec: sec }); };
+  Z.forEach((z, i) => {
+    if (z.kind === 'abierta') return;
+    const near = (g, v) => g.some(q => v > q[0] - 8 && v < q[1] + 8);
+    for (let x = z.x0 + 17; x < z.x1 - 10; x += 34) { if (!near(z.gS, x)) torch(x, z.z0 + 1.5, i); if (!near(z.gN, x)) torch(x, z.z1 - 1.5, i); }
+    for (let q = z.z0 + 17; q < z.z1 - 10; q += 34) { if (!near(z.gW, q)) torch(z.x0 + 1.5, q, i); if (!near(z.gE, q)) torch(z.x1 - 1.5, q, i); }
+  });
+  C.forEach((c, i) => { for (let p = c.a + 25, sg = 1; p < c.b - 10; p += 45, sg = -sg) { const o = c.k + sg * (W / 2 - 1.3); torch(c.axis === 'z' ? o : p, c.axis === 'z' ? p : o, 10 + i); } });
+
+  // ---- enemigos por sala (zonas de encuentro) ----
+  const spawns = [];
+  Z.forEach((z, i) => z.en.forEach(e => { for (let k = 0; k < e[1]; k++) for (let t = 0; t < 60; t++) {
+    const x = rr(z.x0 + 20, z.x1 - 20), zz = rr(z.z0 + 20, z.z1 - 20);
+    if (!hit(x, zz, 2.2)) { spawns.push({ x: x, y: heightAt(x, zz), z: zz, tier: e[0], zone: i }); break; } } }));
+
+  // ---- mallas ----
+  const group = new THREE.Group(), dummy = new THREE.Object3D(); dummy.rotation.order = 'YXZ';
+  const MAP = 700 * S;
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const g2 = cv.getContext('2d'); g2.fillStyle = '#c6aa78'; g2.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 1800; i++) { const v = 150 + (Math.random() * 70 | 0); g2.fillStyle = 'rgba(' + v + ',' + (v - 25) + ',' + (v - 70) + ',.35)'; g2.fillRect(Math.random() * 128, Math.random() * 128, 2, 2); }
+  const tex = new THREE.CanvasTexture(cv); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set((MAP + 300) / 10, (MAP + 300) / 10);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(MAP + 300, MAP + 300).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
+  floor.position.set(MAP / 2, 0, MAP / 2); group.add(floor);
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(MAP + 1200, 700).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x3d5560, roughness: 0.3 }));
+  sea.position.set(MAP / 2, -0.4, -150 - 350); group.add(sea);
+
+  // piedra: textura generada por código (bloques, juntas, mugre) proyectada en 3 ejes, sin depender de UV
+  function stoneTex() {
+    const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
+    g.fillStyle = '#b9b095'; g.fillRect(0, 0, 256, 256);
+    for (let r = 0; r < 8; r++) { const off = (r % 2) * 32; for (let k = -1; k < 5; k++) {
+      const v = 160 + (Math.random() * 40 | 0); g.fillStyle = 'rgb(' + v + ',' + (v - 8) + ',' + (v - 28) + ')'; g.fillRect(k * 64 + off + 2, r * 32 + 2, 60, 28); } }
+    g.strokeStyle = '#5d5646'; g.lineWidth = 3;
+    for (let r = 0; r <= 8; r++) { g.beginPath(); g.moveTo(0, r * 32); g.lineTo(256, r * 32); g.stroke(); }
+    for (let r = 0; r < 8; r++) { const off = (r % 2) * 32; for (let k = -1; k < 5; k++) { g.beginPath(); g.moveTo(k * 64 + off, r * 32); g.lineTo(k * 64 + off, r * 32 + 32); g.stroke(); } }
+    for (let i = 0; i < 2500; i++) { const v = Math.random() * 90 | 0; g.fillStyle = 'rgba(' + v + ',' + v + ',' + v + ',.18)'; g.fillRect(Math.random() * 256, Math.random() * 256, 2, 2); }
+    g.strokeStyle = 'rgba(40,34,26,.5)'; g.lineWidth = 1;
+    for (let i = 0; i < 10; i++) { let x = Math.random() * 256, y = Math.random() * 256; g.beginPath(); g.moveTo(x, y); for (let k = 0; k < 4; k++) g.lineTo(x += Math.random() * 14 - 7, y += Math.random() * 18); g.stroke(); }
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+  }
+  function flagTex() {
+    const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
+    g.fillStyle = '#7d765f'; g.fillRect(0, 0, 256, 256);
+    for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++) { const v = 110 + (Math.random() * 40 | 0); g.fillStyle = 'rgb(' + v + ',' + (v - 6) + ',' + (v - 24) + ')'; g.fillRect(k * 64 + 3, r * 64 + 3, 58, 58); }
+    for (let i = 0; i < 3000; i++) { const v = Math.random() * 80 | 0; g.fillStyle = 'rgba(' + v + ',' + v + ',' + v + ',.2)'; g.fillRect(Math.random() * 256, Math.random() * 256, 2, 2); }
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+  }
+  const stoneMap = stoneTex();
+  const mStone = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, flatShading: true });
+  mStone.onBeforeCompile = sh => {
+    sh.uniforms.uTex = { value: stoneMap }; sh.uniforms.uScale = { value: 1 / 6 };
+    sh.vertexShader = 'varying vec3 vWP;\nvarying vec3 vWN;\n' + sh.vertexShader.replace('#include <begin_vertex>', [
+      '#include <begin_vertex>', 'vec4 wp4 = vec4(transformed, 1.0);', 'vec3 wn3 = objectNormal;',
+      '#ifdef USE_INSTANCING', ' wp4 = instanceMatrix * wp4; wn3 = mat3(instanceMatrix) * wn3;', '#endif',
+      'wp4 = modelMatrix * wp4;', 'vWP = wp4.xyz; vWN = normalize(mat3(modelMatrix) * wn3);'].join('\n'));
+    sh.fragmentShader = ['varying vec3 vWP;', 'varying vec3 vWN;', 'uniform sampler2D uTex;', 'uniform float uScale;',
+      'vec3 triTex(vec3 p, vec3 n){',
+      '  vec3 w = pow(abs(n), vec3(6.0)); w /= (w.x + w.y + w.z);',
+      '  return texture2D(uTex, p.zy * uScale).rgb * w.x + texture2D(uTex, p.xz * uScale).rgb * w.y + texture2D(uTex, p.xy * uScale).rgb * w.z;',
+      '}'].join('\n') + '\n' + sh.fragmentShader.replace('#include <color_fragment>', [
+      '#include <color_fragment>', 'vec3 stn = triTex(vWP, normalize(vWN));',
+      'diffuseColor.rgb *= stn * mix(0.55, 1.15, smoothstep(0.0, 3.5, vWP.y));'].join('\n'));   // la base de los muros queda más sucia
+  };
+  const mBand = new THREE.MeshStandardMaterial({ color: 0x9a8656, roughness: 0.8, flatShading: true });
+  const mDark = new THREE.MeshStandardMaterial({ color: 0x2a2420, roughness: 0.9 });
+  const mFlame = new THREE.MeshBasicMaterial({ color: 0xffa24a });
+  const prof = [[1.5, 0], [1.5, 0.35], [1.15, 0.45], [1.15, 0.7], [0.95, 0.85], [0.86, 1.1], [0.9, 1.35], [0.85, 1.6], [0.78, 6.9], [0.92, 7.05], [0.92, 7.3], [0.82, 7.5], [1.05, 7.9], [1.3, 8.4], [1.5, 8.7], [1.5, 9.3]];
+  const lathe = pts => new THREE.LatheGeometry(pts.map(q => new THREE.Vector2(q[0], q[1])), 12);
+  const sh = new THREE.Shape(), AW = W / 2, AT = 3.8, AR = 3.2, AH = 7.9, AD = T + 0.6;     // arco: rectángulo menos media elipse
+  sh.moveTo(-AW, AT); sh.lineTo(-AW, AH); sh.lineTo(AW, AH); sh.lineTo(AW, AT);
+  for (let k = 0; k <= 16; k++) { const a = k / 16 * Math.PI; sh.lineTo(AW * Math.cos(a), AT + AR * Math.sin(a)); }
+  const geo = { box: new THREE.BoxGeometry(1, 1, 1), shaft: new THREE.CylinderGeometry(0.8, 0.9, 1, 12), ring: new THREE.TorusGeometry(0.9, 0.12, 6, 12).rotateX(Math.PI / 2),
+    pad: new THREE.CylinderGeometry(1, 1, 0.2, 32), spire: new THREE.CylinderGeometry(0.6, 1.8, 18, 4), flame: new THREE.ConeGeometry(0.22, 0.6, 6),
+    colF: lathe(prof), colB: lathe(prof.slice(0, 8).concat([[0.8, 3.2], [0.74, 4.3], [0.5, 4.1], [0, 4.4]])),
+    arch: new THREE.ExtrudeGeometry(sh, { depth: AD, bevelEnabled: false }).translate(0, 0, -AD / 2) };
+  const tint = new THREE.Color();
+  const wsh = new THREE.Shape(); wsh.moveTo(0, 0); wsh.lineTo(1, 0); wsh.lineTo(1, 1); wsh.lineTo(0, 0);
+  geo.wedge = new THREE.ExtrudeGeometry(wsh, { depth: 1, bevelEnabled: false }).translate(-0.5, 0, -0.5);   // cuña: sube hacia +x
+  function inst(sec, g, mat, list, place, color) {
+    if (!list.length) return;
+    const m = new THREE.InstancedMesh(g, mat, list.length); m.frustumCulled = false;
+    list.forEach((a, i) => { place(a); dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix); if (color) { tint.set(color).multiplyScalar(rr(0.9, 1.06)); m.setColorAt(i, tint); } });
+    sec.group.add(m);
+  }
+  const box = a => { dummy.position.set(a[0], a[1], a[2]); dummy.rotation.set(0, 0, 0); dummy.scale.set(a[3], a[4], a[5]); };
+  const at = a => { dummy.position.set(a[0], a[3] || 0, a[1]); dummy.rotation.set(0, a[2], 0); dummy.scale.set(1, 1, 1); };
+  sectors.forEach(s => {
+    s.group = new THREE.Group(); group.add(s.group);
+    inst(s, geo.box, mStone, s.d.blocks, box, 0xdacfb0);
+    inst(s, geo.box, mStone, s.d.parts, box, 0xe0d6bb);
+    inst(s, geo.shaft, mStone, s.d.shafts, a => { dummy.position.set(a[0], a[1], a[2]); dummy.rotation.set(0, a[6], a[7]); dummy.scale.set(a[3], a[4], a[5]); }, 0xe6dcc2);
+    inst(s, geo.colF, mStone, s.d.cols, at, 0xe6dcc2);
+    inst(s, geo.colB, mStone, s.d.colsB, at, 0xdcd1b6);
+    inst(s, geo.arch, mStone, s.d.arches, a => { dummy.position.set(a[0], a[3], a[1]); dummy.rotation.set(0, a[2], 0); dummy.scale.set(1, 1, 1); }, 0xe2d8bd);
+    inst(s, geo.wedge, mStone, s.d.wedges, a => { dummy.position.set(a[0], a[1], a[2]); dummy.rotation.set(0, a[6], 0); dummy.scale.set(a[3], a[4], a[5]); }, 0xd9cfb4);
+    inst(s, geo.pad, mStone, s.d.pads, a => { dummy.position.set(a[0], (a[3] || 0) + 0.1, a[1]); dummy.rotation.set(0, 0, 0); dummy.scale.set(a[2], 1, a[2]); }, 0x8c826a);
+    inst(s, geo.spire, mStone, s.d.spires, a => { dummy.position.set(a[0], a[2] + 8.8, a[1]); dummy.rotation.set(0, 0.78, 0); dummy.scale.set(1, 1, 1); }, 0xd6ccb0);
+    inst(s, geo.box, mDark, s.d.torch, a => { dummy.position.set(a[0], a[1] - 0.4, a[2]); dummy.rotation.set(0, 0, 0); dummy.scale.set(0.22, 0.8, 0.22); });
+    inst(s, geo.flame, mFlame, s.d.torch, a => { dummy.position.set(a[0], a[1] + 0.1, a[2]); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); });
+  });
+  // suelo de losas dentro de salas y pasillos (afuera sigue la arena)
+  const mFloor = new THREE.MeshStandardMaterial({ map: flagTex(), roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  function floorPlane(s, x0, z0, x1, z1, y) {
+    const w = x1 - x0, d = z1 - z0, g = new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), uv = g.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w / 8, uv.getY(i) * d / 8);
+    const m = new THREE.Mesh(g, mFloor); m.position.set((x0 + x1) / 2, y + 0.05, (z0 + z1) / 2); s.group.add(m);
+  }
+  sectors.forEach(s => s.d.planes.forEach(q => floorPlane(s, q[0], q[1], q[2], q[3], q[4])));
+  const TIER = { ligero: [1.7, 0xd6b84a], medio: [2.0, 0xd9803a], pesado: [2.7, 0xc83c3c], jefe: [4.2, 0x9a5cff] };   // marcadores de enemigos
+  spawns.forEach(sp => {
+    const t = TIER[sp.tier], m = new THREE.Mesh(new THREE.CylinderGeometry(0.45 * t[0] / 1.8, 0.6 * t[0] / 1.8, t[0], 8), new THREE.MeshStandardMaterial({ color: t[1], emissive: t[1], emissiveIntensity: 0.25 }));
+    m.position.set(sp.x, sp.y + t[0] / 2, sp.z); sectors[sp.zone].group.add(m);
+  });
+
+  // ---- sectores: cuál es el actual y cuáles se dibujan (actual + vecinos + vecinos de vecinos) ----
+  function sectorAt(x, z) {
+    for (let i = 0; i < Z.length; i++) { const q = Z[i]; if (x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1) return i; }
+    for (let i = 0; i < C.length; i++) { const c = C[i];
+      if (c.axis === 'z' ? (Math.abs(x - c.k) <= W / 2 && z >= c.a && z <= c.b) : (Math.abs(z - c.k) <= W / 2 && x >= c.a && x <= c.b)) return 10 + i; }
+    return -1;
+  }
+  function nearest(x, z) {
+    let best = 0, bd = 1e12;
+    Z.forEach((q, i) => { const dx = Math.max(q.x0 - x, 0, x - q.x1), dz = Math.max(q.z0 - z, 0, z - q.z1), d = dx * dx + dz * dz; if (d < bd) { bd = d; best = i; } });
+    return best;
+  }
+  function setVisible(cur) {
+    const vis = new Set([cur]);
+    for (let d = 0; d < 2; d++) Array.from(vis).forEach(i => sectors[i].nb.forEach(n => vis.add(n)));
+    sectors.forEach((s, i) => { s.group.visible = cur < 0 || vis.has(i); });
+    return vis;
+  }
+  const cen = i => [(Z[i].x0 + Z[i].x1) / 2, (Z[i].z0 + Z[i].z1) / 2];
+  const len = r => { let t = 0; for (let k = 1; k < r.length; k++) { const a = cen(r[k - 1]), b = cen(r[k]); t += Math.hypot(a[0] - b[0], a[1] - b[1]); } return t; };
+  const routes = { main: len([0, 1, 2, 3, 7, 8]), full: len([0, 9, 2, 1, 2, 6, 5, 3, 4, 3, 7, 8]) };
+  const c0 = [cen(0)[0], Z[0].z0 + 28];
+  const stats = { sectors: sectors.length, blocks: sectors.reduce((n, s) => n + s.d.blocks.length, 0), columns: sectors.reduce((n, s) => n + s.d.cols.length + s.d.colsB.length + s.d.shafts.length, 0), torches: torches.length,
+    colliders: colliders.length, enemies: spawns.length, features: FT.length };
+  return { group: group, getHeight: heightAt, heightAt: heightAt, spawn: { x: c0[0], y: heightAt(c0[0], c0[1]), z: c0[1] }, spawns: spawns, collide: collide, sectorAt: sectorAt, nearest: nearest, setVisible: setVisible, torches: torches,
+    sectors: sectors, zones: Z, corridors: C, ATM: ATM, size: MAP, routes: routes, stats: stats, W: W };
+}
+// ===================== FIN DEL MAPA =====================
+
+// ---------- Visor de prueba ----------
+function loadScript(u) { return new Promise(res => { const t = document.createElement('script'); t.src = u; t.onload = () => res(true); t.onerror = () => res(false); document.head.appendChild(t); }); }
+
+function startViewer() {
+  const D = (k, s) => window.DIAG.add(k, s), $ = id => document.getElementById(id);
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight); document.body.appendChild(renderer.domElement);
+  const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 700);
+  const hemi = new THREE.HemisphereLight(0xcfc3a6, 0x6b5d45, 0.9); scene.add(hemi);
+  const sun = new THREE.DirectionalLight(0xffe3b0, 1.0); sun.position.set(-80, 90, -60); scene.add(sun);
+  let map;
+  try { map = createRuinsMap(THREE); } catch (e) { D('ERROR', 'No se pudo crear el mapa: ' + e.message); throw e; }
+  scene.add(map.group);
+  const st = map.stats;
+  D('OK', 'Mapa creado: ' + st.sectors + ' sectores, ' + st.blocks + ' bloques de muro, ' + st.columns + ' anillos de columna, ' + st.colliders + ' colisiones, ' + st.enemies + ' enemigos, ' + st.torches + ' antorchas, ' + st.features + ' desniveles (plataformas, escaleras y rampas).');
+  D('INFO', 'Recorrido principal ≈ ' + (map.routes.main / 1000).toFixed(2) + ' km; recorrido completo ≈ ' + (map.routes.full / 1000).toFixed(2) + ' km (≈ ' + Math.round(map.routes.full / 6 / 60) + ' min andando a 6 m/s, sin contar combates).');
+
+  const col = new THREE.Color(), tgt = new THREE.Color(), fog = new THREE.FogExp2(0xb8a47c, 0.0065);
+  scene.fog = fog; scene.background = new THREE.Color(0xb8a47c); col.set(0xb8a47c);
+  const player = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1.8, 10), new THREE.MeshStandardMaterial({ color: 0x884433 })); scene.add(player);
+  const p = { x: map.spawn.x, y: map.spawn.y, z: map.spawn.z }, visited = new Set([0]);
+  let vy = 0, camY = map.spawn.y + 3;
+  let yaw = 3.14, pitch = 0.4, dist = 12, drag = false, lx = 0, ly = 0, cur = 0, vis = 0, visSet = new Set();
+  const setV = i => { visSet = map.setVisible(i); vis = visSet.size; };
+  const keys = {};
+  addEventListener('keydown', e => {
+    keys[e.code] = true;
+    const n = e.code.indexOf('Digit') === 0 ? (+e.code.slice(5) + 9) % 10 : -1;     // 1..9 y 0 = teletransporte a la sala 0..9
+    if (n >= 0 && n < map.zones.length) { const z = map.zones[n]; p.x = (z.x0 + z.x1) / 2; p.z = (z.z0 + z.z1) / 2; const q = map.collide(p.x, p.z, 1.2); p.x = q[0]; p.z = q[1]; p.y = map.heightAt(p.x, p.z); }
+  });
+  addEventListener('keyup', e => { keys[e.code] = false; });
+  const cvs = renderer.domElement;
+  cvs.addEventListener('pointerdown', e => { drag = true; lx = e.clientX; ly = e.clientY; cvs.setPointerCapture(e.pointerId); });
+  addEventListener('pointerup', () => { drag = false; });
+  addEventListener('pointermove', e => { if (!drag) return; yaw -= (e.clientX - lx) * 0.005; pitch = Math.max(0.05, Math.min(1.3, pitch + (e.clientY - ly) * 0.005)); lx = e.clientX; ly = e.clientY; });
+  addEventListener('wheel', e => { dist = Math.max(4, Math.min(60, dist * (1 + Math.sign(e.deltaY) * 0.1))); }, { passive: true });
+  addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+  // 6 luces reales que se reasignan a las antorchas más cercanas (número fijo: no hay recompilaciones)
+  const pool = [];
+  for (let i = 0; i < 6; i++) { const l = new THREE.PointLight(0xff9a55, 0, 38, 1.6); scene.add(l); pool.push(l); }
+  pool[0].shadow.mapSize.set(1024, 1024); pool[0].shadow.camera.far = 45; pool[0].shadow.bias = -0.003;
+  const NP = 260, dpos = new Float32Array(NP * 3);
+  for (let i = 0; i < NP; i++) { dpos[i * 3] = (Math.random() - 0.5) * 60; dpos[i * 3 + 1] = Math.random() * 14; dpos[i * 3 + 2] = (Math.random() - 0.5) * 60; }
+  const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.BufferAttribute(dpos, 3));
+  const dust = new THREE.Points(dg, new THREE.PointsMaterial({ color: 0xe8d8b0, size: 0.14, transparent: true, opacity: 0.45, depthWrite: false }));
+  dust.frustumCulled = false; scene.add(dust);
+  let shadows = false;
+  addEventListener('keydown', e => {                                     // Q = sombras en tiempo real (más pesado)
+    if (e.code !== 'KeyQ') return;
+    shadows = !shadows; renderer.shadowMap.enabled = shadows; pool[0].castShadow = shadows; player.castShadow = shadows;
+    scene.traverse(o => { if (o.isMesh) { if (o !== player) { o.castShadow = shadows; o.receiveShadow = shadows; } if (o.material) o.material.needsUpdate = true; } });
+    D('INFO', 'Sombras ' + (shadows ? 'activadas' : 'desactivadas'));
+  });
+  const mm = $('mm').getContext('2d'), sc = 200 / map.size, tc = { ligero: '#d6b84a', medio: '#d9803a', pesado: '#c83c3c', jefe: '#9a5cff' };
+  function drawMap() {
+    mm.clearRect(0, 0, 200, 200);
+    map.corridors.forEach((c, i) => { mm.fillStyle = visited.has(10 + i) ? '#9a8f78' : '#4a443a';
+      if (c.axis === 'z') mm.fillRect((c.k - 7) * sc, 200 - c.b * sc, 14 * sc, (c.b - c.a) * sc); else mm.fillRect(c.a * sc, 200 - (c.k + 7) * sc, (c.b - c.a) * sc, 14 * sc); });
+    map.zones.forEach((z, i) => { mm.fillStyle = visited.has(i) ? '#cdbf9f' : '#5a5346'; mm.fillRect(z.x0 * sc, 200 - z.z1 * sc, (z.x1 - z.x0) * sc, (z.z1 - z.z0) * sc); });
+    map.spawns.forEach(s => { if (visited.has(s.zone)) { mm.fillStyle = tc[s.tier]; mm.fillRect(s.x * sc - 1, 200 - s.z * sc - 1, 2.5, 2.5); } });
+    mm.fillStyle = '#ff5533'; mm.beginPath(); mm.arc(p.x * sc, 200 - p.z * sc, 3.5, 0, 6.283); mm.fill();
+    mm.strokeStyle = '#ff5533'; mm.beginPath(); mm.moveTo(p.x * sc, 200 - p.z * sc); mm.lineTo(p.x * sc - Math.sin(yaw) * 10, 200 - p.z * sc + Math.cos(yaw) * 10); mm.stroke();
+  }
+
+  const clock = new THREE.Clock(); let frames = 0, acc = 0, n = 0, fps = 0;
+  (function loop() {
+    requestAnimationFrame(loop);
+    const dt = Math.min(clock.getDelta(), 0.1), sp = (keys.ShiftLeft || keys.ShiftRight ? 12 : 6) * dt;
+    const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+    let mx = 0, mz = 0;
+    if (keys.KeyW) { mx += fx; mz += fz; } if (keys.KeyS) { mx -= fx; mz -= fz; }
+    if (keys.KeyD) { mx -= fz; mz += fx; } if (keys.KeyA) { mx += fz; mz -= fx; }
+    const ml = Math.hypot(mx, mz) || 1, g0 = map.heightAt(p.x, p.z);
+    let q = map.collide(p.x + mx / ml * sp, p.z + mz / ml * sp, 1.0);
+    if (map.heightAt(q[0], q[1]) - g0 > 0.6) {                      // escalón demasiado alto: se bloquea (o se desliza por el borde)
+      const a1 = map.collide(q[0], p.z, 1.0), a2 = map.collide(p.x, q[1], 1.0);
+      q = map.heightAt(a1[0], a1[1]) - g0 <= 0.6 ? a1 : map.heightAt(a2[0], a2[1]) - g0 <= 0.6 ? a2 : [p.x, p.z];
+    }
+    p.x = Math.max(5, Math.min(map.size - 5, q[0])); p.z = Math.max(5, Math.min(map.size - 5, q[1]));
+    const g = map.heightAt(p.x, p.z);                                 // subir escalones y rampas / caer de una plataforma
+    if (g >= p.y - 0.02) { p.y = Math.min(g, p.y + 9 * dt); vy = 0; } else { vy -= 25 * dt; p.y = Math.max(g, p.y + vy * dt); if (p.y === g) vy = 0; }
+    const s = map.sectorAt(p.x, p.z), eff = s >= 0 ? s : map.nearest(p.x, p.z);   // fuera de los muros: se usa la sala más cercana
+    if (eff !== cur) { cur = eff; if (s >= 0) visited.add(s); setV(eff); }
+    if (frames === 0) setV(cur);
+    const sec = map.sectors[cur], a = map.ATM[sec.kind] || map.ATM.pasillo;     // atmósfera propia de cada sector
+    tgt.set(a[0]); col.lerp(tgt, Math.min(1, dt * 1.5)); fog.color.copy(col); scene.background.copy(col); fog.density += (a[1] - fog.density) * Math.min(1, dt * 1.5);
+    const k = Math.min(1, dt * 1.5), tt = clock.elapsedTime;
+    hemi.intensity += (a[3] - hemi.intensity) * k; sun.intensity += (a[2] - sun.intensity) * k;       // luz según el sector
+    const near = [];
+    map.torches.forEach(q => { if (visSet.has(q.sec)) { const dx = q.x - p.x, dz = q.z - p.z; near.push([dx * dx + dz * dz, q]); } });
+    near.sort((u, v) => u[0] - v[0]);
+    pool.forEach((l, i) => {
+      const q = near[i];
+      if (!q || q[0] > 3600) { l.intensity = 0; return; }
+      l.position.set(q[1].x, q[1].y, q[1].z); l.intensity = 1.5 + 0.35 * Math.sin(tt * 9 + i * 3) + 0.2 * Math.sin(tt * 23 + i);   // parpadeo
+    });
+    dust.position.set(p.x, p.y, p.z);
+    for (let i = 0; i < NP; i++) { const j = i * 3 + 1; dpos[j] += dt * 0.25; if (dpos[j] > 14) dpos[j] = 0; }
+    dg.attributes.position.needsUpdate = true;
+    player.position.set(p.x, p.y + 0.9, p.z);
+    const cxp = p.x + Math.sin(yaw) * Math.cos(pitch) * dist, czp = p.z + Math.cos(yaw) * Math.cos(pitch) * dist;
+    camY += (p.y + 1.6 + Math.sin(pitch) * dist - camY) * Math.min(1, dt * 6);
+    camera.position.set(cxp, Math.max(camY, map.heightAt(cxp, czp) + 0.8), czp);
+    camera.lookAt(p.x, p.y + 1.6, p.z);
+    renderer.render(scene, camera);
+    frames++; acc += dt; n++;
+    if (frames === 3) D('OK', 'Dibujando: ' + renderer.info.render.calls + ' llamadas, ' + renderer.info.render.triangles + ' triángulos, ' + vis + ' sectores visibles.');
+    if (acc > 0.5) { fps = Math.round(n / acc); acc = 0; n = 0;
+      $('hud').innerHTML = '<b>' + sec.name + '</b><br>Sectores visibles ' + vis + '/' + map.sectors.length + ' · FPS ' + fps + ' · altura ' + p.y.toFixed(1) + ' m · explorado ' + visited.size + '/' + map.sectors.length +
+        '<br>WASD mover · Shift correr · arrastra para girar · rueda zoom<br>Teclas 1–9 y 0: saltar a cada sala · Q: sombras' +
+        '<br>Recorrido completo ≈ ' + (map.routes.full / 1000).toFixed(1) + ' km'; }
+    drawMap();
+  })();
+}
+(async function () {
+  if (!window.THREE) { DIAG.add('INFO', 'Cargando three.js desde jsDelivr…'); await loadScript('https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js'); }
+  if (!window.THREE) { DIAG.add('INFO', 'Probando cdnjs…'); await loadScript('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'); }
+  if (!window.THREE) { DIAG.add('ERROR', 'No se pudo cargar three.js. Abre el archivo descargado en Chrome o Edge con internet (la vista previa de un chat suele bloquear estos dominios).'); document.getElementById('hud').textContent = 'No cargó three.js. Mira el diagnóstico.'; return; }
+  DIAG.add('OK', 'three.js r' + THREE.REVISION);
+  try { startViewer(); } catch (e) { DIAG.add('ERROR', 'Fallo al iniciar: ' + e.message); }
+})();
+</script>
+</body>
+</html>

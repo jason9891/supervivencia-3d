@@ -145,3 +145,8 @@ Acciones puntuales (`ACTIONS` en hero-moves.js, `doAction` en index-app): recoge
 - **W/S** avanzar/retroceder · **A/D** girar (como el joystick); con un enemigo encarado A/D lo rodean · **Shift** correr (mantener) · **Espacio** saltar · **Tab** abre/cierra INVENTARIO · **clic izquierdo** atacar (combo) · **Ctrl** (mantener) escudo/guardia (`sas block idle`; `window.__guarding`) · **M** mapa · **rueda** acerca/aleja la cámara.
 - Cámara en PC (`pointer: fine`): `camZoom` 0.62 (más cerca del personaje), rueda 0.4–1.4; en móvil sigue igual (1).
 - `index-app.js`: `keys` alimenta `rawF/rawS` como el joystick (`analog`), `guarding`/`guardAct` (mientras dura no hay movimiento), `renderer.domElement` pointerdown (ratón, botón 0) → `attack()`.
+
+## mapa-ruinas-blade.html (texturas estilo Blade)
+- Copia de `mapa-ruinas-original.html` (el mapa «ruinas v3 niveles» del usuario) con texturas nuevas dentro de `createRuinsMap` (sección «TEXTURAS ESTILO BLADE», se copia junto con el mapa): albedo + normales de 512 px generados por código a partir de un mapa de alturas (`wallTexture` sillares con juntas/grietas/picaduras/musgo, `flagTexture` losas Voronoi, `sandTexture` arena con ondulaciones).
+- Muros/columnas: material triplanar con normales (`mStone`), variación de gran escala, base sucia, liquen y regueros. Suelos: `MeshStandardMaterial` con `map` + `normalMap`.
+- Visor: three r170 por import dinámico (misma versión del juego; respaldo a r128), tonemapping ACES, luces compensadas para r155+ (`LK`, `PK`). `window.__set(x,z,yaw,pitch,dist)` coloca la cámara (pruebas).
