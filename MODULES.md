@@ -136,3 +136,5 @@ Acciones puntuales (`ACTIONS` en hero-moves.js, `doAction` en index-app): recoge
 - `armor-wear.js`: las caras traseras de la armadura (el interior visible por los huecos de la malla) se oscurecen ×0.12 → eran las «manchas blancas» al agacharse/atacar. La piel conservada junto al hombro/ingle se tiñe de tela oscura cuando hay brazos o piernas puestos, y la cadera cuenta como «piernas» para el tinte.
 
 - Corrección: se quitó el tinte oscuro de la piel conservada y de la cadera (dejaba la ingle como un agujero negro con solo piernas puestas). `KEEP_R` de los muslos sube a 0.30 m: con piernas sin pechera la cadera/ingle se ve rellena (gris), sin huecos.
+
+- Mancha blanca (causa real): era la piel conservada junto al hombro (`aPart` 8) asomando por los huecos de la manga; con la luz del juego el «tejido» teñido salía casi blanco. Ahora esa piel (solo la del hombro, parte 8; la ingle es la parte 9) se oscurece ×0.22 cuando hay brazos puestos. Revisado en oscuro, hierro y latón.
