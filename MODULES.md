@@ -150,3 +150,7 @@ Acciones puntuales (`ACTIONS` en hero-moves.js, `doAction` en index-app): recoge
 - Copia de `mapa-ruinas-original.html` (el mapa «ruinas v3 niveles» del usuario) con texturas nuevas dentro de `createRuinsMap` (sección «TEXTURAS ESTILO BLADE», se copia junto con el mapa): albedo + normales de 512 px generados por código a partir de un mapa de alturas (`wallTexture` sillares con juntas/grietas/picaduras/musgo, `flagTexture` losas Voronoi, `sandTexture` arena con ondulaciones).
 - Muros/columnas: material triplanar con normales (`mStone`), variación de gran escala, base sucia, liquen y regueros. Suelos: `MeshStandardMaterial` con `map` + `normalMap`.
 - Visor: three r170 por import dinámico (misma versión del juego; respaldo a r128), tonemapping ACES, luces compensadas para r155+ (`LK`, `PK`). `window.__set(x,z,yaw,pitch,dist)` coloca la cámara (pruebas).
+
+## generador-mapas/ — editor 2D + visor 3D de planos
+Copia del repo `liviapao1999-lang/generador-de-mapas` (editor.html/editor.js dibuja el plano, index.html/main.js/mapa.js lo recorren en 3D; ver su README).
+Acceso: botón «EDITOR · MAPAS» en el index del juego → `./generador-mapas/editor.html`. Es independiente (no toca map1.js ni el juego); usa su propio three r160 por CDN y guarda en localStorage (`castillo-v20`) del mismo origen.
