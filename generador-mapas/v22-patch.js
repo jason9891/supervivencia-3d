@@ -1,4 +1,7 @@
-// v22-patch.js — editor por CELDAS (sin vértices)
+// v22-patch.js — editor por CELDAS v22.1
+// - Muro: 1 celda (puntos en centros; celdas.js Bresenham)
+// - Poly: sin desfase +x/+z (cellOf, no snap a vértice)
+// - Suelo: sin cambios
 (function () {
   if (typeof GRID === 'undefined' || typeof cellOf !== 'function') {
     console.error('v22-patch: editor base no cargó');
@@ -9,7 +12,45 @@
     return +(cellOf(v) + GRID / 2).toFixed(2);
   };
 
-  // Corregir puntos de muro/polilínea al centro de celda justo después del handler original
+  // finishDraw: NO usar snap() a vértices (generaba muros de 2 celdas)
+  window.finishDraw = function (close) {
+    let changed = false;
+    if (isDrawingPoly) {
+      if (currentPoly.length >= 3) {
+        const pts = currentPoly.map(p => ({ x: cellOf(p.x), z: cellOf(p.z) }));
+        const clean = pts.filter((p, i) => i === 0 || p.x !== pts[i - 1].x || p.z !== pts[i - 1].z);
+        if (clean.length >= 3) {
+          data.rooms.push({
+            id: uid('poly'), nombre: 'Patio Libre', type: 'patio', open: true,
+            points: clean, y: activeLevel, y2: null
+          });
+          changed = true;
+        }
+      }
+      isDrawingPoly = false; currentPoly = [];
+    }
+    if (isDrawingWall) {
+      let pts = currentWall
+        .filter((p, i) => i === 0 || p.x !== currentWall[i - 1].x || p.z !== currentWall[i - 1].z)
+        .map(p => ({ x: cellCenter(p.x), z: cellCenter(p.z) }));
+      let closed = close === true;
+      if (pts.length > 2) {
+        const dClose = Math.hypot(pts[0].x - pts[pts.length - 1].x, pts[0].z - pts[pts.length - 1].z);
+        if (dClose <= GRID * 1.5) { pts.pop(); closed = true; }
+      }
+      if (pts.length >= 2) {
+        const w = { id: uid('w'), points: pts, h: blockH(), y: activeLevel };
+        if (closed && pts.length >= 3) w.closed = true;
+        data.walls.push(w);
+        changed = true;
+      }
+      isDrawingWall = false; currentWall = [];
+    }
+    el('btn-finish').style.display = 'none';
+    draw();
+    if (changed) commit(); else updateHistButtons();
+  };
+
   container.addEventListener('mousedown', function (e) {
     if (e.button !== 0) return;
     const [wx, wz] = mouseToWorld(e);
@@ -18,10 +59,9 @@
       draw();
     }
     if (tool === 'poly' && isDrawingPoly && currentPoly.length) {
-      currentPoly[currentPoly.length - 1] = { x: cellCenter(wx), z: cellCenter(wz) };
+      currentPoly[currentPoly.length - 1] = { x: cellOf(wx), z: cellOf(wz) };
       draw();
     }
-    // Sala/hueco: forzar dragTemp a celdas enteras
     if ((tool === 'sala' || tool === 'rampa' || tool === 'escalera' || tool === 'hueco') && isDraggingNew && dragTemp) {
       const c0x = cellOf(wx), c0z = cellOf(wz);
       dragTemp.x0 = c0x; dragTemp.z0 = c0z;
@@ -36,9 +76,8 @@
         ' | Zoom: ' + Math.round(scale * 10) + '%';
     }
     if (isDraggingNew && dragTemp && (tool === 'sala' || tool === 'rampa' || tool === 'escalera' || tool === 'hueco')) {
-      const c1x = cellOf(wx), c1z = cellOf(wz);
-      dragTemp.x1 = c1x + GRID;
-      dragTemp.z1 = c1z + GRID;
+      dragTemp.x1 = cellOf(wx) + GRID;
+      dragTemp.z1 = cellOf(wz) + GRID;
     }
   }, false);
 
@@ -46,7 +85,6 @@
   window.draw = function () {
     origDraw();
     try {
-      // Guía: celda + cruz en centro
       if (!isPanning && !isBoxSelecting && mouseWorld) {
         const cellPx = Math.max(1, scale * GRID);
         const [bx, by] = W2S(cellOf(mouseWorld.x), cellOf(mouseWorld.z) + GRID);
@@ -63,7 +101,6 @@
         ctx.moveTo(gx, gy - 5); ctx.lineTo(gx, gy + 5);
         ctx.stroke();
       }
-      // Preview sala/hueco: cuadrados de celdas
       if (isDraggingNew && dragTemp) {
         const xa = Math.min(dragTemp.x0, dragTemp.x1);
         const xb = Math.max(dragTemp.x0, dragTemp.x1);
@@ -85,5 +122,5 @@
     } catch (err) { console.warn('v22 draw overlay', err); }
   };
 
-  console.log('v22-patch OK: celdas (puntero centro, preview cuadrados, muros en centros)');
+  console.log('v22.1-patch OK: muro 1 celda, poly sin desfase');
 })();
