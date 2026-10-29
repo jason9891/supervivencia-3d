@@ -35,6 +35,7 @@ const overlapLen = (a0, a1, b0, b1) => Math.min(a1, b1) - Math.max(a0, b0);
 
 export function construirMapa(scene, json) {
   const matWall = new THREE.MeshStandardMaterial({ color: 0x7a7a7a, roughness: 0.9 });
+  matWall.polygonOffset = true; matWall.polygonOffsetFactor = 1; matWall.polygonOffsetUnits = 1;
   const matFloor = new THREE.MeshStandardMaterial({ color: 0x4a4a4a, roughness: 0.8 });
   const matRoof = new THREE.MeshStandardMaterial({ color: 0x5c3a21, roughness: 0.9 });
   const matRampa = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.8 });
@@ -197,7 +198,6 @@ export function construirMapa(scene, json) {
     }
   });
 
-  // Muros por celdas con hueco real para puertas (sin duplicar muro sólido)
   function celdasDeMuros() {
     const C = globalThis.Celdas;
     if (!C) return [];
@@ -244,12 +244,50 @@ export function construirMapa(scene, json) {
         Math.min(c.x + G, dr.x + ow / 2) - Math.max(c.x, dr.x - ow / 2) > 0.02;
     });
 
+    const solid = [];
+    const withDoor = [];
     cells.forEach(c => {
       const ds = cellDoors(c);
-      if (!ds.length) {
-        createBox(G, c.h, G, c.x + G / 2, c.y + c.h / 2, c.z + G / 2, matWall);
-        return;
-      }
+      if (ds.length) withDoor.push({ c, ds });
+      else solid.push(c);
+    });
+
+    // Fusionar celdas adyacentes → una sola caja (sin caras internas = sin línea negra)
+    const groups = new Map();
+    solid.forEach(c => {
+      const gk = c.y + '|' + c.h;
+      if (!groups.has(gk)) groups.set(gk, []);
+      groups.get(gk).push(c);
+    });
+    groups.forEach(list => {
+      const occ = new Set(list.map(c => c.x + ',' + c.z));
+      const used = new Set();
+      list.forEach(c => {
+        const k0 = c.x + ',' + c.z;
+        if (used.has(k0)) return;
+        let x1 = c.x;
+        while (occ.has((+(x1 + G).toFixed(1)) + ',' + c.z) && !used.has((+(x1 + G).toFixed(1)) + ',' + c.z)) {
+          x1 = +(x1 + G).toFixed(1);
+        }
+        let z1 = c.z;
+        outer: while (true) {
+          const nz = +(z1 + G).toFixed(1);
+          for (let x = c.x; x <= x1 + 1e-9; x = +(x + G).toFixed(1)) {
+            const kk = x + ',' + nz;
+            if (!occ.has(kk) || used.has(kk)) break outer;
+          }
+          z1 = nz;
+        }
+        for (let x = c.x; x <= x1 + 1e-9; x = +(x + G).toFixed(1))
+          for (let z = c.z; z <= z1 + 1e-9; z = +(z + G).toFixed(1))
+            used.add(x + ',' + z);
+        const bw = +(x1 - c.x + G).toFixed(1);
+        const bd = +(z1 - c.z + G).toFixed(1);
+        createBox(bw, c.h, bd, c.x + bw / 2, c.y + c.h / 2, c.z + bd / 2, matWall);
+      });
+    });
+
+    withDoor.forEach(({ c, ds }) => {
       let boxes = [{ x0: c.x, x1: c.x + G, z0: c.z, z1: c.z + G, y0: c.y, y1: c.y + c.h }];
       ds.forEach(dr => {
         cutDoors.add(dr);
@@ -264,8 +302,7 @@ export function construirMapa(scene, json) {
           const hi = ax === 'x' ? 'x1' : 'z1';
           const ca = Math.max(a, bx[lo]), cb = Math.min(b, bx[hi]);
           if (cb - ca <= 0.02 || Math.min(yt, bx.y1) - Math.max(ys, bx.y0) <= 0.02) {
-            next.push(bx);
-            return;
+            next.push(bx); return;
           }
           if (ca - bx[lo] > 0.02) next.push({ ...bx, [hi]: ca });
           if (bx[hi] - cb > 0.02) next.push({ ...bx, [lo]: cb });
