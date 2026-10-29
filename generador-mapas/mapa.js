@@ -221,12 +221,13 @@ export function construirMapa(scene, json) {
 
   function crearBloques(list) {
     const G = GRID;
+    const OVER = 0.002;
     const cells = (list || []).filter(b => b && isFinite(b.x) && isFinite(b.z))
       .map(b => ({
         x: +cellOf(b.x).toFixed(1),
         z: +cellOf(b.z).toFixed(1),
-        y: b.y || 0,
-        h: b.h > 0 ? b.h : 4,
+        y: +(b.y || 0).toFixed(3),
+        h: +((b.h > 0 ? b.h : 4)).toFixed(3),
         muro: !!b.muro
       }));
     if (!cells.length) return;
@@ -252,30 +253,31 @@ export function construirMapa(scene, json) {
       else solid.push(c);
     });
 
-    // Fusionar celdas adyacentes → una sola caja (sin caras internas = sin línea negra)
     const groups = new Map();
     solid.forEach(c => {
       const gk = c.y + '|' + c.h;
-      if (!groups.has(gk)) groups.set(gk, []);
-      groups.get(gk).push(c);
+      if (!groups.has(gk)) groups.set(gk, new Map());
+      groups.get(gk).set(c.x + ',' + c.z, c);
     });
-    groups.forEach(list => {
-      const occ = new Set(list.map(c => c.x + ',' + c.z));
+    groups.forEach((occMap) => {
       const used = new Set();
-      list.forEach(c => {
-        const k0 = c.x + ',' + c.z;
+      [...occMap.keys()].forEach(k0 => {
         if (used.has(k0)) return;
+        const c = occMap.get(k0);
         let x1 = c.x;
-        while (occ.has((+(x1 + G).toFixed(1)) + ',' + c.z) && !used.has((+(x1 + G).toFixed(1)) + ',' + c.z)) {
-          x1 = +(x1 + G).toFixed(1);
+        for (;;) {
+          const nx = +(x1 + G).toFixed(1);
+          if (!occMap.has(nx + ',' + c.z) || used.has(nx + ',' + c.z)) break;
+          x1 = nx;
         }
         let z1 = c.z;
-        outer: while (true) {
+        for (;;) {
           const nz = +(z1 + G).toFixed(1);
+          let ok = true;
           for (let x = c.x; x <= x1 + 1e-9; x = +(x + G).toFixed(1)) {
-            const kk = x + ',' + nz;
-            if (!occ.has(kk) || used.has(kk)) break outer;
+            if (!occMap.has(x + ',' + nz) || used.has(x + ',' + nz)) { ok = false; break; }
           }
+          if (!ok) break;
           z1 = nz;
         }
         for (let x = c.x; x <= x1 + 1e-9; x = +(x + G).toFixed(1))
@@ -283,7 +285,7 @@ export function construirMapa(scene, json) {
             used.add(x + ',' + z);
         const bw = +(x1 - c.x + G).toFixed(1);
         const bd = +(z1 - c.z + G).toFixed(1);
-        createBox(bw, c.h, bd, c.x + bw / 2, c.y + c.h / 2, c.z + bd / 2, matWall);
+        createBox(bw + OVER, c.h, bd + OVER, c.x + bw / 2, c.y + c.h / 2, c.z + bd / 2, matWall);
       });
     });
 
@@ -315,7 +317,7 @@ export function construirMapa(scene, json) {
       boxes.forEach(bx => {
         const bw = bx.x1 - bx.x0, bd = bx.z1 - bx.z0, bh = bx.y1 - bx.y0;
         if (bw < 0.02 || bd < 0.02 || bh < 0.02) return;
-        createBox(bw, bh, bd, bx.x0 + bw / 2, bx.y0 + bh / 2, bx.z0 + bd / 2, matWall);
+        createBox(bw + OVER * 0.5, bh, bd + OVER * 0.5, bx.x0 + bw / 2, bx.y0 + bh / 2, bx.z0 + bd / 2, matWall);
       });
     });
   }
