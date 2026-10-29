@@ -4,31 +4,35 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>Editor Castillos v23 — solo celdas</title>
+<title>Editor Castillos v23.1 — solo celdas</title>
 <style>
-  :root { --bg: #0f1115; --panel: #181b21; --border: #2c313c; --text: #e2e8f0; --primary: #3b82f6; --danger: #ef4444; }
+  :root { --bg:#0f1115; --panel:#181b21; --border:#2c313c; --text:#e2e8f0; --primary:#3b82f6; --danger:#ef4444; }
   * { box-sizing: border-box; }
-  body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); font: 13px/1.5 system-ui, sans-serif; overflow: hidden; user-select: none; }
-  #topbar { display: flex; gap: 6px; padding: 8px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; align-items: center; }
-  button, input { background: #222730; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font: inherit; }
-  button { cursor: pointer; font-weight: bold; }
-  button:hover { background: #2c333e; }
-  button.active { background: var(--primary); border-color: var(--primary); color: #fff; }
-  button.danger { background: #351a1a; border-color: var(--danger); color: #fca5a5; }
-  .separator { width: 1px; height: 24px; background: var(--border); margin: 0 4px; }
-  #level-wrap { display: flex; align-items: center; gap: 4px; background: #0f766e; border-radius: 6px; padding: 2px 6px; }
-  #level-wrap label { color: white; font-weight: bold; }
-  #level-input { background: #0f766e; color: white; border-color: #0d9488; width: 70px; text-align: center; }
-  #level-wrap button { background: #0d9488; border: none; color: white; padding: 2px 8px; }
-  #canvas-container { flex: 1; position: relative; overflow: hidden; cursor: crosshair; }
-  #cv { display: block; width: 100%; height: 100%; }
-  #properties { background: var(--panel); border-top: 1px solid var(--border); padding: 10px; min-height: 80px; }
-  #hud { position: absolute; bottom: 10px; left: 10px; color: #64748b; pointer-events: none; font-family: monospace; }
-  #hint { position: absolute; bottom: 10px; right: 10px; color: #475569; pointer-events: none; font-size: 11px; text-align: right; }
-  #status { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 4px; font-weight: bold; pointer-events: none; }
-  #toast { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(15,118,110,.95); padding: 6px 14px; border-radius: 6px; font-weight: bold; pointer-events: none; opacity: 0; transition: opacity .25s; }
-  #toast.show { opacity: 1; }
-  .modal { display: none; }
+  body { margin:0; height:100vh; display:flex; flex-direction:column; background:var(--bg); color:var(--text); font:13px/1.5 system-ui,sans-serif; overflow:hidden; user-select:none; }
+  #topbar { display:flex; gap:6px; padding:8px; background:var(--panel); border-bottom:1px solid var(--border); flex-wrap:wrap; align-items:center; }
+  button, input, select { background:#222730; color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font:inherit; }
+  button { cursor:pointer; font-weight:bold; }
+  button:hover { background:#2c333e; }
+  button.active { background:var(--primary); border-color:var(--primary); color:#fff; }
+  button.danger { background:#351a1a; border-color:var(--danger); color:#fca5a5; }
+  .separator { width:1px; height:24px; background:var(--border); margin:0 4px; }
+  #level-wrap { display:flex; align-items:center; gap:4px; background:#0f766e; border-radius:6px; padding:2px 6px; }
+  #level-wrap label { color:#fff; font-weight:bold; }
+  #level-input { background:#0f766e; color:#fff; border-color:#0d9488; width:64px; text-align:center; }
+  #level-wrap button { background:#0d9488; border:none; color:#fff; padding:2px 8px; }
+  #block-h-wrap { display:none; align-items:center; gap:4px; color:#cbd5e1; font-size:12px; }
+  #block-h { width:52px; }
+  #canvas-container { flex:1; position:relative; overflow:hidden; cursor:crosshair; }
+  #cv { display:block; width:100%; height:100%; }
+  #properties { background:var(--panel); border-top:1px solid var(--border); padding:10px; min-height:100px; display:flex; flex-wrap:wrap; gap:12px; }
+  .field-group { display:flex; flex-direction:column; gap:4px; }
+  .field-group label { font-size:10px; color:#94a3b8; font-weight:bold; text-transform:uppercase; }
+  .field-group input, .field-group select { width:90px; padding:4px 8px; }
+  #hud { position:absolute; bottom:10px; left:10px; color:#64748b; pointer-events:none; font-family:monospace; }
+  #hint { position:absolute; bottom:10px; right:10px; color:#475569; pointer-events:none; font-size:11px; text-align:right; max-width:50%; }
+  #status { position:absolute; top:10px; right:10px; background:rgba(0,0,0,.5); padding:4px 8px; border-radius:4px; font-weight:bold; pointer-events:none; }
+  #toast { position:absolute; top:10px; left:50%; transform:translateX(-50%); background:rgba(15,118,110,.95); padding:6px 14px; border-radius:6px; font-weight:bold; pointer-events:none; opacity:0; transition:opacity .25s; }
+  #toast.show { opacity:1; }
 </style>
 </head>
 <body>
@@ -41,9 +45,17 @@
   </div>
   <div class="separator"></div>
   <button id="btn-sala" class="active" onclick="setTool('sala')">⬛ Suelo</button>
+  <button id="btn-poly" onclick="setTool('poly')">⬡ Polilínea</button>
+  <button id="btn-hueco" onclick="setTool('hueco')" style="color:#ef4444">🕳️ Hueco</button>
+  <button id="btn-rampa" onclick="setTool('rampa')">📐 Rampa</button>
+  <button id="btn-escalera" onclick="setTool('escalera')">🪜 Escalera</button>
   <button id="btn-pared" onclick="setTool('pared')">📏 Muro</button>
-  <button id="btn-sel" onclick="setTool('sel')">🖱️ Seleccionar</button>
+  <button id="btn-bloque" onclick="setTool('bloque')">🧱 Bloques</button>
+  <label id="block-h-wrap">alto <input id="block-h" type="number" min="0.5" step="0.5" value="4"> m</label>
+  <button id="btn-puerta" onclick="setTool('puerta')">🚪 Puerta</button>
   <button id="btn-borrar" onclick="setTool('borrar')">🗑️ Borrar</button>
+  <div class="separator"></div>
+  <button id="btn-sel" onclick="setTool('sel')">🖱️ Seleccionar</button>
   <button id="btn-del-sel" class="danger" onclick="deleteSelected()" style="display:none">🗑️ Eliminar</button>
   <div class="separator"></div>
   <button onclick="finishDraw()" id="btn-finish" style="display:none;background:#0f766e">✅ Terminar</button>
@@ -59,13 +71,12 @@
 <div id="canvas-container">
   <canvas id="cv"></canvas>
   <div id="hud">Celda 0, 0</div>
-  <div id="hint">v23 solo celdas · Suelo y Muro · Enter termina muro · Esc cancela</div>
+  <div id="hint">v23.1 solo celdas · Enter termina trazo · Esc cancela · Shift+clic en bloques borra</div>
   <div id="status">Nivel: 0</div>
   <div id="toast"></div>
 </div>
-<div id="properties"><div style="color:#64748b;text-align:center;margin-top:20px">v23: suelo + muro por celdas. Respaldo en backup-pre-v23/</div></div>
-<div class="modal" id="door-modal"></div>
-<script src="./celdas.js?v=23"></script>
-<script src="./editor.js?v=23"></script>
+<div id="properties"><div style="color:#64748b;width:100%;text-align:center;margin-top:20px">Selecciona un elemento.</div></div>
+<script src="./celdas.js?v=231"></script>
+<script src="./editor.js?v=231"></script>
 </body>
 </html>
