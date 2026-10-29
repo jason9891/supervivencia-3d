@@ -1,5 +1,5 @@
-// celdas.js v23 — SOLO ocupación de celdas (sin vértices ni líneas con grosor)
-// Celda = 10 cm. Muro = 1 celda. Suelo = conjunto de celdas.
+// celdas.js v23.2 — SOLO ocupación de celdas
+// Celda = 10 cm. Muro = 1 celda. Perímetro completo aunque haya sala vecina.
 (function () {
   const G = 0.1;
   const r1 = (v) => +v.toFixed(1);
@@ -25,23 +25,21 @@
     return rectCells(r.x0, r.z0, r.x1, r.z1);
   }
 
-  // Muros = celdas del perímetro que limitan con vacío (no con otra sala)
+  // Muros = TODAS las celdas del perímetro de la sala (vecino fuera del suelo propio).
+  // Si hay sala pegada, el muro del costado SE CONSERVA (no se abre el hueco).
+  // En el borde compartido cada sala aporta su fila de perímetro (puede verse
+  // 2 celdas de grosor entre interiores); eso evita el bug de borrar la pared.
   function roomWallCells(r, others) {
     const floors = new Set(roomFloorCells(r).map(c => key(c.x, c.z)));
     if (floors.size === 0) return [];
-    const otherFloors = new Set();
-    (others || []).forEach(o => {
-      roomFloorCells(o).forEach(c => otherFloors.add(key(c.x, c.z)));
-    });
     const walls = new Map();
     floors.forEach(k => {
       const { x, z } = parseKey(k);
-      let needsWall = false;
+      let isBorder = false;
       neighbors4(x, z).forEach(n => {
-        const nk = key(n.x, n.z);
-        if (!floors.has(nk) && !otherFloors.has(nk)) needsWall = true;
+        if (!floors.has(key(n.x, n.z))) isBorder = true;
       });
-      if (needsWall) walls.set(k, { x, z });
+      if (isBorder) walls.set(k, { x, z });
     });
     return [...walls.values()];
   }
