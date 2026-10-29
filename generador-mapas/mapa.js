@@ -52,6 +52,10 @@ export function construirMapa(scene, json) {
   const matRoof = new THREE.MeshStandardMaterial({ color: 0x5c3a21, roughness: 0.9 });
   const matRampa = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.8 });
   const matEscalera = new THREE.MeshStandardMaterial({ color: 0xa855f7, roughness: 0.7 });
+  // Los muros de trazo se solapan con los muros de sala (misma cara, mismo plano): sin esto los dos parpadean y dejan rayitas.
+  // El polygonOffset hace que el muro de trazo gane siempre, y como el color es el mismo no se nota la unión.
+  const matWallTrazo = matWall.clone();
+  matWallTrazo.polygonOffset = true; matWallTrazo.polygonOffsetFactor = -1; matWallTrazo.polygonOffsetUnits = -2;
   const matHighFloor = new THREE.MeshStandardMaterial({ color: 0x5a5a5a, roughness: 0.8 });
 
   const matDoorFrame = new THREE.MeshStandardMaterial({ color: 0x4a2e15, roughness: 0.9 });
@@ -129,7 +133,7 @@ export function construirMapa(scene, json) {
       const r0 = at(sa, -1, R[i], R[j]), r1 = at(sb, -1, R[i], R[j]);
       const shape = new THREE.Shape();
       shape.moveTo(l0.x, -l0.z); shape.lineTo(l1.x, -l1.z); shape.lineTo(r1.x, -r1.z); shape.lineTo(r0.x, -r0.z); shape.closePath();
-      const mesh = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: y1 - y0, bevelEnabled: false }), matWall);
+      const mesh = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: y1 - y0, bevelEnabled: false }), matWallTrazo);
       mesh.rotation.x = -Math.PI / 2; mesh.position.y = y0;
       mesh.castShadow = true; mesh.receiveShadow = true; root.add(mesh);
     };

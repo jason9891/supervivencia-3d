@@ -319,6 +319,35 @@ function doorSpan(d) {
   return d.ax === 'z' ? [d.x, d.z - w / 2, d.x, d.z + w / 2] : [d.x - w / 2, d.z, d.x + w / 2, d.z];
 }
 
+// ---- Muros y puertas como CELDAS de 10 cm (igual que las salas) ----
+// El dato sigue siendo la polilínea (puntos rojos); las celdas son el muro generado a partir de ella.
+const ckey = (cx, cz) => cx.toFixed(1) + ',' + cz.toFixed(1);
+function segCells(set, ax, az, bx, bz) {
+  const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(len / (GRID / 4)));
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, cx = cellOf(ax + (bx - ax) * t), cz = cellOf(az + (bz - az) * t);
+    set.set(ckey(cx, cz), [cx, cz]);
+  }
+}
+function wallCells(w) {
+  const set = new Map(), pts = w.points || [];
+  for (let i = 0; i < pts.length - 1; i++) segCells(set, pts[i].x, pts[i].z, pts[i + 1].x, pts[i + 1].z);
+  if (w.closed && pts.length >= 3) segCells(set, pts[pts.length - 1].x, pts[pts.length - 1].z, pts[0].x, pts[0].z);
+  if (pts.length === 1) segCells(set, pts[0].x, pts[0].z, pts[0].x, pts[0].z);
+  return [...set.values()];
+}
+function doorCells(d) {
+  const s = doorSpan(d), set = new Map();
+  // la abertura ocupa las celdas que cubre; el eje cae en el centro de la celda del muro
+  const ax = d.ax === 'z' ? d.x : null, az = d.ax === 'z' ? null : d.z;
+  const x0 = Math.min(s[0], s[2]), x1 = Math.max(s[0], s[2]), z0 = Math.min(s[1], s[3]), z1 = Math.max(s[1], s[3]);
+  const nx = Math.max(1, Math.round((x1 - x0) / GRID)), nz = Math.max(1, Math.round((z1 - z0) / GRID));
+  if (d.ax === 'z') for (let i = 0; i < nz; i++) { const c = cellOf(z0 + (i + 0.5) * GRID); const cx = cellOf(d.x); set.set(ckey(cx, c), [cx, c]); }
+  else for (let i = 0; i < nx; i++) { const c = cellOf(x0 + (i + 0.5) * GRID); const cz = cellOf(d.z); set.set(ckey(c, cz), [c, cz]); }
+  return [...set.values()];
+}
+const cellHit = (cells, wx, wz) => { const cx = cellOf(wx), cz = cellOf(wz); return cells.some(c => almost(c[0], cx, 0.01) && almost(c[1], cz, 0.01)); };
+
 // Prioridad: puertas > huecos > muros > escaleras/rampas > salas.
 // Muros/puertas/huecos: nivel activo primero, si no hay hit se prueban todos.
 // Salas (áreas grandes): solo nivel activo, para no “robar” clics a los muros.
@@ -328,8 +357,7 @@ function pickAt(wx, wz) {
   const hitDoor = (onlyActive) => {
     for (let i = data.doors.length - 1; i >= 0; i--) {
       const d = data.doors[i]; if (onlyActive && !isLevel(d.y)) continue;
-      const s = doorSpan(d);
-      if (segDist(wx, wz, s[0], s[1], s[2], s[3]) < tol || Math.hypot(d.x - wx, d.z - wz) < 15 / scale) return { type: 'door', id: d.id };
+      if (cellHit(doorCells(d), wx, wz) || Math.hypot(d.x - wx, d.z - wz) < GRID) return { type: 'door', id: d.id };
     }
     return null;
   };
@@ -343,14 +371,8 @@ function pickAt(wx, wz) {
   const hitWall = (onlyActive) => {
     for (let i = data.walls.length - 1; i >= 0; i--) {
       const w = data.walls[i]; if (onlyActive && !isLevel(w.y || 0)) continue;
-      const pts = w.points; if (!pts || pts.length < 2) continue;
-      for (let j = 0; j < pts.length - 1; j++) {
-        if (segDist(wx, wz, pts[j].x, pts[j].z, pts[j + 1].x, pts[j + 1].z) < tol) return { type: 'wall', id: w.id };
-      }
-      // Segmento de cierre en muros cerrados
-      if (w.closed && pts.length >= 3) {
-        if (segDist(wx, wz, pts[pts.length - 1].x, pts[pts.length - 1].z, pts[0].x, pts[0].z) < tol) return { type: 'wall', id: w.id };
-      }
+      if (!w.points || w.points.length < 2) continue;
+      if (cellHit(wallCells(w), wx, wz)) return { type: 'wall', id: w.id };   // un clic en cualquier celda elige todo el trazo
     }
     return null;
   };
@@ -582,22 +604,18 @@ function draw() {
   });
   ctx.globalAlpha = 1;
 
-  // 3. Muros
+  // 3. Muros: trazo de celdas consecutivas (los puntos rojos son los vértices de la polilínea)
   data.walls.forEach(w => {
     ctx.globalAlpha = levelAlpha(w.y || 0);
     const sel = isSelectedAny('wall', w.id);
-    ctx.strokeStyle = sel ? '#3b82f6' : '#cbd5e1';
-    ctx.lineWidth = sel ? 6 : 4;
-    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-    ctx.beginPath();
-    if (w.points && w.points.length > 0) {
-      const [sx, sy] = W2S(w.points[0].x, w.points[0].z);
-      ctx.moveTo(sx, sy);
-      for (let i = 1; i < w.points.length; i++) { const [px, py] = W2S(w.points[i].x, w.points[i].z); ctx.lineTo(px, py); }
-      // Cierra el trazo si el muro está marcado como cerrado
-      if (w.closed && w.points.length >= 3) ctx.closePath();
-    }
-    ctx.stroke();
+    ctx.fillStyle = sel ? 'rgba(59,130,246,0.85)' : 'rgba(203,213,225,0.92)';
+    ctx.strokeStyle = sel ? '#1d4ed8' : '#64748b'; ctx.lineWidth = 1;
+    wallCells(w).forEach(([cx, cz]) => {
+      const [bx, by] = W2S(cx, cz + GRID);
+      ctx.fillRect(bx + 0.5, by + 0.5, cellPx - 1, cellPx - 1);
+      if (cellPx >= 6) ctx.strokeRect(bx + 0.5, by + 0.5, cellPx - 1, cellPx - 1);
+    });
+    if (sel) (w.points || []).forEach(p => { const [px, py] = W2S(p.x, p.z); ctx.fillStyle = '#ef4444'; ctx.fillRect(px - 3, py - 3, 6, 6); });
   });
 
   // 4. Puertas: abertura exacta (cian) + arco de giro
@@ -608,8 +626,8 @@ function draw() {
     const w = d.w || 1.5, mode = doorPanelMode(d);
     const s = doorSpan(d);
     const [ax, ay] = W2S(s[0], s[1]), [bx, by] = W2S(s[2], s[3]);
-    ctx.strokeStyle = sel ? '#3b82f6' : '#22d3ee'; ctx.lineWidth = sel ? 5 : 3; ctx.lineCap = 'butt';
-    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.fillStyle = sel ? '#3b82f6' : '#22d3ee';
+    doorCells(d).forEach(([cx, cz]) => { const [qx, qy] = W2S(cx, cz + GRID); ctx.fillRect(qx + 0.5, qy + 0.5, cellPx - 1, cellPx - 1); });
     ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
     if (mode !== 'none') {
       const ang = ((d.angle != null ? d.angle : 72) * Math.PI) / 180;
@@ -639,22 +657,12 @@ function draw() {
   }
 
   if (isDrawingWall && currentWall.length > 0) {
-    ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 4; ctx.lineJoin = 'round';
-    ctx.beginPath();
-    const [sx, sy] = W2S(currentWall[0].x, currentWall[0].z);
-    ctx.moveTo(sx, sy);
-    for (let i = 1; i < currentWall.length; i++) { const [px, py] = W2S(currentWall[i].x, currentWall[i].z); ctx.lineTo(px, py); }
-    // Si el cursor está cerca del inicio (y hay ≥3 pts), previsualiza el cierre
     const nearStart = currentWall.length >= 3 && Math.hypot(snap(mouseWorld.x) - currentWall[0].x, snap(mouseWorld.z) - currentWall[0].z) <= GRID * 1.5;
-    if (nearStart) {
-      ctx.lineTo(sx, sy);
-      ctx.stroke();
-      ctx.fillStyle = '#22d3ee';
-      ctx.beginPath(); ctx.arc(sx, sy, 7, 0, Math.PI * 2); ctx.fill();
-    } else {
-      const [mx, my] = W2S(mouseWorld.x, mouseWorld.z); ctx.lineTo(mx, my);
-      ctx.stroke();
-    }
+    const end = nearStart ? currentWall[0] : { x: snap(mouseWorld.x), z: snap(mouseWorld.z) };
+    const pv = { points: [...currentWall, end] };
+    ctx.fillStyle = 'rgba(59,130,246,0.55)';
+    wallCells(pv).forEach(([cx, cz]) => { const [bx, by] = W2S(cx, cz + GRID); ctx.fillRect(bx + 0.5, by + 0.5, cellPx - 1, cellPx - 1); });
+    if (nearStart) { const [sx, sy] = W2S(currentWall[0].x, currentWall[0].z); ctx.fillStyle = '#22d3ee'; ctx.beginPath(); ctx.arc(sx, sy, 7, 0, Math.PI * 2); ctx.fill(); }
     currentWall.forEach(p => { const [px, py] = W2S(p.x, p.z); ctx.fillStyle = '#ef4444'; ctx.fillRect(px - 3, py - 3, 6, 6); });
   }
 

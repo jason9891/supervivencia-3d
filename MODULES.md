@@ -154,3 +154,5 @@ Acciones puntuales (`ACTIONS` en hero-moves.js, `doAction` en index-app): recoge
 ## generador-mapas/ — editor 2D + visor 3D de planos
 Copia del repo `liviapao1999-lang/generador-de-mapas` (editor.html/editor.js dibuja el plano, index.html/main.js/mapa.js lo recorren en 3D; ver su README).
 Acceso: botón «EDITOR · MAPAS» en el index del juego → `./generador-mapas/editor.html`. Es independiente (no toca map1.js ni el juego); usa su propio three r160 por CDN y guarda en localStorage (`castillo-v20`) del mismo origen.
+- generador-mapas/editor.js: muros (polilínea) y puertas se dibujan y se eligen como celdas de 10 cm (`wallCells`, `doorCells`); los puntos rojos son los vértices; un clic en cualquier celda elige todo el trazo. El dato guardado no cambia.
+- generador-mapas/mapa.js: los muros de trazo usan `polygonOffset` para no parpadear al solaparse con los muros de sala.
