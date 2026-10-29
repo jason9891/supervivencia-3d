@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-import { construirMapa, destruirMapa } from './mapa.js';
+import { construirMapa, destruirMapa } from './mapa.js?v=3';
 
 const zoneEl = document.getElementById('zone');
 const overlay = document.getElementById('overlay');
@@ -40,6 +40,8 @@ sunLight.position.set(30, 60, 30);
 sunLight.castShadow = true;
 sunLight.shadow.mapSize.width = 4096;
 sunLight.shadow.mapSize.height = 4096;
+sunLight.shadow.bias = -0.0005;      // evita bandas de sombra en las caras de los muros
+sunLight.shadow.normalBias = 0.04;
 sunLight.shadow.camera.left = -100;
 sunLight.shadow.camera.right = 100;
 sunLight.shadow.camera.top = 100;
