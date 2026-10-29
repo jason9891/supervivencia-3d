@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>Editor de Castillos PRO v21</title>
+<title>Editor de Castillos PRO v22</title>
 <style>
   :root { --bg: #0f1115; --panel: #181b21; --border: #2c313c; --text: #e2e8f0; --primary: #3b82f6; --accent: #f59e0b; --danger: #ef4444; }
   * { box-sizing: border-box; }
@@ -39,8 +39,6 @@
   #status { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 4px; font-weight: bold; pointer-events: none; }
   #toast { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(15,118,110,.95); padding: 6px 14px; border-radius: 6px; font-weight: bold; pointer-events: none; opacity: 0; transition: opacity .25s; }
   #toast.show { opacity: 1; }
-
-  /* ---- ventana del diseñador de puertas ---- */
   .modal { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: none; align-items: center; justify-content: center; z-index: 100; }
   .modal.open { display: flex; }
   .modal-box { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; width: min(920px, 96vw); max-height: 94vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
@@ -104,7 +102,6 @@
   <div style="color: #64748b; display: flex; align-items: center; justify-content: center; width: 100%; margin-top: 30px;">Selecciona un elemento.</div>
 </div>
 
-<!-- ============ VENTANA: DISEÑADOR DE PUERTAS ============ -->
 <div class="modal" id="door-modal" onmousedown="if(event.target===this)closeDoorDesigner()">
   <div class="modal-box">
     <div class="modal-head">
@@ -138,7 +135,7 @@
         <div class="field-group"><label>Apertura</label>
           <select data-dd="swing" onchange="ddField(this)"><option value="in">Hacia adentro</option><option value="out">Hacia afuera</option></select></div>
         <div class="field-group full" style="color:#64748b;font-size:11px;">
-          Las medidas se copian a cada puerta que coloques, así que cada una puede quedar distinta. Con «Aplicar a las puertas de este tipo» cambias de golpe todas las ya colocadas.
+          Las medidas se copian a cada puerta que coloques. Con «Aplicar a las puertas de este tipo» cambias de golpe todas las ya colocadas.
         </div>
       </div>
       <div class="modal-right"><canvas id="dd-canvas" width="640" height="400"></canvas></div>
@@ -154,7 +151,7 @@
   </div>
 </div>
 
-<script src="./celdas.js?v=3"></script>
-<script src="./editor.js?v=3"></script>
+<script src="./celdas.js?v=5"></script>
+<script src="./editor.js?v=5"></script>
 </body>
 </html>
