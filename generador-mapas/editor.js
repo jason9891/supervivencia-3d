@@ -1,10 +1,10 @@
-// v22.1: editor base + parche celdas
+// v22.2: editor base + parche celdas (puntero sigue mouse)
 (function () {
   var base = document.createElement('script');
   base.src = 'https://cdn.jsdelivr.net/gh/jason9891/supervivencia-3d@0ec5568c9ac3a74a18c7aad615eb3d01804acbb7/generador-mapas/editor.js';
   base.onload = function () {
     var p = document.createElement('script');
-    p.src = 'v22-patch.js?v=5';
+    p.src = 'v22-patch.js?v=6';
     document.head.appendChild(p);
   };
   base.onerror = function () {
