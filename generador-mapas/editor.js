@@ -19,7 +19,7 @@ const levelAlpha=y=>{const d=Math.abs((y||0)-activeLevel);if(d<0.5)return 1;if(d
 const el=id=>document.getElementById(id);
 const uid=p=>p+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36);
 const deep=o=>JSON.parse(JSON.stringify(o));
-const blockH=()=>{const i=el('block-h');return i?Math.max(0.5,parseFloat(i.value)||4):4};
+const blockH=()=>{const i=el('block-h');return i?Math.max(0.5,(parseFloat(i.value)||40)*GRID):4};   // el campo está en celdas
 function mouseToWorld(e){const rect=canvas.getBoundingClientRect();const sx=rect.width?canvas.width/rect.width:1,sy=rect.height?canvas.height/rect.height:1;const cx=e.clientX!=null?e.clientX:(e.touches&&e.touches[0]?e.touches[0].clientX:0);const cy=e.clientY!=null?e.clientY:(e.touches&&e.touches[0]?e.touches[0].clientY:0);return S2W((cx-rect.left)*sx,(cy-rect.top)*sy);}
 function cellUnder(e){const[wx,wz]=mouseToWorld(e);return{x:cellOf(wx),z:cellOf(wz),wx,wz};}
 function toast(m){if(!toastEl)return;toastEl.textContent=m;toastEl.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>toastEl.classList.remove('show'),1400);}

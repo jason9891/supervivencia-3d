@@ -41,3 +41,7 @@ npx serve .
 - `mapa.js` (visor 3D) ya NO depende de una copia en internet: vive en este repo y construye muros de sala, muros de trazo, bloques y puertas desde la misma ocupación de celdas que el editor (`celdas.js`), en una sola malla. Los muros de sala arrancan sobre la losa (sin parpadeo en la base) y el dintel de las puertas es una sola pieza.
 - La puerta toma la dirección del muro donde la colocas (antes salía cruzada en muros de trazo y de sala).
 - `_historial/`: archivos intermedios de las versiones v22/v23 (no se usan). `backup-pre-v23/`: cómo volver a la versión anterior.
+
+## v23.4 · todo en celdas (0 vértices)
+- `editor-extras.js`: panel de propiedades y diseñador de puertas con medidas y posiciones en **celdas** (ancho/alto/alféizar/marco de la puerta, celda X/Z, celdas inicial/final de una sala, alto de muros y bloques). Solo el nivel Y se sigue dando en metros.
+- Herramienta Bloques: el alto también va en celdas.
