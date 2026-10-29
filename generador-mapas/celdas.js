@@ -21,11 +21,26 @@
       if (dSeg(x + G / 2, z + G / 2, ax, az, bx, bz) <= h) map.set(key(x, z), { x, z });
     }
   }
-  // Muro de trazo (polilínea) → celdas
+  // Muro de trazo (polilínea). Los puntos son ORIGEN de cuadro (esquina del cuadro que se eligió).
+  // Tramos rectos: banda de 4 celdas centrada en la línea, de cuadro inicial a cuadro final incluidos (extremos al ras, sin salientes).
+  // Esquinas: un cuadrado de 4×4 en cada vértice interior. Diagonales: escalonadas.
   function wallCells(w, t) {
-    const m = new Map(), p = w.points || [];
-    for (let i = 0; i < p.length - 1; i++) addSeg(m, p[i].x, p[i].z, p[i + 1].x, p[i + 1].z, t);
-    if (w.closed && p.length >= 3) addSeg(m, p[p.length - 1].x, p[p.length - 1].z, p[0].x, p[0].z, t);
+    const m = new Map(), p = w.points || [], hh = (t == null ? T : t) / 2;
+    const rect = (xa, xb, za, zb) => addRect(m, xa, xb, za, zb);
+    const seg = (A, B) => {
+      const dx = B.x - A.x, dz = B.z - A.z;
+      if (Math.abs(dx) < 1e-6) rect(A.x - hh, A.x + hh, Math.min(A.z, B.z), Math.max(A.z, B.z) + G);
+      else if (Math.abs(dz) < 1e-6) rect(Math.min(A.x, B.x), Math.max(A.x, B.x) + G, A.z - hh, A.z + hh);
+      else addSeg(m, A.x + G / 2, A.z + G / 2, B.x + G / 2, B.z + G / 2, t);
+    };
+    const n = p.length, closed = !!w.closed && n >= 3;
+    for (let i = 0; i < n - 1; i++) seg(p[i], p[i + 1]);
+    if (closed) seg(p[n - 1], p[0]);
+    if (n === 1) rect(p[0].x - hh, p[0].x + hh, p[0].z - hh, p[0].z + hh);
+    for (let i = 0; i < n; i++) {
+      if (!closed && (i === 0 || i === n - 1)) continue;
+      rect(p[i].x - hh, p[i].x + hh, p[i].z - hh, p[i].z + hh);
+    }
     return [...m.values()];
   }
   // Rectángulo en celdas [xa,xb) × [za,zb)

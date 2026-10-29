@@ -414,7 +414,8 @@ export function construirMapa(scene, json) {
       if (sign * base < 0) corners.reverse();
       const i0 = P.length / 3;
       corners.forEach(([u, v]) => {
-        const p = [0, 0, 0]; p[axis] = c; p[t[0]] = u; p[t[1]] = v;
+        const R4 = (q) => Math.round(q * 1e4) / 1e4;   // vértices iguales al bit: sin grietas entre piezas vecinas
+        const p = [0, 0, 0]; p[axis] = R4(c); p[t[0]] = R4(u); p[t[1]] = R4(v);
         P.push(p[0], p[1], p[2]);
         const n = [0, 0, 0]; n[axis] = sign; N.push(n[0], n[1], n[2]);
         UV.push(axis === 1 ? p[0] : p[t[0]], axis === 1 ? p[2] : p[1]);

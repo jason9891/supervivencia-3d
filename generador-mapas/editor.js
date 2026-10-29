@@ -201,7 +201,7 @@ container.addEventListener('wheel', e => {
   offsetX = mouseX - (mouseX - offsetX) * (newScale / scale);
   offsetY = mouseY - (mouseY - offsetY) * (newScale / scale);
   scale = newScale;
-  hudEl.textContent = `X: ${(+snap(mouseWorld.x)).toFixed(1)}, Z: ${(+snap(mouseWorld.z)).toFixed(1)} | Zoom: ${Math.round(scale * 10)}%`;
+  hudEl.textContent = `X: ${(+cellOf(mouseWorld.x)).toFixed(1)}, Z: ${(+cellOf(mouseWorld.z)).toFixed(1)} | Zoom: ${Math.round(scale * 10)}%`;
   draw();
 }, { passive: false });
 container.addEventListener('contextmenu', e => e.preventDefault());
@@ -642,8 +642,8 @@ function draw() {
   }
 
   if (isDrawingWall && currentWall.length > 0) {
-    const nearStart = currentWall.length >= 3 && Math.hypot(snap(mouseWorld.x) - currentWall[0].x, snap(mouseWorld.z) - currentWall[0].z) <= GRID * 1.5;
-    const end = nearStart ? currentWall[0] : { x: snap(mouseWorld.x), z: snap(mouseWorld.z) };
+    const nearStart = currentWall.length >= 3 && Math.hypot(cellOf(mouseWorld.x) - currentWall[0].x, cellOf(mouseWorld.z) - currentWall[0].z) <= GRID * 1.5;
+    const end = nearStart ? currentWall[0] : { x: cellOf(mouseWorld.x), z: cellOf(mouseWorld.z) };
     const pv = { points: [...currentWall, end] };
     ctx.fillStyle = 'rgba(59,130,246,0.55)';
     wallCells(pv).forEach(([cx, cz]) => { const [bx, by] = W2S(cx, cz + GRID); ctx.fillRect(bx + 0.5, by + 0.5, cellPx - 1, cellPx - 1); });
@@ -654,8 +654,10 @@ function draw() {
   if (isDraggingNew && dragTemp) {
     ctx.strokeStyle = tool === 'hueco' ? '#ef4444' : '#3b82f6';
     ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
-    const [x, y] = W2S(Math.min(dragTemp.x0, dragTemp.x1), Math.max(dragTemp.z0, dragTemp.z1));
-    ctx.strokeRect(x, y, Math.abs(dragTemp.x1 - dragTemp.x0) * scale, Math.abs(dragTemp.z1 - dragTemp.z0) * scale);
+    const px0 = Math.min(dragTemp.x0, dragTemp.x1), px1 = Math.max(dragTemp.x0, dragTemp.x1) + GRID;
+    const pz0 = Math.min(dragTemp.z0, dragTemp.z1), pz1 = Math.max(dragTemp.z0, dragTemp.z1) + GRID;
+    const [x, y] = W2S(px0, pz1);
+    ctx.strokeRect(x, y, (px1 - px0) * scale, (pz1 - pz0) * scale);
     ctx.setLineDash([]);
   }
 
@@ -704,7 +706,7 @@ function drawGrid() {
 // =====================================================================
 container.addEventListener('mousedown', e => {
   const [wx, wz] = mouseToWorld(e);
-  const sx = snap(wx), sz = snap(wz);
+  const sx = cellOf(wx), sz = cellOf(wz);      // un clic elige el CUADRO bajo el cursor (no la intersección)
 
   if (e.button === 1 || e.button === 2 || spacePressed) { isPanning = true; panStart = { x: e.clientX, y: e.clientY }; return; }
   if (e.button !== 0) return;
@@ -802,7 +804,11 @@ container.addEventListener('mousedown', e => {
       }
     }
     if (bestPoint) {
-      const door = Object.assign({ id: uid('d'), x: bk ? bestPoint.x : snap(bestPoint.x), z: bk ? bestPoint.z : snap(bestPoint.z), ax: bestAxis, y: activeLevel }, doorParams(activeDoorType()));
+      const dp = doorParams(activeDoorType()), dw = dp.w || 1.5;
+      const alongC = (c) => snap(Math.round((c - dw / 2) / GRID) * GRID) + dw / 2;   // la abertura empieza y termina en bordes de cuadro
+      let px = bk ? bestPoint.x : snap(bestPoint.x), pz = bk ? bestPoint.z : snap(bestPoint.z);
+      if (!bk) { if (bestAxis === 'x') px = +alongC(bestPoint.x).toFixed(2); else pz = +alongC(bestPoint.z).toFixed(2); }
+      const door = Object.assign({ id: uid('d'), x: px, z: pz, ax: bestAxis, y: activeLevel }, dp);
       data.doors.push(door);
       selected = { type: 'door', id: door.id }; currentEditId = null; renderProperties();
       draw(); commit();
@@ -823,7 +829,7 @@ container.addEventListener('mousemove', e => {
   }
   const [wx, wz] = mouseToWorld(e);
   mouseWorld = { x: wx, z: wz };
-  hudEl.textContent = `X: ${(+snap(wx)).toFixed(1)}, Z: ${(+snap(wz)).toFixed(1)} | Zoom: ${Math.round(scale * 10)}%`;
+  hudEl.textContent = `X: ${(+cellOf(wx)).toFixed(1)}, Z: ${(+cellOf(wz)).toFixed(1)} | Zoom: ${Math.round(scale * 10)}%`;
 
   if (isDrawingPoly || isDrawingWall) draw();
   if (paintingBlocks) paintBlockAt(wx, wz);
@@ -845,7 +851,7 @@ container.addEventListener('mousemove', e => {
     draw();
   }
 
-  if (isDraggingNew && dragTemp) { dragTemp.x1 = snap(wx); dragTemp.z1 = snap(wz); draw(); }
+  if (isDraggingNew && dragTemp) { dragTemp.x1 = cellOf(wx); dragTemp.z1 = cellOf(wz); draw(); }
 });
 
 container.addEventListener('mouseup', e => {
@@ -884,10 +890,11 @@ container.addEventListener('mouseup', e => {
   isDraggingNew = false;
 
   // Coordenadas siempre alineadas a la rejilla de 10 cm (sin 1.6999999)
+  // De cuadro a cuadro: la figura incluye el cuadro inicial y el final
   const x0 = snap(Math.min(dragTemp.x0, dragTemp.x1));
-  const x1 = snap(Math.max(dragTemp.x0, dragTemp.x1));
+  const x1 = snap(Math.max(dragTemp.x0, dragTemp.x1) + GRID);
   const z0 = snap(Math.min(dragTemp.z0, dragTemp.z1));
-  const z1 = snap(Math.max(dragTemp.z0, dragTemp.z1));
+  const z1 = snap(Math.max(dragTemp.z0, dragTemp.z1) + GRID);
   if (x1 - x0 > 0 && z1 - z0 > 0) {
     if (tool === 'sala' || tool === 'rampa' || tool === 'escalera') {
       // Un solo objeto sala (se mueve entero). Visualmente se dibuja como marco de celdas.
