@@ -319,32 +319,15 @@ function doorSpan(d) {
   return d.ax === 'z' ? [d.x, d.z - w / 2, d.x, d.z + w / 2] : [d.x - w / 2, d.z, d.x + w / 2, d.z];
 }
 
-// ---- Muros y puertas como CELDAS de 10 cm (igual que las salas) ----
-// El dato sigue siendo la polilínea (puntos rojos); las celdas son el muro generado a partir de ella.
+// ---- Muros y puertas como CELDAS de 10 cm (las mismas que construye el visor 3D, ver celdas.js) ----
 const ckey = (cx, cz) => cx.toFixed(1) + ',' + cz.toFixed(1);
-function segCells(set, ax, az, bx, bz) {
-  const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(len / (GRID / 4)));
-  for (let i = 0; i <= n; i++) {
-    const t = i / n, cx = cellOf(ax + (bx - ax) * t), cz = cellOf(az + (bz - az) * t);
-    set.set(ckey(cx, cz), [cx, cz]);
-  }
-}
-function wallCells(w) {
-  const set = new Map(), pts = w.points || [];
-  for (let i = 0; i < pts.length - 1; i++) segCells(set, pts[i].x, pts[i].z, pts[i + 1].x, pts[i + 1].z);
-  if (w.closed && pts.length >= 3) segCells(set, pts[pts.length - 1].x, pts[pts.length - 1].z, pts[0].x, pts[0].z);
-  if (pts.length === 1) segCells(set, pts[0].x, pts[0].z, pts[0].x, pts[0].z);
-  return [...set.values()];
-}
-function doorCells(d) {
-  const s = doorSpan(d), set = new Map();
-  // la abertura ocupa las celdas que cubre; el eje cae en el centro de la celda del muro
-  const ax = d.ax === 'z' ? d.x : null, az = d.ax === 'z' ? null : d.z;
-  const x0 = Math.min(s[0], s[2]), x1 = Math.max(s[0], s[2]), z0 = Math.min(s[1], s[3]), z1 = Math.max(s[1], s[3]);
-  const nx = Math.max(1, Math.round((x1 - x0) / GRID)), nz = Math.max(1, Math.round((z1 - z0) / GRID));
-  if (d.ax === 'z') for (let i = 0; i < nz; i++) { const c = cellOf(z0 + (i + 0.5) * GRID); const cx = cellOf(d.x); set.set(ckey(cx, c), [cx, c]); }
-  else for (let i = 0; i < nx; i++) { const c = cellOf(x0 + (i + 0.5) * GRID); const cz = cellOf(d.z); set.set(ckey(c, cz), [c, cz]); }
-  return [...set.values()];
+const wallCells = (w) => Celdas.wallCells(w).map(c => [c.x, c.z]);
+const doorCells = (d) => Celdas.doorCells(d).map(c => [c.x, c.z]);
+const topOfRoom = (r) => (r.y2 != null ? r.y2 : r.y + 4);
+function roomWallCellList(r) {
+  if (r.type !== 'sala' || r.open || r.points) return [];
+  const others = data.rooms.filter(o => o !== r && !o.points && o.type === 'sala' && !o.open && Math.min(topOfRoom(r), topOfRoom(o)) - Math.max(r.y, o.y) > 0.1);
+  return Celdas.roomWallCells(r, others).map(c => [c.x, c.z]);
 }
 const cellHit = (cells, wx, wz) => { const cx = cellOf(wx), cz = cellOf(wz); return cells.some(c => almost(c[0], cx, 0.01) && almost(c[1], cz, 0.01)); };
 
@@ -540,13 +523,16 @@ function draw() {
         ctx.fillStyle = 'rgba(148, 163, 184, 0.04)';
         ctx.fillRect(ix0, Math.min(iy0, iy1), Math.abs(ix1 - ix0), Math.abs(iy1 - iy0));
       }
-      const xs = [], zs = [];
-      for (let x = x0; x < x1 - 1e-9; x = snap(x + GRID)) xs.push(x);
-      for (let z = z0; z < z1 - 1e-9; z = snap(z + GRID)) zs.push(z);
-      const cells = [];
-      xs.forEach(x => { cells.push([x, zs[0]]); if (zs.length > 1) cells.push([x, zs[zs.length - 1]]); });
-      zs.forEach(z => { cells.push([xs[0], z]); if (xs.length > 1) cells.push([xs[xs.length - 1], z]); });
-      // dedupe
+      let cells;
+      if (r.type === 'sala' && !r.open) cells = roomWallCellList(r);          // 4 celdas de grosor, como en 3D
+      else {
+        const xs = [], zs = [];
+        for (let x = x0; x < x1 - 1e-9; x = snap(x + GRID)) xs.push(x);
+        for (let z = z0; z < z1 - 1e-9; z = snap(z + GRID)) zs.push(z);
+        cells = [];
+        xs.forEach(x => { cells.push([x, zs[0]]); if (zs.length > 1) cells.push([x, zs[zs.length - 1]]); });
+        zs.forEach(z => { cells.push([xs[0], z]); if (xs.length > 1) cells.push([xs[xs.length - 1], z]); });
+      }
       const seen = new Set();
       cells.forEach(([cx, cz]) => {
         const k = cx + ',' + cz;
@@ -554,8 +540,7 @@ function draw() {
         const [bx, by] = W2S(cx, cz + GRID);
         ctx.fillStyle = fillCol;
         ctx.fillRect(bx + 0.5, by + 0.5, cellPx - 1, cellPx - 1);
-        ctx.strokeStyle = strokeCol; ctx.lineWidth = sel ? 1.5 : 1;
-        ctx.strokeRect(bx + 0.5, by + 0.5, cellPx - 1, cellPx - 1);
+        if (cellPx >= 6) { ctx.strokeStyle = strokeCol; ctx.lineWidth = sel ? 1.5 : 1; ctx.strokeRect(bx + 0.5, by + 0.5, cellPx - 1, cellPx - 1); }
       });
       // borde de selección
       if (sel) {

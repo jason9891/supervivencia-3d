@@ -340,68 +340,7 @@ export function construirMapa(scene, json) {
       rectSubtract(r, cutters).forEach(p => slabBox(p, r.y2, matRoof));
     }
 
-    // --- Paredes: sin muros entre salas cerradas que comparten borde ---
-    if (r.type === 'sala' && !r.open) {
-      const wh = topOf(r) - r.y;
-      const ht = T_WALL / 2;
-      const others = rects.filter(o => o !== r && o.type === 'sala' && !o.open && overlapY(r, o));
-
-      const touchesX = (xEdge, side) => others.filter(o =>
-        Math.abs((side === 'left' ? o.x1 : o.x0) - xEdge) < EPS && overlapLen(r.z0, r.z1, o.z0, o.z1) > EPS);
-      const touchesZ = (zEdge, side) => others.filter(o =>
-        Math.abs((side === 'top' ? o.z1 : o.z0) - zEdge) < EPS && overlapLen(r.x0, r.x1, o.x0, o.x1) > EPS);
-
-      const nL = touchesX(r.x0, 'left'), nR = touchesX(r.x1, 'right');
-      const nT = touchesZ(r.z0, 'top'), nB = touchesZ(r.z1, 'bottom');
-
-      // Puertas colocadas sobre un borde de esta sala (ax 'x' = muro a lo largo de X, 'z' = a lo largo de Z)
-      const doorsOnEdge = (ax, coord, a0, a1) => (json.doors || []).filter(dr => {
-        if (Math.abs((dr.y || 0) - r.y) > 0.5) return false;
-        return ax === 'x'
-          ? dr.ax !== 'z' && Math.abs(dr.z - coord) < 0.3 && dr.x >= a0 - EPS && dr.x <= a1 + EPS
-          : dr.ax === 'z' && Math.abs(dr.x - coord) < 0.3 && dr.z >= a0 - EPS && dr.z <= a1 + EPS;
-      });
-      // Emite los tramos de muro recortando la abertura de cada puerta; deja dintel (arriba) y antepecho (abajo)
-      const emitWall = (segs, ds, ax, make) => {
-        let rest = segs;
-        ds.forEach(dr => {
-          cutDoors.add(dr);
-          const ow = dr.w || 1.5, oh = dr.h || 3.6, sill = dr.sill || 0;
-          const c = ax === 'x' ? dr.x : dr.z;
-          const dlo = c - ow / 2, dhi = c + ow / 2;
-          const before = rest;
-          rest = subtractInterval(rest, dlo, dhi);
-          before.forEach(([a, b]) => {
-            const lo2 = Math.max(a, dlo), hi2 = Math.min(b, dhi);
-            if (hi2 - lo2 <= 0.05) return;
-            const yb = r.y + sill, yt = r.y + sill + oh;
-            if (sill > 0.02) make(lo2, hi2, r.y, yb);
-            if (r.y + wh - yt > 0.02) make(lo2, hi2, yt, r.y + wh);
-          });
-        });
-        rest.forEach(([a, b]) => make(a, b, r.y, r.y + wh));
-      };
-
-      // Muros horizontales (a lo largo de X): se alargan en las esquinas libres
-      const lo = r.x0 - (nL.length ? 0 : ht);
-      const hi = r.x1 + (nR.length ? 0 : ht);
-      [[r.z0, nT], [r.z1, nB]].forEach(([z, neigh]) => {
-        let segs = [[lo, hi]];
-        neigh.forEach(o => { segs = subtractInterval(segs, Math.max(r.x0, o.x0), Math.min(r.x1, o.x1)); });
-        emitWall(segs, doorsOnEdge('x', z, r.x0, r.x1), 'x', (a, b, y0, y1) => {
-          if (b - a > 0.05 && y1 - y0 > 0.02) createBox(b - a, y1 - y0, T_WALL, (a + b) / 2, (y0 + y1) / 2, z, matWall);
-        });
-      });
-
-      // Muros verticales (a lo largo de Z): entre las esquinas, para no duplicar volumen
-      [[r.x0, nL], [r.x1, nR]].forEach(([x, neigh]) => {
-        let segs = [[r.z0 + ht, r.z1 - ht]];
-        neigh.forEach(o => { segs = subtractInterval(segs, Math.max(r.z0, o.z0), Math.min(r.z1, o.z1)); });
-        emitWall(segs, doorsOnEdge('z', x, r.z0, r.z1), 'z', (a, b, y0, y1) => {
-          if (b - a > 0.05 && y1 - y0 > 0.02) createBox(T_WALL, y1 - y0, b - a, x, (y0 + y1) / 2, (a + b) / 2, matWall);
-        });
-      });
-    }
+    // (los muros de sala ahora salen como celdas, ver celdasDeMuros)
   });
 
   // --- MUROS POR BLOQUES (celdas de 10×10 cm) ---
@@ -411,7 +350,7 @@ export function construirMapa(scene, json) {
   function crearBloques(list) {
     const G = GRID;
     const cells = (list || []).filter(b => b && isFinite(b.x) && isFinite(b.z))
-      .map(b => ({ x: +cellOf(b.x).toFixed(1), z: +cellOf(b.z).toFixed(1), y: b.y || 0, h: b.h > 0 ? b.h : 4 }));
+      .map(b => ({ x: +cellOf(b.x).toFixed(1), z: +cellOf(b.z).toFixed(1), y: b.y || 0, h: b.h > 0 ? b.h : 4, muro: !!b.muro }));
     if (!cells.length) return;
     const doors = json.doors || [];
     const key = cellKey;
@@ -422,10 +361,11 @@ export function construirMapa(scene, json) {
     const cellDoors = (c) => doors.filter(dr => {
       if (dr.y == null ? c.y > 0.5 : (dr.y < c.y - 0.5 || dr.y >= c.y + c.h)) return false;
       const ow = dr.w || 1.5;
+      const tol = c.muro ? 0.25 : 0;   // los muros de trazo/sala son 4 celdas: la abertura los cruza de lado a lado
       if (dr.ax === 'z') {
-        return dr.x >= c.x - 0.05 && dr.x <= c.x + G + 0.05 && Math.min(c.z + G, dr.z + ow / 2) - Math.max(c.z, dr.z - ow / 2) > 0.02;
+        return dr.x >= c.x - 0.05 - tol && dr.x <= c.x + G + 0.05 + tol && Math.min(c.z + G, dr.z + ow / 2) - Math.max(c.z, dr.z - ow / 2) > 0.02;
       }
-      return dr.z >= c.z - 0.05 && dr.z <= c.z + G + 0.05 && Math.min(c.x + G, dr.x + ow / 2) - Math.max(c.x, dr.x - ow / 2) > 0.02;
+      return dr.z >= c.z - 0.05 - tol && dr.z <= c.z + G + 0.05 + tol && Math.min(c.x + G, dr.x + ow / 2) - Math.max(c.x, dr.x - ow / 2) > 0.02;
     });
     const hitCells = new Map(); // puerta -> celdas
     cells.forEach(c => {
@@ -511,16 +451,24 @@ export function construirMapa(scene, json) {
     mesh.castShadow = true; mesh.receiveShadow = true;
     root.add(mesh);
   }
-  crearBloques(json.blocks);
-
-  // --- PROCESAR MUROS CONTINUOS (WALLS) ---
-  if (json.walls) {
-    json.walls.forEach(w => {
-      if (w.points && w.points.length >= 2) {
-        crearMuroDesdeLinea(w, T_WALL);
-      }
+  // Muros de trazo y de sala → celdas de 10 cm, fusionadas con los bloques: una sola malla, sin paredes duplicadas ni solapes.
+  function celdasDeMuros() {
+    const C = globalThis.Celdas, out = new Map(), put = (c, y, h) => {
+      const k = C.key(c.x, c.z) + '|' + y; const o = out.get(k);
+      if (!o || o.h < h) out.set(k, { x: c.x, z: c.z, y, h, muro: true });
+    };
+    (json.walls || []).forEach(w => {
+      if (!w.points || w.points.length < 2) return;
+      C.wallCells(w).forEach(c => put(c, w.y || 0, w.h || 3));
     });
+    const salas = rects.filter(r => r.type === 'sala' && !r.open);
+    salas.forEach(r => {
+      const others = salas.filter(o => o !== r && overlapY(r, o));
+      C.roomWallCells(r, others).forEach(c => put(c, r.y, topOf(r) - r.y));
+    });
+    return [...out.values()];
   }
+  crearBloques([...(json.blocks || []), ...celdasDeMuros()]);
 
   // --- PROCESAR PUERTAS (DOORS) ---
   if (json.doors) {
