@@ -1,4 +1,4 @@
-# Generador de mapas (v22)
+# Generador de mapas (v23)
 
 Editor 2D + visor 3D de planos con cuadrícula de **10 cm**.
 
@@ -36,3 +36,8 @@ npx serve .
 
 - En el editor, **💾 JSON** copia el mapa, **⬇️** lo descarga y **📂** importa uno.
 - Si guardas un archivo como `mapa.json` junto a `index.html`, el visor lo usa cuando no hay datos del editor en el navegador. Con `?src=file` en la URL se fuerza a usar solo `mapa.json`.
+
+## Estado v23.4
+- `mapa.js` (visor 3D) ya NO depende de una copia en internet: vive en este repo y construye muros de sala, muros de trazo, bloques y puertas desde la misma ocupación de celdas que el editor (`celdas.js`), en una sola malla. Los muros de sala arrancan sobre la losa (sin parpadeo en la base) y el dintel de las puertas es una sola pieza.
+- La puerta toma la dirección del muro donde la colocas (antes salía cruzada en muros de trazo y de sala).
+- `_historial/`: archivos intermedios de las versiones v22/v23 (no se usan). `backup-pre-v23/`: cómo volver a la versión anterior.

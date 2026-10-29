@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-import { construirMapa, destruirMapa } from './mapa.js?v=3';
+import { construirMapa, destruirMapa } from './mapa.js?v=4';
 
 const zoneEl = document.getElementById('zone');
 const overlay = document.getElementById('overlay');
