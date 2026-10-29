@@ -1,54 +1,71 @@
-// celdas.js — muros como CELDAS de 10 cm. Lo comparten el editor (dibujo/selección) y el visor 3D (geometría),
-// así lo que ves en el plano es exactamente lo que se construye. Script clásico: deja todo en globalThis.Celdas.
-//
-// v22: grosor de muro = 1 celda (T = 0.1). Todo trabaja en ocupación de celdas, no en vértices.
+// celdas.js — muros como CELDAS de 10 cm. Lo comparten el editor y el visor 3D.
+// v22.1: grosor muro = 1 celda exacta (raster por celdas, no distancia a línea).
 (function () {
-  const G = 0.1;                 // celda (10 cm)
-  const T = 0.1;                 // grosor del muro = 1 celda
+  const G = 0.1;
+  const T = 0.1;
   const r1 = (v) => +v.toFixed(1);
   const cellOf = (v) => r1(Math.floor(v / G + 1e-9) * G);
   const key = (x, z) => r1(x) + ',' + r1(z);
 
-  // distancia de un punto a un segmento
-  function dSeg(px, pz, ax, az, bx, bz) {
-    const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz;
-    let t = l2 ? ((px - ax) * dx + (pz - az) * dz) / l2 : 0; t = Math.max(0, Math.min(1, t));
-    return Math.hypot(px - (ax + t * dx), pz - (az + t * dz));
-  }
+  // Rasteriza un segmento en celdas de 1 de grosor.
+  // Normaliza a centros de celda → siempre 1 celda en tramos alineados.
+  function addSeg(map, ax, az, bx, bz) {
+    const acx = cellOf(ax) + G / 2, acz = cellOf(az) + G / 2;
+    const bcx = cellOf(bx) + G / 2, bcz = cellOf(bz) + G / 2;
 
-  // Celdas cuyo centro queda a menos de T/2 + epsilon del segmento.
-  // Con T = 0.1 y trazo alineado a la rejilla produce exactamente 1 celda de grosor
-  // cuando el segmento pasa por el centro de la celda (o muy cerca).
-  function addSeg(map, ax, az, bx, bz, t) {
-    const h = (t == null ? T : t) / 2 + 1e-6;
-    const x0 = Math.min(ax, bx) - h, x1 = Math.max(ax, bx) + h;
-    const z0 = Math.min(az, bz) - h, z1 = Math.max(az, bz) + h;
-    for (let x = cellOf(x0); x <= x1 + 1e-9; x = r1(x + G))
-      for (let z = cellOf(z0); z <= z1 + 1e-9; z = r1(z + G)) {
-        if (dSeg(x + G / 2, z + G / 2, ax, az, bx, bz) <= h)
-          map.set(key(x, z), { x, z });
+    let cx = cellOf(acx), cz = cellOf(acz);
+    const x1 = cellOf(bcx), z1 = cellOf(bcz);
+
+    const dx = r1(x1 - cx), dz = r1(z1 - cz);
+    const sx = dx > 0 ? G : dx < 0 ? -G : 0;
+    const sz = dz > 0 ? G : dz < 0 ? -G : 0;
+    let adx = Math.abs(Math.round(dx / G));
+    let adz = Math.abs(Math.round(dz / G));
+
+    map.set(key(cx, cz), { x: cx, z: cz });
+    if (adx === 0 && adz === 0) return;
+
+    if (adx === 0) {
+      for (let i = 0; i < adz; i++) {
+        cz = r1(cz + sz);
+        map.set(key(cx, cz), { x: cx, z: cz });
       }
+      return;
+    }
+    if (adz === 0) {
+      for (let i = 0; i < adx; i++) {
+        cx = r1(cx + sx);
+        map.set(key(cx, cz), { x: cx, z: cz });
+      }
+      return;
+    }
+
+    let err = adx - adz;
+    let steps = adx + adz;
+    for (let i = 0; i < steps; i++) {
+      const e2 = 2 * err;
+      if (e2 > -adz) { err -= adz; cx = r1(cx + sx); }
+      if (e2 < adx)  { err += adx; cz = r1(cz + sz); }
+      map.set(key(cx, cz), { x: cx, z: cz });
+    }
   }
 
-  // Muro de trazo (polilínea) → celdas. Los puntos se interpretan como posiciones
-  // (idealmente centros de celda). Cada tramo genera 1 celda de grosor.
   function wallCells(w, t) {
     const m = new Map(), p = w.points || [];
     for (let i = 0; i < p.length - 1; i++)
-      addSeg(m, p[i].x, p[i].z, p[i + 1].x, p[i + 1].z, t);
+      addSeg(m, p[i].x, p[i].z, p[i + 1].x, p[i + 1].z);
     if (w.closed && p.length >= 3)
-      addSeg(m, p[p.length - 1].x, p[p.length - 1].z, p[0].x, p[0].z, t);
+      addSeg(m, p[p.length - 1].x, p[p.length - 1].z, p[0].x, p[0].z);
     return [...m.values()];
   }
 
-  // Rectángulo en celdas [xa, xb) × [za, zb)
   function addRect(map, xa, xb, za, zb) {
     for (let x = cellOf(xa + 1e-6); x < xb - 1e-6; x = r1(x + G))
       for (let z = cellOf(za + 1e-6); z < zb - 1e-6; z = r1(z + G))
         map.set(key(x, z), { x, z });
   }
 
-  const sub = (list, lo, hi) => {                       // resta [lo,hi] a una lista de intervalos
+  const sub = (list, lo, hi) => {
     const out = [];
     for (const [a, b] of list) {
       if (hi <= a + 1e-6 || lo >= b - 1e-6) { out.push([a, b]); continue; }
@@ -59,14 +76,10 @@
   };
   const ov = (a0, a1, b0, b1) => Math.min(a1, b1) - Math.max(a0, b0);
 
-  // Muros de una sala rectangular cerrada.
-  // v22: 1 celda de grosor. Las paredes se colocan EN el borde de la sala
-  // (celda interior del perímetro). El borde compartido con otra sala no lleva muro.
   function roomWallCells(r, others) {
     const m = new Map(), E = 1e-6;
     const x0 = Math.min(r.x0, r.x1), x1 = Math.max(r.x0, r.x1);
     const z0 = Math.min(r.z0, r.z1), z1 = Math.max(r.z0, r.z1);
-
     if (x1 - x0 < G * 1.5 || z1 - z0 < G * 1.5) return [];
 
     const nb = (o) => ({
@@ -74,7 +87,6 @@
       z0: Math.min(o.z0, o.z1), z1: Math.max(o.z0, o.z1)
     });
     const O = others.map(nb);
-
     const tX = (xe, side) => O.filter(o =>
       Math.abs((side === 'left' ? o.x1 : o.x0) - xe) < E && ov(z0, z1, o.z0, o.z1) > E);
     const tZ = (ze, side) => O.filter(o =>
@@ -83,10 +95,8 @@
     const nL = tX(x0, 'left'), nR = tX(x1, 'right');
     const nT = tZ(z0, 'top'), nB = tZ(z1, 'bottom');
 
-    const cx0 = cellOf(x0);
-    const cx1 = cellOf(x1 - E);
-    const cz0 = cellOf(z0);
-    const cz1 = cellOf(z1 - E);
+    const cx0 = cellOf(x0), cx1 = cellOf(x1 - E);
+    const cz0 = cellOf(z0), cz1 = cellOf(z1 - E);
 
     [[cz0, nT], [cz1, nB]].forEach(([cz, ne]) => {
       if (ne.length) {
@@ -99,8 +109,7 @@
     });
 
     [[cx0, nL], [cx1, nR]].forEach(([cx, ne]) => {
-      const zLo = cz0 + G;
-      const zHi = cz1;
+      const zLo = cz0 + G, zHi = cz1;
       if (zHi <= zLo + E) return;
       if (ne.length) {
         let segs = [[zLo, zHi]];
