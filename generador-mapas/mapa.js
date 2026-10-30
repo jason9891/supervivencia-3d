@@ -167,13 +167,23 @@ export function construirMapa(scene, json) {
     if (r.y2 != null) rectSubtract(r, holesAt(r.y)).forEach(p => slabBox(p, r.y2, matRoof));
   });
 
-  // Muros: cajas por segmento (simple, estable)
+  // Muros: cajas por segmento; closed une ultimo con primero
   (json.walls || []).forEach(w => {
     const height = w.h || 3, y0 = w.y || 0;
-    const pts = (w.points || []).map(p => ({ x: +p.x, z: +p.z }));
+    let pts = (w.points || []).map(p => ({ x: +p.x, z: +p.z }));
     if (pts.length < 2) return;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const a = pts[i], b = pts[i + 1];
+    let closed = !!w.closed;
+    if (pts.length > 2) {
+      const a = pts[0], b = pts[pts.length - 1];
+      if (Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.z - b.z) < 1e-6) {
+        pts = pts.slice(0, -1);
+        closed = true;
+      }
+    }
+    const n = pts.length;
+    const segCount = closed && n >= 3 ? n : n - 1;
+    for (let i = 0; i < segCount; i++) {
+      const a = pts[i], b = pts[(i + 1) % n];
       const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
       if (len < 1e-6) continue;
       const ux = dx / len, uz = dz / len;
