@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-import { construirMapa, destruirMapa } from './mapa.js?v=4';
+import { construirMapa, destruirMapa } from './mapa.js?v=5';
 
 const zoneEl = document.getElementById('zone');
 const overlay = document.getElementById('overlay');
@@ -40,7 +40,7 @@ sunLight.position.set(30, 60, 30);
 sunLight.castShadow = true;
 sunLight.shadow.mapSize.width = 4096;
 sunLight.shadow.mapSize.height = 4096;
-sunLight.shadow.bias = -0.0005;      // evita bandas de sombra en las caras de los muros
+sunLight.shadow.bias = -0.0005;
 sunLight.shadow.normalBias = 0.04;
 sunLight.shadow.camera.left = -100;
 sunLight.shadow.camera.right = 100;
@@ -51,9 +51,6 @@ scene.add(sunLight);
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);
 
-// --- CARGA DEL MAPA ---
-// Prioridad: 1) lo que el editor guardó en localStorage (misma URL base/puerto)
-//            2) mapa.json. Con ?src=file se fuerza mapa.json.
 const LS_KEY = 'castillo-v20';
 let mapaData = null;
 
@@ -72,6 +69,8 @@ function reconstruir(json, origen) {
         console.log(`✅ Mapa construido desde ${origen}`);
     } catch (error) {
         console.error('❌ Error construyendo el mapa:', error);
+        overlay.innerHTML = `<h1 style="color:red;">Error construyendo el mapa</h1><p>${error.message}</p>`;
+        overlay.style.display = 'flex';
     }
 }
 
@@ -92,7 +91,6 @@ async function cargarMapa() {
 
 cargarMapa();
 
-// Recarga en vivo: cuando el editor (otra pestaña, mismo origen) guarda, el mapa se reconstruye solo
 window.addEventListener('storage', (e) => {
     if (e.key !== LS_KEY || !e.newValue) return;
     if (new URLSearchParams(location.search).get('src') === 'file') return;
@@ -100,11 +98,10 @@ window.addEventListener('storage', (e) => {
     if (j) reconstruir(j, 'el editor (actualización en vivo)');
 });
 
-// CONTROLES Y MOVIMIENTO
 const keys = {};
 window.addEventListener('keydown', (e) => {
     keys[e.code] = true;
-    if (e.code === 'KeyR') cargarMapa(); // recarga manual
+    if (e.code === 'KeyR') cargarMapa();
 });
 window.addEventListener('keyup', (e) => keys[e.code] = false);
 
