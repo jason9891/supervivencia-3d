@@ -127,7 +127,6 @@ export function construirMapa(scene, json) {
     if (r.y2 != null) rectSubtract(r, holesAt(r.y)).forEach(p => slabBox(p, r.y2, matRoof));
   });
 
-  // Muro = cajas orientadas por segmento, solape en extremos = esquina solida
   function crearMuroDesdeLinea(w, thickness) {
     const height = w.h || 3, y0 = w.y || 0, half = thickness / 2;
     const EQ = (a, b) => Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.z - b.z) < 1e-6;
@@ -201,7 +200,48 @@ export function construirMapa(scene, json) {
     }
   }
 
-  (json.walls || []).forEach(w => crearMuroDesdeLinea(w, T_WALL));
+  function mergeWalls(walls) {
+    if (!walls || !walls.length) return [];
+    const EQ = (a, b) => a && b && Math.abs(a.x - b.x) < 0.08 && Math.abs(a.z - b.z) < 0.08;
+    const used = new Array(walls.length).fill(false);
+    const out = [];
+    for (let i = 0; i < walls.length; i++) {
+      if (used[i]) continue;
+      const w = walls[i];
+      if (!w.points || w.points.length < 2) { used[i] = true; continue; }
+      let pts = w.points.map(p => ({ x: +p.x, z: +p.z }));
+      const y = w.y || 0, h = w.h || 3;
+      used[i] = true;
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (let j = 0; j < walls.length; j++) {
+          if (used[j]) continue;
+          const o = walls[j];
+          if (!o.points || o.points.length < 2) continue;
+          if (Math.abs((o.y || 0) - y) > 0.05 || Math.abs((o.h || 3) - h) > 0.05) continue;
+          const op = o.points.map(p => ({ x: +p.x, z: +p.z }));
+          const a0 = pts[0], a1 = pts[pts.length - 1];
+          const b0 = op[0], b1 = op[op.length - 1];
+          if (EQ(a1, b0)) { pts = pts.concat(op.slice(1)); used[j] = true; changed = true; }
+          else if (EQ(a1, b1)) { pts = pts.concat(op.slice(0, -1).reverse()); used[j] = true; changed = true; }
+          else if (EQ(a0, b1)) { pts = op.slice(0, -1).concat(pts); used[j] = true; changed = true; }
+          else if (EQ(a0, b0)) { pts = op.slice(1).reverse().concat(pts); used[j] = true; changed = true; }
+        }
+      }
+      const clean = [pts[0]];
+      for (let k = 1; k < pts.length - 1; k++) {
+        const p = clean[clean.length - 1], c = pts[k], n2 = pts[k + 1];
+        const cross = (c.x - p.x) * (n2.z - p.z) - (c.z - p.z) * (n2.x - p.x);
+        if (Math.abs(cross) > 1e-4) clean.push(c);
+      }
+      clean.push(pts[pts.length - 1]);
+      out.push({ ...w, points: clean, y, h });
+    }
+    return out;
+  }
+
+  mergeWalls(json.walls || []).forEach(w => crearMuroDesdeLinea(w, T_WALL));
 
   (json.blocks || []).forEach(b => {
     if (!b || !isFinite(b.x) || !isFinite(b.z)) return;
