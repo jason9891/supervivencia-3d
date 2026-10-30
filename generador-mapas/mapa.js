@@ -131,19 +131,21 @@ export function construirMapa(scene, json) {
     if (r.y2 != null) rectSubtract(r, holesAt(r.y)).forEach(p => slabBox(p, r.y2, matRoof));
   });
 
-  // MUROS CONTINUOS por extrusión (sin cajas por celda)
   function crearMuroDesdeLinea(w, thickness) {
-    const height = w.h || 3, y = w.y || 0, half = thickness / 2;
+    const height = w.h || 3, y0 = w.y || 0, half = thickness / 2;
     const EQ = (a, b) => Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.z - b.z) < 1e-6;
     let pts = [];
-    (w.points || []).forEach(p => { if (!pts.length || !EQ(p, pts[pts.length - 1])) pts.push({ x: p.x, z: p.z }); });
+    (w.points || []).forEach(p => {
+      if (!pts.length || !EQ(p, pts[pts.length - 1])) pts.push({ x: +p.x, z: +p.z });
+    });
     let closed = !!w.closed;
     if (pts.length > 2 && EQ(pts[0], pts[pts.length - 1])) { pts.pop(); closed = true; }
     if (pts.length < 2) return;
     if (pts.length < 3) closed = false;
     const n = pts.length;
+    const segCount = closed ? n : n - 1;
     const segs = [];
-    for (let i = 0; i < (closed ? n : n - 1); i++) {
+    for (let i = 0; i < segCount; i++) {
       const a = pts[i], b = pts[(i + 1) % n];
       const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
       if (len < 1e-9) continue;
@@ -160,57 +162,97 @@ export function construirMapa(scene, json) {
       else {
         mx = prev.nx + next.nx; mz = prev.nz + next.nz;
         const ml = Math.hypot(mx, mz);
-        if (ml < 1e-6) { mx = prev.nx; mz = prev.nz; } else { mx /= ml; mz /= ml; }
-        k = 1 / Math.max(0.25, mx * prev.nx + mz * prev.nz);
+        if (ml < 1e-6) { mx = prev.nx; mz = prev.nz; }
+        else { mx /= ml; mz /= ml; }
+        const den = mx * prev.nx + mz * prev.nz;
+        k = 1 / Math.max(0.3, Math.abs(den) < 1e-6 ? 0.3 : den);
+        if (k > 3) k = 3;
       }
       const o = half * k;
       L.push({ x: pts[i].x + mx * o, z: pts[i].z + mz * o });
       R.push({ x: pts[i].x - mx * o, z: pts[i].z - mz * o });
     }
-    const piece = (seg, i, sa, sb, y0, y1) => {
-      if (sb - sa < 0.02 || y1 - y0 < 0.02) return;
-      const j = (i + 1) % n;
-      const at = (s, side, P, V) => (s <= 1e-9 ? P : s >= seg.len - 1e-9 ? V
-        : { x: seg.a.x + seg.ux * s + side * seg.nx * half, z: seg.a.z + seg.uz * s + side * seg.nz * half });
-      const l0 = at(sa, 1, L[i], L[j]), l1 = at(sb, 1, L[i], L[j]);
-      const r0 = at(sa, -1, R[i], R[j]), r1 = at(sb, -1, R[i], R[j]);
-      const shape = new THREE.Shape();
-      shape.moveTo(l0.x, -l0.z); shape.lineTo(l1.x, -l1.z); shape.lineTo(r1.x, -r1.z); shape.lineTo(r0.x, -r0.z); shape.closePath();
-      const mesh = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: y1 - y0, bevelEnabled: false }), matWall);
-      mesh.rotation.x = -Math.PI / 2; mesh.position.y = y0;
-      mesh.castShadow = true; mesh.receiveShadow = true; root.add(mesh);
+    const buildRibbon = (yBottom, yTop, skipIntervals) => {
+      segs.forEach((seg) => {
+        const i = seg.i;
+        const skips = (skipIntervals || []).filter(s => s.segIdx === i).sort((a, b) => a.lo - b.lo);
+        let cur = 0;
+        const emit = (sa, sb) => {
+          if (sb - sa < 0.02 || yTop - yBottom < 0.02) return;
+          const j = (i + 1) % n;
+          const at = (s, side, P, V) => {
+            if (s <= 1e-9) return P;
+            if (s >= seg.len - 1e-9) return V;
+            return {
+              x: seg.a.x + seg.ux * s + side * seg.nx * half,
+              z: seg.a.z + seg.uz * s + side * seg.nz * half
+            };
+          };
+          const l0 = at(sa, 1, L[i], L[j]), l1 = at(sb, 1, L[i], L[j]);
+          const r0 = at(sa, -1, R[i], R[j]), r1 = at(sb, -1, R[i], R[j]);
+          const shape = new THREE.Shape();
+          shape.moveTo(l0.x, -l0.z);
+          shape.lineTo(l1.x, -l1.z);
+          shape.lineTo(r1.x, -r1.z);
+          shape.lineTo(r0.x, -r0.z);
+          shape.closePath();
+          const mesh = new THREE.Mesh(
+            new THREE.ExtrudeGeometry(shape, { depth: yTop - yBottom, bevelEnabled: false }),
+            matWall
+          );
+          mesh.rotation.x = -Math.PI / 2;
+          mesh.position.y = yBottom;
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          root.add(mesh);
+        };
+        skips.forEach(sk => {
+          if (sk.lo > cur) emit(cur, sk.lo);
+          cur = Math.max(cur, sk.hi);
+        });
+        if (cur < seg.len) emit(cur, seg.len);
+      });
     };
-    segs.forEach((seg) => {
-      const i = seg.i;
-      const alongX = Math.abs(seg.uz) < 1e-3, alongZ = Math.abs(seg.ux) < 1e-3;
-      const found = [];
-      if (alongX || alongZ) (json.doors || []).forEach(dr => {
-        if (Math.abs((dr.y || 0) - y) > 0.5) return;
+    const doorSkips = [];
+    const doorsOnWall = [];
+    (json.doors || []).forEach(dr => {
+      if (Math.abs((dr.y || 0) - y0) > 0.5) return;
+      segs.forEach((seg) => {
+        const alongX = Math.abs(seg.uz) < 1e-3, alongZ = Math.abs(seg.ux) < 1e-3;
+        if (!alongX && !alongZ) return;
         if (alongX && dr.ax === 'z') return;
         if (alongZ && dr.ax !== 'z') return;
         const s = (dr.x - seg.a.x) * seg.ux + (dr.z - seg.a.z) * seg.uz;
         const off = Math.abs((dr.x - seg.a.x) * seg.nx + (dr.z - seg.a.z) * seg.nz);
         if (off > half + 0.3 || s < -0.01 || s > seg.len + 0.01) return;
-        found.push({ dr, s });
+        doorsOnWall.push({ dr, seg, s });
       });
-      found.sort((p, q) => p.s - q.s);
-      let cur = 0;
-      found.forEach(({ dr, s }) => {
-        cutDoors.add(dr);
-        const ow = dr.w || 1.5, oh = dr.h || 3.6, sill = dr.sill || 0;
-        const lo = Math.max(0, s - ow / 2), hi = Math.min(seg.len, s + ow / 2);
-        if (lo > cur) piece(seg, i, cur, lo, y, y + height);
-        if (sill > 0.02) piece(seg, i, lo, hi, y, y + sill);
-        if (height - sill - oh > 0.02) piece(seg, i, lo, hi, y + sill + oh, y + height);
-        cur = Math.max(cur, hi);
-      });
-      if (cur < seg.len) piece(seg, i, cur, seg.len, y, y + height);
     });
+    if (!doorsOnWall.length) {
+      buildRibbon(y0, y0 + height, []);
+      return;
+    }
+    doorsOnWall.forEach(({ dr, seg, s }) => {
+      cutDoors.add(dr);
+      const ow = dr.w || 1.5, oh = dr.h || 3.6, sill = dr.sill || 0;
+      const lo = Math.max(0, s - ow / 2), hi = Math.min(seg.len, s + ow / 2);
+      doorSkips.push({ segIdx: seg.i, lo, hi, ys: y0 + sill, yt: y0 + sill + oh });
+    });
+    let minSill = height, maxTop = 0;
+    doorSkips.forEach(d => {
+      minSill = Math.min(minSill, d.ys - y0);
+      maxTop = Math.max(maxTop, d.yt - y0);
+    });
+    if (minSill > 0.02) buildRibbon(y0, y0 + minSill, []);
+    const midSkips = doorSkips.map(d => ({ segIdx: d.segIdx, lo: d.lo, hi: d.hi }));
+    const midY0 = y0 + minSill;
+    const midY1 = y0 + Math.min(height, maxTop);
+    if (midY1 - midY0 > 0.02) buildRibbon(midY0, midY1, midSkips);
+    if (height - maxTop > 0.02) buildRibbon(y0 + maxTop, y0 + height, []);
   }
 
   (json.walls || []).forEach(w => crearMuroDesdeLinea(w, T_WALL));
 
-  // Bloques sueltos
   (json.blocks || []).forEach(b => {
     if (!b || !isFinite(b.x) || !isFinite(b.z)) return;
     const x = +cellOf(b.x).toFixed(1), z = +cellOf(b.z).toFixed(1);
