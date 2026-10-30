@@ -168,8 +168,9 @@ export function construirMapa(scene, json) {
   });
 
   // Muros: cajas por segmento; closed une ultimo con primero
+  // Hueco de puerta: se corta el tramo donde cae la puerta
   (json.walls || []).forEach(w => {
-    const height = w.h || 3, y0 = w.y || 0;
+    const height = w.h || 3, y0 = w.y || 0, half = T_WALL / 2;
     let pts = (w.points || []).map(p => ({ x: +p.x, z: +p.z }));
     if (pts.length < 2) return;
     let closed = !!w.closed;
@@ -182,18 +183,59 @@ export function construirMapa(scene, json) {
     }
     const n = pts.length;
     const segCount = closed && n >= 3 ? n : n - 1;
+
+    const emitSeg = (a, ux, uz, s0, s1, yB, yT) => {
+      const segLen = s1 - s0, h = yT - yB;
+      if (segLen < 0.02 || h < 0.02) return;
+      const mx = a.x + ux * ((s0 + s1) / 2);
+      const mz = a.z + uz * ((s0 + s1) / 2);
+      const my = (yB + yT) / 2;
+      const geo = new THREE.BoxGeometry(T_WALL, h, segLen);
+      const mesh = new THREE.Mesh(geo, matWall);
+      mesh.position.set(mx, my, mz);
+      mesh.rotation.y = Math.atan2(ux, uz);
+      mesh.castShadow = true; mesh.receiveShadow = true;
+      root.add(mesh);
+    };
+
     for (let i = 0; i < segCount; i++) {
       const a = pts[i], b = pts[(i + 1) % n];
       const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
       if (len < 1e-6) continue;
       const ux = dx / len, uz = dz / len;
-      const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
-      const geo = new THREE.BoxGeometry(T_WALL, height, len + T_WALL);
-      const mesh = new THREE.Mesh(geo, matWall);
-      mesh.position.set(mx, y0 + height / 2, mz);
-      mesh.rotation.y = Math.atan2(ux, uz);
-      mesh.castShadow = true; mesh.receiveShadow = true;
-      root.add(mesh);
+      const nx = -uz, nz = ux;
+
+      const doors = [];
+      (json.doors || []).forEach(dr => {
+        if (Math.abs((dr.y || 0) - y0) > 0.5) return;
+        const alongX = Math.abs(uz) < 1e-3, alongZ = Math.abs(ux) < 1e-3;
+        if (!alongX && !alongZ) return;
+        if (alongX && dr.ax === 'z') return;
+        if (alongZ && dr.ax !== 'z') return;
+        const s = (dr.x - a.x) * ux + (dr.z - a.z) * uz;
+        const off = Math.abs((dr.x - a.x) * nx + (dr.z - a.z) * nz);
+        if (off > half + 0.3 || s < -0.01 || s > len + 0.01) return;
+        doors.push({ dr, s });
+      });
+      doors.sort((p, q) => p.s - q.s);
+
+      const pad = T_WALL * 0.5;
+      if (!doors.length) {
+        emitSeg(a, ux, uz, -pad, len + pad, y0, y0 + height);
+        continue;
+      }
+
+      let cur = -pad;
+      doors.forEach(({ dr, s }) => {
+        cutDoors.add(dr);
+        const ow = dr.w || 1.5, oh = dr.h || 3.6, sill = dr.sill || 0;
+        const lo = Math.max(0, s - ow / 2), hi = Math.min(len, s + ow / 2);
+        if (lo > cur) emitSeg(a, ux, uz, cur, lo, y0, y0 + height);
+        if (sill > 0.02) emitSeg(a, ux, uz, lo, hi, y0, y0 + sill);
+        if (height - sill - oh > 0.02) emitSeg(a, ux, uz, lo, hi, y0 + sill + oh, y0 + height);
+        cur = Math.max(cur, hi);
+      });
+      if (cur < len + pad) emitSeg(a, ux, uz, cur, len + pad, y0, y0 + height);
     }
   });
 
@@ -204,7 +246,7 @@ export function construirMapa(scene, json) {
     createBox(GRID, h, GRID, x + GRID / 2, y + h / 2, z + GRID / 2, matWall);
   });
 
-  if (json.doors) json.doors.forEach(d => createDoor(d, true));
+  if (json.doors) json.doors.forEach(d => createDoor(d, !cutDoors.has(d)));
   return root;
 }
 
