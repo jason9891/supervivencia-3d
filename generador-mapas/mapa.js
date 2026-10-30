@@ -30,8 +30,6 @@ function rectSubtract(rect, cutters) {
   return pieces;
 }
 
-const overlapLen = (a0, a1, b0, b1) => Math.min(a1, b1) - Math.max(a0, b0);
-
 export function construirMapa(scene, json) {
   const matWall = new THREE.MeshStandardMaterial({ color: 0x7a7a7a, roughness: 0.9 });
   matWall.polygonOffset = true; matWall.polygonOffsetFactor = 1; matWall.polygonOffsetUnits = 1;
@@ -103,6 +101,33 @@ export function construirMapa(scene, json) {
   const floorPieces = new Map();
   rects.forEach(r => { if (isElev(r)) return; floorPieces.set(r, rectSubtract(r, holesAt(r.y))); });
 
+  (json.rooms || []).filter(isPoly).forEach(r => {
+    const cleanPoints = [];
+    for (let i = 0; i < r.points.length; i++) {
+      const p = r.points[i];
+      const last = cleanPoints[cleanPoints.length - 1];
+      if (!last || last.x !== p.x || last.z !== p.z) cleanPoints.push(p);
+    }
+    if (cleanPoints.length > 2 && cleanPoints[0].x === cleanPoints[cleanPoints.length - 1].x && cleanPoints[0].z === cleanPoints[cleanPoints.length - 1].z) cleanPoints.pop();
+    if (cleanPoints.length < 3) return;
+    const shape = new THREE.Shape();
+    shape.moveTo(cleanPoints[0].x, -cleanPoints[0].z);
+    for (let i = 1; i < cleanPoints.length; i++) shape.lineTo(cleanPoints[i].x, -cleanPoints[i].z);
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: T_SLAB, bevelEnabled: false });
+    const mesh = new THREE.Mesh(geo, matFloor);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = r.y - T_SLAB / 2;
+    mesh.castShadow = true; mesh.receiveShadow = true; root.add(mesh);
+  });
+
+  rects.forEach(r => {
+    if (isElev(r)) return;
+    const floorMat = r.y > 3 ? matHighFloor : matFloor;
+    (floorPieces.get(r) || []).forEach(p => slabBox(p, r.y, floorMat));
+    if (r.y2 != null) rectSubtract(r, holesAt(r.y)).forEach(p => slabBox(p, r.y2, matRoof));
+  });
+
+  // Muro = cajas orientadas por segmento, solape en extremos = esquina solida
   function crearMuroDesdeLinea(w, thickness) {
     const height = w.h || 3, y0 = w.y || 0, half = thickness / 2;
     const EQ = (a, b) => Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.z - b.z) < 1e-6;
@@ -116,149 +141,67 @@ export function construirMapa(scene, json) {
     if (pts.length < 3) closed = false;
     const n = pts.length;
     const segCount = closed ? n : n - 1;
-    const segs = [];
+    const OVERLAP = thickness;
+
     for (let i = 0; i < segCount; i++) {
       const a = pts[i], b = pts[(i + 1) % n];
       const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
       if (len < 1e-9) continue;
-      segs.push({ a, b, len, ux: dx / len, uz: dz / len, nx: -dz / len, nz: dx / len, i });
-    }
-    if (!segs.length) return;
-    const L = [], R = [];
-    for (let i = 0; i < n; i++) {
-      const prev = closed ? segs[(i - 1 + segs.length) % segs.length] : (i > 0 ? segs[i - 1] : null);
-      const next = closed ? segs[i % segs.length] : (i < segs.length ? segs[i] : null);
-      let mx, mz, k = 1;
-      if (!prev) { mx = next.nx; mz = next.nz; }
-      else if (!next) { mx = prev.nx; mz = prev.nz; }
-      else {
-        mx = prev.nx + next.nx; mz = prev.nz + next.nz;
-        const ml = Math.hypot(mx, mz);
-        if (ml < 1e-6) { mx = prev.nx; mz = prev.nz; }
-        else { mx /= ml; mz /= ml; }
-        const den = mx * prev.nx + mz * prev.nz;
-        k = 1 / Math.max(0.3, Math.abs(den) < 1e-6 ? 0.3 : den);
-        if (k > 3) k = 3;
-      }
-      const o = half * k;
-      L.push({ x: pts[i].x + mx * o, z: pts[i].z + mz * o });
-      R.push({ x: pts[i].x - mx * o, z: pts[i].z - mz * o });
-    }
-    const extrudeRibbon = (yBottom, yTop, shape2d) => {
-      if (yTop - yBottom < 0.02 || !shape2d) return;
-      const mesh = new THREE.Mesh(
-        new THREE.ExtrudeGeometry(shape2d, { depth: yTop - yBottom, bevelEnabled: false }),
-        matWall
-      );
-      mesh.rotation.x = -Math.PI / 2;
-      mesh.position.y = yBottom;
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      root.add(mesh);
-    };
-    const fullShape = () => {
-      const shape = new THREE.Shape();
-      shape.moveTo(L[0].x, -L[0].z);
-      for (let i = 1; i < n; i++) shape.lineTo(L[i].x, -L[i].z);
-      shape.lineTo(R[n - 1].x, -R[n - 1].z);
-      for (let i = n - 2; i >= 0; i--) shape.lineTo(R[i].x, -R[i].z);
-      shape.closePath();
-      return shape;
-    };
-    const doorsOnWall = [];
-    (json.doors || []).forEach(dr => {
-      if (Math.abs((dr.y || 0) - y0) > 0.5) return;
-      segs.forEach((seg) => {
-        const alongX = Math.abs(seg.uz) < 1e-3, alongZ = Math.abs(seg.ux) < 1e-3;
+      const ux = dx / len, uz = dz / len;
+      const nx = -uz, nz = ux;
+
+      const doors = [];
+      (json.doors || []).forEach(dr => {
+        if (Math.abs((dr.y || 0) - y0) > 0.5) return;
+        const alongX = Math.abs(uz) < 1e-3, alongZ = Math.abs(ux) < 1e-3;
         if (!alongX && !alongZ) return;
         if (alongX && dr.ax === 'z') return;
         if (alongZ && dr.ax !== 'z') return;
-        const s = (dr.x - seg.a.x) * seg.ux + (dr.z - seg.a.z) * seg.uz;
-        const off = Math.abs((dr.x - seg.a.x) * seg.nx + (dr.z - seg.a.z) * seg.nz);
-        if (off > half + 0.3 || s < -0.01 || s > seg.len + 0.01) return;
-        doorsOnWall.push({ dr, seg, s });
+        const s = (dr.x - a.x) * ux + (dr.z - a.z) * uz;
+        const off = Math.abs((dr.x - a.x) * nx + (dr.z - a.z) * nz);
+        if (off > half + 0.3 || s < -0.01 || s > len + 0.01) return;
+        doors.push({ dr, s });
       });
-    });
-    if (!doorsOnWall.length) {
-      extrudeRibbon(y0, y0 + height, fullShape());
-      return;
-    }
-    const OVERLAP = 0.001;
-    const piece = (seg, i, sa, sb, yB, yT) => {
-      if (sb - sa < 0.02 || yT - yB < 0.02) return;
-      const j = (i + 1) % n;
-      const at = (s, side, P, V) => {
-        if (s <= 1e-9) return P;
-        if (s >= seg.len - 1e-9) return V;
-        return {
-          x: seg.a.x + seg.ux * s + side * seg.nx * half,
-          z: seg.a.z + seg.uz * s + side * seg.nz * half
-        };
+      doors.sort((p, q) => p.s - q.s);
+
+      const emitBox = (s0, s1, yB, yT) => {
+        const segLen = s1 - s0;
+        const h = yT - yB;
+        if (segLen < 0.02 || h < 0.02) return;
+        const mx = a.x + ux * ((s0 + s1) / 2);
+        const mz = a.z + uz * ((s0 + s1) / 2);
+        const my = (yB + yT) / 2;
+        const geo = new THREE.BoxGeometry(thickness, h, segLen);
+        const mesh = new THREE.Mesh(geo, matWall);
+        mesh.position.set(mx, my, mz);
+        mesh.rotation.y = Math.atan2(ux, uz);
+        mesh.castShadow = true; mesh.receiveShadow = true;
+        root.add(mesh);
       };
-      const sa2 = Math.max(0, sa - (sa > 0.01 ? OVERLAP : 0));
-      const sb2 = Math.min(seg.len, sb + (sb < seg.len - 0.01 ? OVERLAP : 0));
-      const l0 = at(sa2, 1, L[i], L[j]), l1 = at(sb2, 1, L[i], L[j]);
-      const r0 = at(sa2, -1, R[i], R[j]), r1 = at(sb2, -1, R[i], R[j]);
-      const shape = new THREE.Shape();
-      shape.moveTo(l0.x, -l0.z);
-      shape.lineTo(l1.x, -l1.z);
-      shape.lineTo(r1.x, -r1.z);
-      shape.lineTo(r0.x, -r0.z);
-      shape.closePath();
-      extrudeRibbon(yB, yT, shape);
-    };
-    segs.forEach((seg) => {
-      const i = seg.i;
-      const found = doorsOnWall.filter(d => d.seg === seg).sort((a, b) => a.s - b.s);
-      let cur = 0;
-      found.forEach(({ dr, s }) => {
+
+      const extendStart = (i > 0 || closed) ? OVERLAP / 2 : 0;
+      const extendEnd = (i < segCount - 1 || closed) ? OVERLAP / 2 : 0;
+
+      if (!doors.length) {
+        emitBox(-extendStart, len + extendEnd, y0, y0 + height);
+        continue;
+      }
+
+      let cur = -extendStart;
+      doors.forEach(({ dr, s }) => {
         cutDoors.add(dr);
         const ow = dr.w || 1.5, oh = dr.h || 3.6, sill = dr.sill || 0;
-        const lo = Math.max(0, s - ow / 2), hi = Math.min(seg.len, s + ow / 2);
-        if (lo > cur) piece(seg, i, cur, lo, y0, y0 + height);
-        if (sill > 0.02) piece(seg, i, lo, hi, y0, y0 + sill);
-        if (height - sill - oh > 0.02) piece(seg, i, lo, hi, y0 + sill + oh, y0 + height);
+        const lo = Math.max(0, s - ow / 2), hi = Math.min(len, s + ow / 2);
+        if (lo > cur) emitBox(cur, lo, y0, y0 + height);
+        if (sill > 0.02) emitBox(lo, hi, y0, y0 + sill);
+        if (height - sill - oh > 0.02) emitBox(lo, hi, y0 + sill + oh, y0 + height);
         cur = Math.max(cur, hi);
       });
-      if (cur < seg.len) piece(seg, i, cur, seg.len, y0, y0 + height);
-    });
-  }
-
-  function mergeWalls(walls) {
-    if (!walls || !walls.length) return [];
-    const EQ = (a, b) => a && b && Math.abs(a.x - b.x) < 0.05 && Math.abs(a.z - b.z) < 0.05;
-    const used = new Array(walls.length).fill(false);
-    const out = [];
-    for (let i = 0; i < walls.length; i++) {
-      if (used[i]) continue;
-      const w = walls[i];
-      if (!w.points || w.points.length < 2) { used[i] = true; continue; }
-      let pts = w.points.map(p => ({ x: +p.x, z: +p.z }));
-      const y = w.y || 0, h = w.h || 3;
-      used[i] = true;
-      let changed = true;
-      while (changed) {
-        changed = false;
-        for (let j = 0; j < walls.length; j++) {
-          if (used[j]) continue;
-          const o = walls[j];
-          if (!o.points || o.points.length < 2) continue;
-          if (Math.abs((o.y || 0) - y) > 0.05 || Math.abs((o.h || 3) - h) > 0.05) continue;
-          const op = o.points.map(p => ({ x: +p.x, z: +p.z }));
-          const a0 = pts[0], a1 = pts[pts.length - 1];
-          const b0 = op[0], b1 = op[op.length - 1];
-          if (EQ(a1, b0)) { pts = pts.concat(op.slice(1)); used[j] = true; changed = true; }
-          else if (EQ(a1, b1)) { pts = pts.concat(op.slice(0, -1).reverse()); used[j] = true; changed = true; }
-          else if (EQ(a0, b1)) { pts = op.slice(0, -1).concat(pts); used[j] = true; changed = true; }
-          else if (EQ(a0, b0)) { pts = op.slice(1).reverse().concat(pts); used[j] = true; changed = true; }
-        }
-      }
-      out.push({ ...w, points: pts, y, h });
+      if (cur < len + extendEnd) emitBox(cur, len + extendEnd, y0, y0 + height);
     }
-    return out;
   }
 
-  mergeWalls(json.walls || []).forEach(w => crearMuroDesdeLinea(w, T_WALL));
+  (json.walls || []).forEach(w => crearMuroDesdeLinea(w, T_WALL));
 
   (json.blocks || []).forEach(b => {
     if (!b || !isFinite(b.x) || !isFinite(b.z)) return;
