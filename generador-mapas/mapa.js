@@ -121,10 +121,58 @@ export function construirMapa(scene, json) {
   });
 
   rects.forEach(r => {
-    if (isElev(r)) return;
+    const w = r.x1 - r.x0, d = r.z1 - r.z0;
+    const cx = r.x0 + w / 2, cz = r.z0 + d / 2;
+    const dir = r.dir || '+x';
+    const half = T_SLAB / 2;
+    if (r.type === 'rampa') {
+      const rise = (r.y2 != null ? r.y2 : r.y + 3) - r.y;
+      const length = dir.includes('z') ? d : w;
+      const theta = Math.atan2(rise, length);
+      const hypot = Math.sqrt(length * length + rise * rise);
+      const geo = new THREE.BoxGeometry(dir.includes('z') ? w : hypot, T_SLAB, dir.includes('z') ? hypot : d);
+      const ramp = new THREE.Mesh(geo, matRampa);
+      ramp.position.set(cx, r.y + rise / 2 + half - half / Math.cos(theta), cz);
+      if (dir === '+z') ramp.rotation.x = -theta;
+      if (dir === '-z') ramp.rotation.x = theta;
+      if (dir === '+x') ramp.rotation.z = theta;
+      if (dir === '-x') ramp.rotation.z = -theta;
+      ramp.castShadow = true; ramp.receiveShadow = true; root.add(ramp);
+      return;
+    }
+    if (r.type === 'escalera') {
+      const y2 = r.y2 != null ? r.y2 : r.y + 3;
+      const surf0 = r.y + half, surf1 = y2 + half;
+      const rise = surf1 - surf0;
+      const steps = r.steps || Math.max(4, Math.min(40, Math.round(Math.abs(y2 - r.y) / 0.25)));
+      const length = dir.includes('z') ? d : w;
+      const stepD = length / steps;
+      const baseY = r.y - half;
+      for (let i = 0; i < steps; i++) {
+        const topY = surf0 + ((i + 1) / steps) * rise;
+        const offset = i * stepD + stepD / 2;
+        let sx = cx, sz = cz;
+        if (dir === '+z') sz = r.z0 + offset;
+        if (dir === '-z') sz = r.z1 - offset;
+        if (dir === '+x') sx = r.x0 + offset;
+        if (dir === '-x') sx = r.x1 - offset;
+        const sw = dir.includes('z') ? w : stepD;
+        const sd = dir.includes('z') ? stepD : d;
+        const h = topY - baseY;
+        createBox(sw, h, sd, sx, baseY + h / 2, sz, matEscalera);
+      }
+      return;
+    }
     const floorMat = r.y > 3 ? matHighFloor : matFloor;
     (floorPieces.get(r) || []).forEach(p => slabBox(p, r.y, floorMat));
-    if (r.y2 != null) rectSubtract(r, holesAt(r.y)).forEach(p => slabBox(p, r.y2, matRoof));
+    if (r.y2 != null) {
+      const cutters = holesAt(r.y).slice();
+      rects.forEach(o => {
+        if (o === r || isElev(o)) return;
+        if (Math.abs(o.y - r.y2) < 0.1) cutters.push(...(floorPieces.get(o) || []));
+      });
+      rectSubtract(r, cutters).forEach(p => slabBox(p, r.y2, matRoof));
+    }
   });
 
   function crearMuroDesdeLinea(w, thickness) {
