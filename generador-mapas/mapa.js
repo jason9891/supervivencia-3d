@@ -226,8 +226,9 @@ export function construirMapa(scene, json) {
         root.add(mesh);
       };
 
-      const extendStart = (i > 0 || closed) ? OVERLAP / 2 : 0;
-      const extendEnd = (i < segCount - 1 || closed) ? OVERLAP / 2 : 0;
+      // Siempre solapar extremos: cierra huecos entre muros consecutivos dibujados aparte
+      const extendStart = OVERLAP;
+      const extendEnd = OVERLAP;
 
       if (!doors.length) {
         emitBox(-extendStart, len + extendEnd, y0, y0 + height);
@@ -250,7 +251,7 @@ export function construirMapa(scene, json) {
 
   function mergeWalls(walls) {
     if (!walls || !walls.length) return [];
-    const EQ = (a, b) => a && b && Math.abs(a.x - b.x) < 0.08 && Math.abs(a.z - b.z) < 0.08;
+    const near = (a, b, t = 0.15) => a && b && Math.abs(a.x - b.x) < t && Math.abs(a.z - b.z) < t;
     const used = new Array(walls.length).fill(false);
     const out = [];
     for (let i = 0; i < walls.length; i++) {
@@ -271,10 +272,10 @@ export function construirMapa(scene, json) {
           const op = o.points.map(p => ({ x: +p.x, z: +p.z }));
           const a0 = pts[0], a1 = pts[pts.length - 1];
           const b0 = op[0], b1 = op[op.length - 1];
-          if (EQ(a1, b0)) { pts = pts.concat(op.slice(1)); used[j] = true; changed = true; }
-          else if (EQ(a1, b1)) { pts = pts.concat(op.slice(0, -1).reverse()); used[j] = true; changed = true; }
-          else if (EQ(a0, b1)) { pts = op.slice(0, -1).concat(pts); used[j] = true; changed = true; }
-          else if (EQ(a0, b0)) { pts = op.slice(1).reverse().concat(pts); used[j] = true; changed = true; }
+          if (near(a1, b0)) { pts = pts.concat(op.slice(1)); used[j] = true; changed = true; }
+          else if (near(a1, b1)) { pts = pts.concat(op.slice(0, -1).reverse()); used[j] = true; changed = true; }
+          else if (near(a0, b1)) { pts = op.slice(0, -1).concat(pts); used[j] = true; changed = true; }
+          else if (near(a0, b0)) { pts = op.slice(1).reverse().concat(pts); used[j] = true; changed = true; }
         }
       }
       const clean = [pts[0]];
