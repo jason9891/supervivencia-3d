@@ -125,17 +125,32 @@ export function construirMapa(scene, json) {
     const dir = r.dir || '+x';
     const half = T_SLAB / 2;
     if (r.type === 'rampa') {
-      const rise = (r.y2 != null ? r.y2 : r.y + 3) - r.y;
-      const length = dir.includes('z') ? d : w;
-      const theta = Math.atan2(rise, length);
-      const hypot = Math.sqrt(length * length + rise * rise);
-      const geo = new THREE.BoxGeometry(dir.includes('z') ? w : hypot, T_SLAB, dir.includes('z') ? hypot : d);
+      // Prisma inclinado: techo y base paralelos (grosor vertical constante) con los extremos
+      // cortados en VERTICAL: empieza en Y y termina exactamente en Y final (a ras con los pisos).
+      const yEnd = r.y2 != null ? r.y2 : r.y + 3;
+      const t = T_SLAB;
+      const along = dir.includes('z') ? 'z' : 'x';
+      const fwd = dir[0] === '+';
+      const a0 = along === 'x' ? r.x0 : r.z0, a1 = along === 'x' ? r.x1 : r.z1;
+      const o0 = along === 'x' ? r.z0 : r.x0, o1 = along === 'x' ? r.z1 : r.x1;
+      const ys = (fwd ? [r.y, yEnd] : [yEnd, r.y]).map(v => v + half); // altura del techo en a0 y en a1
+      const P = (a, y, o) => along === 'x' ? [a, y, o] : [o, y, a];
+      const v = {
+        t00: P(a0, ys[0], o0), t01: P(a0, ys[0], o1), t10: P(a1, ys[1], o0), t11: P(a1, ys[1], o1),
+        b00: P(a0, ys[0] - t, o0), b01: P(a0, ys[0] - t, o1), b10: P(a1, ys[1] - t, o0), b11: P(a1, ys[1] - t, o1),
+      };
+      const quads = [
+        ['t00', 't01', 't11', 't10'], ['b00', 'b10', 'b11', 'b01'],
+        ['t00', 'b00', 'b01', 't01'], ['t10', 't11', 'b11', 'b10'],
+        ['t00', 't10', 'b10', 'b00'], ['t01', 'b01', 'b11', 't11'],
+      ];
+      const pos = [], uv = [];
+      quads.forEach(q => [0, 1, 2, 0, 2, 3].forEach(i => { const p = v[q[i]]; pos.push(p[0], p[1], p[2]); uv.push(p[0] + p[2], p[1]); }));
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geo.computeVertexNormals();
       const ramp = new THREE.Mesh(geo, matRampa);
-      ramp.position.set(cx, r.y + rise / 2 + half - half / Math.cos(theta), cz);
-      if (dir === '+z') ramp.rotation.x = -theta;
-      if (dir === '-z') ramp.rotation.x = theta;
-      if (dir === '+x') ramp.rotation.z = theta;
-      if (dir === '-x') ramp.rotation.z = -theta;
       ramp.castShadow = true; ramp.receiveShadow = true; root.add(ramp);
       return;
     }

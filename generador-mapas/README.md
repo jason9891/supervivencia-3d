@@ -45,3 +45,5 @@ npx serve .
 ## v23.4 · todo en celdas (0 vértices)
 - `editor-extras.js`: panel de propiedades y diseñador de puertas con medidas y posiciones en **celdas** (ancho/alto/alféizar/marco de la puerta, celda X/Z, celdas inicial/final de una sala, alto de muros y bloques). Solo el nivel Y se sigue dando en metros.
 - Herramienta Bloques: el alto también va en celdas.
+
+- generador-mapas: la rampa es un prisma inclinado con extremos cortados en vertical (empieza en Y y termina en Y final, grosor vertical constante). Visor v=6.
