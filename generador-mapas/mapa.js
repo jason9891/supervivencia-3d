@@ -34,6 +34,7 @@ export function construirMapa(scene, json) {
   const matWall = new THREE.MeshStandardMaterial({ color: 0x7a7a7a, roughness: 0.9 });
   const matFloor = new THREE.MeshStandardMaterial({ color: 0x4a4a4a, roughness: 0.8 });
   const matRoof = new THREE.MeshStandardMaterial({ color: 0x5c3a21, roughness: 0.9 });
+  const matWallRamp = new THREE.MeshStandardMaterial({ color: 0x6b6f76, roughness: 0.9 });
   const matRampa = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.8 });
   const matEscalera = new THREE.MeshStandardMaterial({ color: 0xa855f7, roughness: 0.7 });
   const matHighFloor = new THREE.MeshStandardMaterial({ color: 0x5a5a5a, roughness: 0.8 });
@@ -135,23 +136,35 @@ export function construirMapa(scene, json) {
       const o0 = along === 'x' ? r.z0 : r.x0, o1 = along === 'x' ? r.z1 : r.x1;
       const ys = (fwd ? [r.y, yEnd] : [yEnd, r.y]).map(v => v + half); // altura del techo en a0 y en a1
       const P = (a, y, o) => along === 'x' ? [a, y, o] : [o, y, a];
-      const v = {
-        t00: P(a0, ys[0], o0), t01: P(a0, ys[0], o1), t10: P(a1, ys[1], o0), t11: P(a1, ys[1], o1),
-        b00: P(a0, ys[0] - t, o0), b01: P(a0, ys[0] - t, o1), b10: P(a1, ys[1] - t, o0), b11: P(a1, ys[1] - t, o1),
+      // prisma de caras planas: techo ysT y base ysB (alturas en a0 y a1), extremos verticales
+      const prism = (pa0, pa1, po0, po1, ysT, ysB, mat) => {
+        const v = {
+          t00: P(pa0, ysT[0], po0), t01: P(pa0, ysT[0], po1), t10: P(pa1, ysT[1], po0), t11: P(pa1, ysT[1], po1),
+          b00: P(pa0, ysB[0], po0), b01: P(pa0, ysB[0], po1), b10: P(pa1, ysB[1], po0), b11: P(pa1, ysB[1], po1),
+        };
+        const quads = [
+          ['t00', 't01', 't11', 't10'], ['b00', 'b10', 'b11', 'b01'],
+          ['t00', 'b00', 'b01', 't01'], ['t10', 't11', 'b11', 'b10'],
+          ['t00', 't10', 'b10', 'b00'], ['t01', 'b01', 'b11', 't11'],
+        ];
+        const pos = [], uv = [];
+        quads.forEach(q => [0, 1, 2, 0, 2, 3].forEach(i => { const p = v[q[i]]; pos.push(p[0], p[1], p[2]); uv.push(p[0] + p[2], p[1]); }));
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+        geo.computeVertexNormals();
+        const m = new THREE.Mesh(geo, mat);
+        m.castShadow = true; m.receiveShadow = true; root.add(m);
+        return m;
       };
-      const quads = [
-        ['t00', 't01', 't11', 't10'], ['b00', 'b10', 'b11', 'b01'],
-        ['t00', 'b00', 'b01', 't01'], ['t10', 't11', 'b11', 'b10'],
-        ['t00', 't10', 'b10', 'b00'], ['t01', 'b01', 'b11', 't11'],
-      ];
-      const pos = [], uv = [];
-      quads.forEach(q => [0, 1, 2, 0, 2, 3].forEach(i => { const p = v[q[i]]; pos.push(p[0], p[1], p[2]); uv.push(p[0] + p[2], p[1]); }));
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-      geo.computeVertexNormals();
-      const ramp = new THREE.Mesh(geo, matRampa);
-      ramp.castShadow = true; ramp.receiveShadow = true; root.add(ramp);
+      // Muros laterales (1 celda de grosor) que siguen la pendiente y acaban rectos; r.lat = alto sobre la rampa (0 = sin muros)
+      const lat = r.lat != null ? +r.lat : 1;
+      if (lat > 0) {
+        const G1 = 0.1;
+        prism(a0, a1, o0, o0 + G1, ys.map(y => y + lat), ys, matWallRamp);
+        prism(a0, a1, o1 - G1, o1, ys.map(y => y + lat), ys, matWallRamp);
+      }
+      const ramp = prism(a0, a1, o0, o1, ys, ys.map(y => y - t), matRampa);
       return;
     }
     if (r.type === 'escalera') {

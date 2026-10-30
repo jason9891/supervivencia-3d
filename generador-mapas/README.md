@@ -47,3 +47,4 @@ npx serve .
 - Herramienta Bloques: el alto también va en celdas.
 
 - generador-mapas: la rampa es un prisma inclinado con extremos cortados en vertical (empieza en Y y termina en Y final, grosor vertical constante). Visor v=6.
+- generador-mapas: rampas con muros laterales (1 celda de grosor, alto configurable en 'Muros laterales', 0 = sin) que siguen la pendiente y acaban en corte vertical. Visor v=7.

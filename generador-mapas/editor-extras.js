@@ -27,6 +27,7 @@
       h += n('Nivel Y (m)', 'y', obj.y || 0, 0.5);
       if (T === 'room' && obj.y2 != null) h += n('Y final (m)', 'y2', obj.y2, 0.5);
       if (T === 'room' && (obj.type === 'rampa' || obj.type === 'escalera')) h += sel('Sube hacia', 'dir', obj.dir || '+x', [['+x', '+X (este)'], ['-x', '−X (oeste)'], ['+z', '+Z (norte)'], ['-z', '−Z (sur)']]);
+      if (T === 'room' && obj.type === 'rampa') h += n('Muros laterales: alto (celdas, 0 = sin)', 'latC', C(obj.lat != null ? obj.lat : 1), 1);
       if (T === 'room' && obj.type === 'sala') h += sel('Muros', 'open', String(!!obj.open), [['false', 'Cerrada'], ['true', 'Abierta']]);
     } else if (T === 'wall') {
       h += n('Alto (celdas)', 'hC', C(obj.h || 3), 1, hint(C(obj.h || 3))) + n('Nivel Y (m)', 'y', obj.y || 0, 0.5)
@@ -63,6 +64,7 @@
     else if (key === 'cz1') o.z1 = M(Math.max(v + 1, C(o.z0) + 1));
     else if (key === 'cx') o.x = type === 'block' ? M(v) : M(v + 0.5);
     else if (key === 'cz') o.z = type === 'block' ? M(v) : M(v + 0.5);
+    else if (key === 'latC') o.lat = M(Math.max(0, v));
     else if (key.endsWith('C')) o[key.slice(0, -1)] = M(Math.max(key === 'sillC' ? 0 : 1, v));
     else o[key] = v;
     renderProps(); draw(); commit();
