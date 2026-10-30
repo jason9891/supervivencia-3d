@@ -226,9 +226,8 @@ export function construirMapa(scene, json) {
         root.add(mesh);
       };
 
-      // Siempre solapar extremos: cierra huecos entre muros consecutivos dibujados aparte
-      const extendStart = OVERLAP;
-      const extendEnd = OVERLAP;
+      const extendStart = (i > 0 || closed) ? OVERLAP : 0;
+      const extendEnd = (i < segCount - 1 || closed) ? OVERLAP : 0;
 
       if (!doors.length) {
         emitBox(-extendStart, len + extendEnd, y0, y0 + height);
@@ -247,6 +246,18 @@ export function construirMapa(scene, json) {
       });
       if (cur < len + extendEnd) emitBox(cur, len + extendEnd, y0, y0 + height);
     }
+
+    // Poste en cada vértice intermedio → esquina L/T sólida
+    const cornerIdx = [];
+    if (closed) {
+      for (let i = 0; i < n; i++) cornerIdx.push(i);
+    } else {
+      for (let i = 1; i < n - 1; i++) cornerIdx.push(i);
+    }
+    cornerIdx.forEach(i => {
+      const p = pts[i];
+      createBox(thickness, height, thickness, p.x, y0 + height / 2, p.z, matWall);
+    });
   }
 
   function mergeWalls(walls) {
