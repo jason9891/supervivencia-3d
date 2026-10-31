@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Mapa + decorado</title>
+<style>
+body{margin:0;overflow:hidden;background:#1a1e15;font:13px system-ui;color:#fff}
+canvas{display:block}
+#hud{position:absolute;top:8px;left:8px;max-width:min(560px,calc(100% - 16px));background:#000a;padding:6px 10px;border-radius:8px;line-height:1.45;max-height:42vh;overflow:auto}
+#hud table{border-collapse:collapse;font-size:12px}#hud td,#hud th{padding:1px 8px 1px 0;text-align:left;white-space:nowrap}
+#bar{position:absolute;bottom:10px;left:8px;right:8px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+button{background:#2a2622e0;color:#eee;border:1px solid #6a5a44;border-radius:8px;padding:10px 12px;font:inherit}
+.mal{color:#ffb4a0}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head><body>
+<div id="hud">Cargando…</div>
+<div id="bar"><button id="brec">Recargar</button><button id="bsem">Otra semilla</button><button id="bpie">Piedras: —</button><button id="bdia">Día</button><button id="bpan">Panel</button></div>
+<script type="module">
+/* Coloca este archivo en la misma carpeta que mapa.js, objetos*.js, piedras.js, decorado.js y decorado.json,
+   y ábrelo desde tu servidor local (http://localhost:8080/mapa_decorado.html).
+   Lee el plano de mapa.json si existe; si no, de lo que el editor guardó en el navegador. */
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { construirMapa, destruirMapa } from './mapa.js';
+import { montarDecorado, listarSalas } from './decorado.js';
+
+const hud=document.getElementById('hud');
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x9ec3d9);
+const camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,.1,3000);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);document.body.appendChild(renderer.domElement);
+const ctl=new OrbitControls(camera,renderer.domElement);ctl.maxPolarAngle=Math.PI*.495;
+const hemi=new THREE.HemisphereLight(0xdcecff,0x4a5c3a,.9);scene.add(hemi);
+const sol=new THREE.DirectionalLight(0xfff0d0,1.3);sol.position.set(60,120,80);scene.add(sol);
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+
+async function leerJson(nombre){try{const r=await fetch(nombre+'?t='+Date.now());if(!r.ok)return null;return await r.json()}catch(e){return null}}
+function leerEditor(){
+  const claves=['castillo-v21','castillo-v20'];
+  for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(/castillo/i.test(k)&&!claves.includes(k))claves.push(k)}
+  for(const k of claves){try{const j=JSON.parse(localStorage.getItem(k));if(j&&Array.isArray(j.rooms))return{json:j,fuente:'editor ('+k+')'}}catch(e){}}
+  return null}
+
+let mapa=null,fuente='',raiz=null,dec=null,decJson=null,semilla=0,piedrasOn=true,verPanel=true,dia=true;
+async function cargar(){
+  if(dec){dec.quitar();dec=null}if(raiz){destruirMapa(scene,raiz);raiz=null}
+  mapa=await leerJson('mapa.json');fuente='mapa.json';
+  if(!mapa||!Array.isArray(mapa.rooms)){const e=leerEditor();mapa=e&&e.json;fuente=e?e.fuente:''}
+  decJson=(await leerJson('decorado.json'))||{};
+  if(!mapa){hud.innerHTML='<span class="mal">No encuentro el plano.</span> Descarga <b>mapa.json</b> desde el editor y ponlo junto a este archivo, o abre el editor en este mismo servidor (localhost:8080) para que lo lea solo.';return}
+  construir()}
+function construir(){
+  if(dec){dec.quitar();dec=null}if(raiz){destruirMapa(scene,raiz)}
+  raiz=construirMapa(scene,mapa);
+  const d=JSON.parse(JSON.stringify(decJson));if(d.piedras&&!piedrasOn)delete d.piedras;
+  try{dec=montarDecorado(scene,raiz,mapa,d,{semilla,luces:4})}catch(e){console.error(e);hud.innerHTML='<span class="mal">Error en decorado.json o en un objeto:</span> '+e.message;return}
+  encuadrar();panel()}
+function encuadrar(){
+  const R=(mapa.rooms||[]);if(!R.length)return;
+  let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;R.forEach(r=>{x0=Math.min(x0,r.x0,r.x1);x1=Math.max(x1,r.x0,r.x1);z0=Math.min(z0,r.z0,r.z1);z1=Math.max(z1,r.z0,r.z1)});
+  const cx=(x0+x1)/2,cz=(z0+z1)/2,L=Math.max(x1-x0,z1-z0);ctl.target.set(cx,0,cz);camera.position.set(cx+L*.55,L*.6+10,cz+L*.8);ctl.update()}
+function panel(){
+  if(!verPanel){hud.style.display='none';return}hud.style.display='block';
+  const filas=dec.info.map(f=>'<tr><td>'+f.sala+'</td><td>'+f.ancho+'×'+f.fondo+'</td><td>'+f.colocados+'/'+f.pedidos+(f.sinSitio?' <span class="mal">(faltó sitio para '+f.sinSitio+')</span>':'')+'</td></tr>').join('');
+  const todas=listarSalas(mapa).map(s=>'<tr><td>'+(s.nombre||'(sin nombre)')+'</td><td>id '+s.id+'</td><td>'+s.tipo+' · '+s.ancho+'×'+s.fondo+' · Y '+s.y+'</td></tr>').join('');
+  hud.innerHTML='Plano: <b>'+fuente+'</b> · '+(mapa.rooms||[]).length+' salas · semilla +'+semilla+
+    (filas?'<br><b>Salas decoradas</b> (colocados / pedidos)<table>'+filas+'</table>':'<br><span class="mal">decorado.json no decora ninguna sala todavía.</span>')+
+    '<br><b>Todas las salas del plano</b> (usa el nombre o el id como clave en decorado.json)<table>'+todas+'</table>'+
+    '<br>Toca palancas, rejas y puentes para accionarlos.'}
+
+document.getElementById('brec').onclick=cargar;
+document.getElementById('bsem').onclick=()=>{semilla++;construir()};
+document.getElementById('bpie').onclick=e=>{piedrasOn=!piedrasOn;construir();e.target.textContent='Piedras: '+(piedrasOn?'SÍ':'NO')};
+document.getElementById('bdia').onclick=e=>{dia=!dia;hemi.intensity=dia?.9:.25;sol.intensity=dia?1.3:.2;scene.background.set(dia?0x9ec3d9:0x10141c);e.target.textContent=dia?'Día':'Noche'};
+document.getElementById('bpan').onclick=()=>{verPanel=!verPanel;if(dec)panel();else hud.style.display=verPanel?'block':'none'};
+const ray=new THREE.Raycaster(),pt=new THREE.Vector2();let d0=null;
+renderer.domElement.addEventListener('pointerdown',e=>{d0={x:e.clientX,y:e.clientY}});
+renderer.domElement.addEventListener('pointerup',e=>{if(!d0||!dec||Math.hypot(e.clientX-d0.x,e.clientY-d0.y)>6)return;pt.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(pt,camera);dec.clic(ray)});
+
+await cargar();
+document.getElementById('bpie').textContent='Piedras: SÍ';
+renderer.setAnimationLoop(ms=>{if(dec)dec.anim(ms/1000,camera.position);ctl.update();renderer.render(scene,camera)});
+</script></body></html>

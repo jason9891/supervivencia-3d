@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Pasadizo natural · muros de piedra</title>
+<style>
+body{margin:0;overflow:hidden;background:#1a1e15;font:13px system-ui;color:#fff}
+canvas{display:block}
+#hud{position:absolute;top:10px;left:10px;right:10px;background:#0008;padding:6px 10px;border-radius:8px;pointer-events:none}
+#bar{position:absolute;bottom:12px;left:8px;right:8px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+button{background:#2a2622e0;color:#eee;border:1px solid #6a5a44;border-radius:8px;padding:10px 12px;font:inherit}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<div id="hud">Cargando…</div>
+<div id="bar"><button id="bp">Piedras: SÍ</button><button id="bs">Otra semilla</button><button id="bt">Tamaño: 0.9</button><button id="bl">Lados: 2</button></div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+
+const T_SLAB = 0.3;   // grosor de pisos y techos (centrados en su Y)
+const T_WALL = 0.4;   // grosor de muros de sala
+const EPS = 1e-6;
+
+// ---------- utilidades geométricas ----------
+const norm = (o) => ({
+  ...o,
+  x0: Math.min(o.x0, o.x1), x1: Math.max(o.x0, o.x1),
+  z0: Math.min(o.z0, o.z1), z1: Math.max(o.z0, o.z1),
+});
+
+// Resta una lista de rectángulos a un rectángulo y devuelve los trozos restantes.
+function rectSubtract(rect, cutters) {
+  let pieces = [rect];
+  for (const c of cutters) {
+    const next = [];
+    for (const p of pieces) {
+      const ix0 = Math.max(p.x0, c.x0), ix1 = Math.min(p.x1, c.x1);
+      const iz0 = Math.max(p.z0, c.z0), iz1 = Math.min(p.z1, c.z1);
+      if (ix1 - ix0 <= EPS || iz1 - iz0 <= EPS) { next.push(p); continue; }
+      if (iz0 - p.z0 > EPS) next.push({ x0: p.x0, x1: p.x1, z0: p.z0, z1: iz0 });
+      if (p.z1 - iz1 > EPS) next.push({ x0: p.x0, x1: p.x1, z0: iz1, z1: p.z1 });
+      if (ix0 - p.x0 > EPS) next.push({ x0: p.x0, x1: ix0, z0: iz0, z1: iz1 });
+      if (p.x1 - ix1 > EPS) next.push({ x0: ix1, x1: p.x1, z0: iz0, z1: iz1 });
+    }
+    pieces = next;
+  }
+  return pieces;
+}
+
+// Resta el intervalo [lo,hi] a una lista de intervalos [a,b].
+function subtractInterval(list, lo, hi) {
+  const out = [];
+  for (const [a, b] of list) {
+    if (hi <= a + EPS || lo >= b - EPS) { out.push([a, b]); continue; }
+    if (lo - a > EPS) out.push([a, lo]);
+    if (b - hi > EPS) out.push([hi, b]);
+  }
+  return out;
+}
+
+// UV en metros: la textura se repite según el tamaño real de cada cara (1 repetición = `tile` m).
+function uvMetros(geo) {
+  const p = geo.parameters;
+  if (!p || p.width === undefined || p.depth === undefined || !geo.attributes.uv) return;
+  const S = [[p.depth, p.height], [p.depth, p.height], [p.width, p.depth], [p.width, p.depth], [p.width, p.height], [p.width, p.height]];
+  const uv = geo.attributes.uv;
+  for (let f = 0; f < 6; f++) for (let i = 0; i < 4; i++) {
+    const k = f * 4 + i;
+    uv.setXY(k, uv.getX(k) * S[f][0], uv.getY(k) * S[f][1]);
+  }
+  uv.needsUpdate = true;
+}
+
+const overlapLen = (a0, a1, b0, b1) => Math.min(a1, b1) - Math.max(a0, b0);
+
+/* opciones.material(dueno, superficie, base) -> material | null
+ *   dueno      = id de la sala (o de la puerta / muro libre)
+ *   superficie = 'piso' | 'techo' | 'muro' | 'escalera' | 'rampa' | 'marco' | 'hoja'
+ *   base       = material base que se usaría; devuelve null para dejarlo.
+ * Cada malla lleva mesh.userData = { dueno, superficie } para poder elegirla y cambiarla después. */
+function construirMapa(scene, json, opciones = {}) {
+  const pick = (dueno, sup, base) => (opciones.material && opciones.material(dueno, sup, base)) || base;
+  const matWall = new THREE.MeshStandardMaterial({ color: 0x7a7a7a, roughness: 0.9 });
+  const matFloor = new THREE.MeshStandardMaterial({ color: 0x4a4a4a, roughness: 0.8 });
+  const matRoof = new THREE.MeshStandardMaterial({ color: 0x5c3a21, roughness: 0.9 });
+  const matRampa = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.8 });
+  const matEscalera = new THREE.MeshStandardMaterial({ color: 0xa855f7, roughness: 0.7 });
+  const matHighFloor = new THREE.MeshStandardMaterial({ color: 0x5a5a5a, roughness: 0.8 });
+
+  const matDoorFrame = new THREE.MeshStandardMaterial({ color: 0x4a2e15, roughness: 0.9 });
+  const matDoorPanel = new THREE.MeshStandardMaterial({ color: 0xa67c52, roughness: 0.6, metalness: 0.1 });
+  const matDoorHole = new THREE.MeshBasicMaterial({ color: 0x000000 });
+
+  const root = new THREE.Group();
+  scene.add(root);
+
+  function createBox(w, h, d, x, y, z, mat, dueno, sup) {
+    const geo = new THREE.BoxGeometry(w, h, d);
+    uvMetros(geo);
+    const mesh = new THREE.Mesh(geo, dueno ? pick(dueno, sup, mat) : mat);
+    mesh.userData = { dueno: dueno || null, superficie: sup || null };
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    root.add(mesh);
+    return mesh;
+  }
+
+  // Caja a partir de un rectángulo en planta {x0,x1,z0,z1}
+  function slabBox(rc, y, mat, dueno, sup) {
+    const w = rc.x1 - rc.x0, d = rc.z1 - rc.z0;
+    if (w <= EPS || d <= EPS) return;
+    createBox(w, T_SLAB, d, rc.x0 + w / 2, y, rc.z0 + d / 2, mat, dueno, sup);
+  }
+
+  // --- GENERADOR DE MUROS CONTINUOS (POLILÍNEAS CON GROSOR) ---
+  function crearMuroDesdeLinea(points, thickness, height, y, dueno) {
+    const half = thickness / 2;
+    const leftSide = [];
+    const rightSide = [];
+
+    const pts = [];
+    for (let i = 0; i < points.length; i++) {
+      if (i === 0 || points[i].x !== points[i - 1].x || points[i].z !== points[i - 1].z) {
+        pts.push(points[i]);
+      }
+    }
+    if (pts.length < 2) return;
+
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      let nx = 0, nz = 0;
+
+      if (i === 0) {
+        const dx = pts[1].x - p.x; const dz = pts[1].z - p.z;
+        const len = Math.sqrt(dx * dx + dz * dz) || 1;
+        nx = -dz / len; nz = dx / len;
+      } else if (i === pts.length - 1) {
+        const dx = p.x - pts[i - 1].x; const dz = p.z - pts[i - 1].z;
+        const len = Math.sqrt(dx * dx + dz * dz) || 1;
+        nx = -dz / len; nz = dx / len;
+      } else {
+        const dx1 = p.x - pts[i - 1].x; const dz1 = p.z - pts[i - 1].z;
+        const len1 = Math.sqrt(dx1 * dx1 + dz1 * dz1) || 1;
+        const nx1 = -dz1 / len1; const nz1 = dx1 / len1;
+
+        const dx2 = pts[i + 1].x - p.x; const dz2 = pts[i + 1].z - p.z;
+        const len2 = Math.sqrt(dx2 * dx2 + dz2 * dz2) || 1;
+        const nx2 = -dz2 / len2; const nz2 = dx2 / len2;
+
+        nx = (nx1 + nx2) / 2; nz = (nz1 + nz2) / 2;
+        const nLen = Math.sqrt(nx * nx + nz * nz) || 1;
+        nx /= nLen; nz /= nLen;
+      }
+
+      leftSide.push(new THREE.Vector2(p.x + nx * half, -(p.z + nz * half)));
+      rightSide.push(new THREE.Vector2(p.x - nx * half, -(p.z - nz * half)));
+    }
+
+    const shape = new THREE.Shape();
+    shape.moveTo(leftSide[0].x, leftSide[0].y);
+    for (let i = 1; i < leftSide.length; i++) shape.lineTo(leftSide[i].x, leftSide[i].y);
+    for (let i = rightSide.length - 1; i >= 0; i--) shape.lineTo(rightSide[i].x, rightSide[i].y);
+    shape.closePath();
+
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false });
+    const mesh = new THREE.Mesh(geo, pick(dueno, 'muro', matWall));
+    mesh.userData = { dueno, superficie: 'muro', linea: { points: pts, thickness, height, y } };
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = y;
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    root.add(mesh);
+  }
+
+  // --- GENERADOR DE PUERTAS ---
+  // Medidas propias de cada puerta (las define el diseñador del editor):
+  //   w/h = abertura, sill = alféizar, fw = grosor del marco, depth = profundidad del marco,
+  //   panel = 'single' | 'double' | 'none' (arco sin hoja), angle = apertura de la hoja en grados.
+  // fill = true tapa la abertura en negro (solo cuando la puerta NO está en un muro de sala,
+  // porque en los muros de sala el motor abre un hueco real).
+  function createDoor(d, fill = true) {
+    const w = d.w || 1.5; const h = d.h || 3.6; const y = (d.y || 0) + (d.sill || 0);
+    const mode = d.panel || (d.double ? 'double' : 'single');
+    const isDouble = mode === 'double'; const panelW = isDouble ? w / 2 : w;
+    const frameThick = d.fw != null ? d.fw : 0.1; const frameDepth = d.depth || 0.5;
+    const openAngle = ((d.angle != null ? d.angle : 72) * Math.PI) / 180;
+
+    if (d.ax === 'z') {
+      createBox(frameDepth, h, frameThick, d.x, y + h / 2, d.z - w / 2, matDoorFrame, d.id, 'marco');
+      createBox(frameDepth, h, frameThick, d.x, y + h / 2, d.z + w / 2, matDoorFrame, d.id, 'marco');
+      createBox(frameDepth, frameThick, w, d.x, y + h, d.z, matDoorFrame, d.id, 'marco');
+      if (fill && mode !== 'none') createBox(0.1, h, w, d.x, y + h / 2, d.z, matDoorHole);
+      if (mode === 'none') return;
+
+      const hingeZ = d.hinge === 'left' ? d.z - w / 2 + frameThick / 2 : d.z + w / 2 - frameThick / 2;
+      const dir = d.hinge === 'left' ? 1 : -1;
+      const angle = d.swing === 'in' ? openAngle : -openAngle;
+
+      const pivot = new THREE.Group();
+      pivot.position.set(d.x, y, hingeZ); pivot.rotation.y = dir * angle; root.add(pivot);
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(0.08, h - 0.1, panelW), pick(d.id, 'hoja', matDoorPanel)); panel.userData = { dueno: d.id, superficie: 'hoja' };
+      panel.position.set(0, h / 2, dir * panelW / 2); panel.castShadow = true; pivot.add(panel);
+
+      if (isDouble) {
+        const pivot2 = new THREE.Group(); pivot2.position.set(d.x, y, d.z + w / 2 - frameThick / 2);
+        pivot2.rotation.y = -dir * angle; root.add(pivot2);
+        const panel2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, h - 0.1, panelW), pick(d.id, 'hoja', matDoorPanel)); panel2.userData = { dueno: d.id, superficie: 'hoja' };
+        panel2.position.set(0, h / 2, -dir * panelW / 2); panel2.castShadow = true; pivot2.add(panel2);
+      }
+    } else {
+      createBox(frameThick, h, frameDepth, d.x - w / 2, y + h / 2, d.z, matDoorFrame, d.id, 'marco');
+      createBox(frameThick, h, frameDepth, d.x + w / 2, y + h / 2, d.z, matDoorFrame, d.id, 'marco');
+      createBox(w, frameThick, frameDepth, d.x, y + h, d.z, matDoorFrame, d.id, 'marco');
+      if (fill && mode !== 'none') createBox(w, h, 0.1, d.x, y + h / 2, d.z, matDoorHole);
+      if (mode === 'none') return;
+
+      const hingeX = d.hinge === 'left' ? d.x - w / 2 + frameThick / 2 : d.x + w / 2 - frameThick / 2;
+      const dir = d.hinge === 'left' ? 1 : -1;
+      const angle = d.swing === 'in' ? -openAngle : openAngle;
+
+      const pivot = new THREE.Group();
+      pivot.position.set(hingeX, y, d.z); pivot.rotation.y = dir * angle; root.add(pivot);
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(panelW, h - 0.1, 0.08), pick(d.id, 'hoja', matDoorPanel)); panel.userData = { dueno: d.id, superficie: 'hoja' };
+      panel.position.set(dir * panelW / 2, h / 2, 0); panel.castShadow = true; pivot.add(panel);
+
+      if (isDouble) {
+        const pivot2 = new THREE.Group(); pivot2.position.set(d.x + w / 2 - frameThick / 2, y, d.z);
+        pivot2.rotation.y = -dir * angle; root.add(pivot2);
+        const panel2 = new THREE.Mesh(new THREE.BoxGeometry(panelW, h - 0.1, 0.08), pick(d.id, 'hoja', matDoorPanel)); panel2.userData = { dueno: d.id, superficie: 'hoja' };
+        panel2.position.set(-dir * panelW / 2, h / 2, 0); panel2.castShadow = true; pivot2.add(panel2);
+      }
+    }
+  }
+
+  // ---------- PREPARACIÓN: salas rectangulares, huecos y losas ----------
+  const allHoles = (json.holes || []).map(norm);
+  const isPoly = (r) => r.points && r.points.length > 2;
+  const isElev = (r) => r.type === 'rampa' || r.type === 'escalera';
+
+  const rects = (json.rooms || []).filter(r => !isPoly(r)).map(norm);
+  const holesAt = (y) => allHoles.filter(h => Math.abs(h.y - y) < 0.1);
+
+  // Trozos de piso de cada sala (rectángulo menos sus huecos)
+  const floorPieces = new Map();
+  rects.forEach(r => {
+    if (isElev(r)) return;
+    floorPieces.set(r, rectSubtract(r, holesAt(r.y)));
+  });
+
+  const topOf = (r) => (r.y2 != null ? r.y2 : r.y + 4);
+  const overlapY = (a, b) => overlapLen(a.y, topOf(a), b.y, topOf(b)) > 0.1;
+
+  // Puertas que caen sobre un muro de sala: ahí se abre un hueco real (sin tapa negra)
+  const cutDoors = new Set();
+
+  // ---------- SALAS POLIGONALES (patios libres) ----------
+  (json.rooms || []).filter(isPoly).forEach(r => {
+    const cleanPoints = [];
+    for (let i = 0; i < r.points.length; i++) {
+      const p = r.points[i];
+      const last = cleanPoints[cleanPoints.length - 1];
+      if (!last || last.x !== p.x || last.z !== p.z) cleanPoints.push(p);
+    }
+    if (cleanPoints.length > 2 &&
+        cleanPoints[0].x === cleanPoints[cleanPoints.length - 1].x &&
+        cleanPoints[0].z === cleanPoints[cleanPoints.length - 1].z) cleanPoints.pop();
+
+    const shape = new THREE.Shape();
+    shape.moveTo(cleanPoints[0].x, -cleanPoints[0].z);
+    for (let i = 1; i < cleanPoints.length; i++) shape.lineTo(cleanPoints[i].x, -cleanPoints[i].z);
+
+    holesAt(r.y).forEach(h => {
+      const path = new THREE.Path();
+      path.moveTo(h.x0, -h.z0); path.lineTo(h.x1, -h.z0); path.lineTo(h.x1, -h.z1); path.lineTo(h.x0, -h.z1); path.lineTo(h.x0, -h.z0);
+      shape.holes.push(path);
+    });
+
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: T_SLAB, bevelEnabled: false });
+    const mesh = new THREE.Mesh(geo, pick(r.id, 'piso', matFloor));
+    mesh.userData = { dueno: r.id, superficie: 'piso' };
+    mesh.rotation.x = -Math.PI / 2; mesh.position.y = r.y;
+    mesh.castShadow = true; mesh.receiveShadow = true; root.add(mesh);
+  });
+
+  // ---------- SALAS RECTANGULARES, RAMPAS Y ESCALERAS ----------
+  rects.forEach(r => {
+    const w = r.x1 - r.x0, d = r.z1 - r.z0;
+    const cx = r.x0 + w / 2, cz = r.z0 + d / 2;
+    const dir = r.dir || '+x';
+
+    // Superficie caminable de un piso = y + T_SLAB/2
+    const half = T_SLAB / 2;
+
+    if (r.type === 'rampa') {
+      const rise = (r.y2 != null ? r.y2 : r.y + 3) - r.y;
+      const length = dir.includes('z') ? d : w;
+      const theta = Math.atan2(rise, length);
+      const hypot = Math.sqrt(length * length + rise * rise);
+      const geo = new THREE.BoxGeometry(dir.includes('z') ? w : hypot, T_SLAB, dir.includes('z') ? hypot : d);
+      uvMetros(geo);
+      const ramp = new THREE.Mesh(geo, pick(r.id, 'rampa', matRampa));
+      ramp.userData = { dueno: r.id, superficie: 'rampa' };
+      // La cara superior va de (y + half) a (y2 + half): enrasada con los pisos
+      ramp.position.set(cx, r.y + rise / 2 + half - half / Math.cos(theta), cz);
+      if (dir === '+z') ramp.rotation.x = -theta;
+      if (dir === '-z') ramp.rotation.x = theta;
+      if (dir === '+x') ramp.rotation.z = theta;
+      if (dir === '-x') ramp.rotation.z = -theta;
+      ramp.castShadow = true; ramp.receiveShadow = true; root.add(ramp);
+      return;
+    }
+
+    if (r.type === 'escalera') {
+      const y2 = r.y2 != null ? r.y2 : r.y + 3;
+      const surf0 = r.y + half, surf1 = y2 + half;
+      const rise = surf1 - surf0;
+      const steps = r.steps || Math.max(4, Math.min(40, Math.round(Math.abs(y2 - r.y) / 0.25)));
+      const length = dir.includes('z') ? d : w;
+      const stepD = length / steps;
+      const baseY = r.y - half; // los escalones son sólidos hasta la base
+      for (let i = 0; i < steps; i++) {
+        // El último escalón queda exactamente a la altura del piso superior
+        const topY = surf0 + ((i + 1) / steps) * rise;
+        const offset = i * stepD + stepD / 2;
+        let sx = cx, sz = cz;
+        if (dir === '+z') sz = r.z0 + offset;
+        if (dir === '-z') sz = r.z1 - offset;
+        if (dir === '+x') sx = r.x0 + offset;
+        if (dir === '-x') sx = r.x1 - offset;
+        const sw = dir.includes('z') ? w : stepD;
+        const sd = dir.includes('z') ? stepD : d;
+        const h = topY - baseY;
+        createBox(sw, h, sd, sx, baseY + h / 2, sz, matEscalera, r.id, 'escalera');
+      }
+      return;
+    }
+
+    // --- Piso (ya sin huecos) ---
+    const floorMat = r.y > 3 ? matHighFloor : matFloor;
+    floorPieces.get(r).forEach(p => slabBox(p, r.y, floorMat, r.id, 'piso'));
+
+    // --- Techo: se le resta lo que ya cubre el piso de otra sala en esa misma altura ---
+    if (r.y2 != null) {
+      const cutters = holesAt(r.y).slice();
+      rects.forEach(o => {
+        if (o === r || isElev(o)) return;
+        if (Math.abs(o.y - r.y2) < 0.1) cutters.push(...floorPieces.get(o));
+      });
+      rectSubtract(r, cutters).forEach(p => slabBox(p, r.y2, matRoof, r.id, 'techo'));
+    }
+
+    // --- Paredes: sin muros entre salas cerradas que comparten borde ---
+    if (r.type === 'sala' && !r.open) {
+      const wh = topOf(r) - r.y;
+      const ht = T_WALL / 2;
+      const others = rects.filter(o => o !== r && o.type === 'sala' && !o.open && overlapY(r, o));
+
+      const touchesX = (xEdge, side) => others.filter(o =>
+        Math.abs((side === 'left' ? o.x1 : o.x0) - xEdge) < EPS && overlapLen(r.z0, r.z1, o.z0, o.z1) > EPS);
+      const touchesZ = (zEdge, side) => others.filter(o =>
+        Math.abs((side === 'top' ? o.z1 : o.z0) - zEdge) < EPS && overlapLen(r.x0, r.x1, o.x0, o.x1) > EPS);
+
+      const nL = touchesX(r.x0, 'left'), nR = touchesX(r.x1, 'right');
+      const nT = touchesZ(r.z0, 'top'), nB = touchesZ(r.z1, 'bottom');
+
+      // Puertas colocadas sobre un borde de esta sala (ax 'x' = muro a lo largo de X, 'z' = a lo largo de Z)
+      const doorsOnEdge = (ax, coord, a0, a1) => (json.doors || []).filter(dr => {
+        if (Math.abs((dr.y || 0) - r.y) > 0.5) return false;
+        return ax === 'x'
+          ? dr.ax !== 'z' && Math.abs(dr.z - coord) < 0.3 && dr.x >= a0 - EPS && dr.x <= a1 + EPS
+          : dr.ax === 'z' && Math.abs(dr.x - coord) < 0.3 && dr.z >= a0 - EPS && dr.z <= a1 + EPS;
+      });
+      // Emite los tramos de muro recortando la abertura de cada puerta; deja dintel (arriba) y antepecho (abajo)
+      const emitWall = (segs, ds, ax, make) => {
+        let rest = segs;
+        ds.forEach(dr => {
+          cutDoors.add(dr);
+          const ow = dr.w || 1.5, oh = dr.h || 3.6, sill = dr.sill || 0;
+          const c = ax === 'x' ? dr.x : dr.z;
+          const dlo = c - ow / 2, dhi = c + ow / 2;
+          const before = rest;
+          rest = subtractInterval(rest, dlo, dhi);
+          before.forEach(([a, b]) => {
+            const lo2 = Math.max(a, dlo), hi2 = Math.min(b, dhi);
+            if (hi2 - lo2 <= 0.05) return;
+            const yb = r.y + sill, yt = r.y + sill + oh;
+            if (sill > 0.02) make(lo2, hi2, r.y, yb);
+            if (r.y + wh - yt > 0.02) make(lo2, hi2, yt, r.y + wh);
+          });
+        });
+        rest.forEach(([a, b]) => make(a, b, r.y, r.y + wh));
+      };
+
+      // Muros horizontales (a lo largo de X): se alargan en las esquinas libres
+      const lo = r.x0 - (nL.length ? 0 : ht);
+      const hi = r.x1 + (nR.length ? 0 : ht);
+      [[r.z0, nT], [r.z1, nB]].forEach(([z, neigh]) => {
+        let segs = [[lo, hi]];
+        neigh.forEach(o => { segs = subtractInterval(segs, Math.max(r.x0, o.x0), Math.min(r.x1, o.x1)); });
+        emitWall(segs, doorsOnEdge('x', z, r.x0, r.x1), 'x', (a, b, y0, y1) => {
+          if (b - a > 0.05 && y1 - y0 > 0.02) createBox(b - a, y1 - y0, T_WALL, (a + b) / 2, (y0 + y1) / 2, z, matWall, r.id, 'muro');
+        });
+      });
+
+      // Muros verticales (a lo largo de Z): entre las esquinas, para no duplicar volumen
+      [[r.x0, nL], [r.x1, nR]].forEach(([x, neigh]) => {
+        let segs = [[r.z0 + ht, r.z1 - ht]];
+        neigh.forEach(o => { segs = subtractInterval(segs, Math.max(r.z0, o.z0), Math.min(r.z1, o.z1)); });
+        emitWall(segs, doorsOnEdge('z', x, r.z0, r.z1), 'z', (a, b, y0, y1) => {
+          if (b - a > 0.05 && y1 - y0 > 0.02) createBox(T_WALL, y1 - y0, b - a, x, (y0 + y1) / 2, (a + b) / 2, matWall, r.id, 'muro');
+        });
+      });
+    }
+  });
+
+  // --- PROCESAR MUROS CONTINUOS (WALLS) ---
+  if (json.walls) {
+    json.walls.forEach(w => {
+      if (w.points && w.points.length >= 2) {
+        crearMuroDesdeLinea(w.points, T_WALL, w.h || 3, w.y || 0, w.id);
+      }
+    });
+  }
+
+  // --- PROCESAR PUERTAS (DOORS) ---
+  if (json.doors) {
+    json.doors.forEach(d => createDoor(d, !cutDoors.has(d)));
+  }
+
+  return root;
+}
+
+// Quita un mapa de la escena liberando memoria (para recargas en vivo)
+function destruirMapa(scene, root) {
+  if (!root) return;
+  scene.remove(root);
+  const mats = new Set();
+  root.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) mats.add(o.material);
+  });
+  mats.forEach(m => m.dispose());
+}
+
+
+
+
+const rng = s => () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+
+/* Piedra irregular: icosaedro con los vértices desplazados + color por cara
+   (arriba con musgo, abajo oscura). Radio base 0.5, así que la escala = diámetro. */
+function geoPiedra(seed, detalle) {
+  const g = new THREE.IcosahedronGeometry(.5, detalle), a = g.attributes.position.array, n = a.length;
+  for (let i = 0; i < n; i += 3) {
+    const l = Math.hypot(a[i], a[i + 1], a[i + 2]) || 1, dx = a[i] / l, dy = a[i + 1] / l, dz = a[i + 2] / l;
+    const r = Math.sin(dx * 3.7 + seed) * Math.cos(dy * 3.1 + seed * 1.7) + Math.sin(dz * 4.3 + seed * .6) * .6 + Math.sin((dx + dy) * 7.1 + seed) * .25;
+    const k = .5 * (1 + r * .15);
+    a[i] = dx * k; a[i + 1] = dy * k; a[i + 2] = dz * k;
+  }
+  const col = new Float32Array(n);
+  for (let i = 0; i < n; i += 9) {
+    const ux = a[i + 3] - a[i], uy = a[i + 4] - a[i + 1], uz = a[i + 5] - a[i + 2], vx = a[i + 6] - a[i], vy = a[i + 7] - a[i + 1], vz = a[i + 8] - a[i + 2];
+    const nx = uy * vz - uz * vy, ny0 = uz * vx - ux * vz, nz = ux * vy - uy * vx, ny = ny0 / (Math.hypot(nx, ny0, nz) || 1);
+    let r, gg, b;
+    if (ny > .55) { r = .62; gg = .7; b = .45; }
+    else if (ny < -.4) { r = .4; gg = .38; b = .36; }
+    else { const t = .72 + ny * .2; r = t; gg = t * .97; b = t * .93; }
+    for (let k = 0; k < 3; k++) { col[i + k * 3] = r; col[i + k * 3 + 1] = gg; col[i + k * 3 + 2] = b; }
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+function crearLote(opciones = {}) {
+  const o = Object.assign({ tam: .9, detalle: 1, semilla: 1, lados: 2, variantes: 4, tono: 1, maxPiedras: 6000 }, opciones);
+  const R = rng(o.semilla), geos = [], datos = [];
+  for (let v = 0; v < o.variantes; v++) { geos.push(geoPiedra(v * 7.3 + o.semilla, o.detalle)); datos.push([]); }
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, flatShading: true, roughness: 1 });
+  const dummy = new THREE.Object3D();
+  let total = 0, truncado = false;
+
+  /* Un tramo recto de muro: de (ax,az) a (bx,bz), base en y0, alto H, grosor T. */
+  function tramo(ax, az, bx, bz, y0, H, T) {
+    const dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz);
+    if (L < .05 || H < .05) return;
+    const ux = dx / L, uz = dz / L, nx = -uz, nz = ux;
+    const cols = Math.max(1, Math.round(L / (o.tam * .7)));
+    for (let c = 0; c <= cols; c++) {
+      const s = Math.max(0, Math.min(L, (c + (c === 0 || c === cols ? 0 : (R() - .5) * .6)) / cols * L));
+      const px = ax + ux * s, pz = az + uz * s;
+      for (let k = 0; k < o.lados; k++) {
+        const lado = o.lados === 1 ? 0 : (k ? 1 : -1), Hc = H * (.9 + .1 * R());
+        let y = 0;
+        while (y < Hc - .05) {
+          if (total >= o.maxPiedras) { truncado = true; return; }
+          const sz = Math.min(o.tam * (.55 + R() * .6), Math.max(.25, (Hc - y) * 1.5)), hr = sz * (.62 + R() * .2);
+          const lat = lado * (T / 2 - sz * .08) + (R() - .5) * T * .3;
+          dummy.position.set(px + nx * lat, y0 + y + hr * .45, pz + nz * lat);
+          dummy.rotation.set((R() - .5) * .35, R() * 6.28, (R() - .5) * .35);
+          dummy.scale.set(sz * (1 + R() * .35), hr, sz * (1 + R() * .3));
+          dummy.updateMatrix();
+          const col = new THREE.Color().setHSL(.07 + R() * .07, .06 + R() * .12, Math.min(.9, (.55 + R() * .2) * o.tono));
+          datos[Math.floor(R() * o.variantes)].push({ m: dummy.matrix.clone(), c: col });
+          total++; y += hr * .8;
+        }
+      }
+    }
+  }
+
+  function cerrar() {
+    const g = new THREE.Group();
+    geos.forEach((geo, v) => {
+      const d = datos[v]; if (!d.length) return;
+      const im = new THREE.InstancedMesh(geo, mat, d.length);
+      d.forEach((e, i) => { im.setMatrixAt(i, e.m); im.setColorAt(i, e.c); });
+      im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
+      im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false; g.add(im);
+    });
+    g.name = 'piedras_de_muro';
+    return g;
+  }
+  return { tramo, cerrar, get total() { return total; }, get truncado() { return truncado; } };
+}
+
+/* Recorre un mapa construido con mapa.js y cubre de piedras todos los muros (superficie 'muro'). */
+function cubrirMuros(root, opciones = {}) {
+  const lote = crearLote(opciones), nucleo = opciones.nucleo || 'oscuro', tocados = [];
+  const oscuro = new THREE.MeshStandardMaterial({ color: 0x2b2824, roughness: 1 });
+  root.traverse(m => {
+    if (!m.isMesh || !m.userData || m.userData.superficie !== 'muro') return;
+    const u = m.userData, L = u.linea, p = m.geometry && m.geometry.parameters;
+    if (L && L.points) {
+      for (let i = 0; i < L.points.length - 1; i++) lote.tramo(L.points[i].x, L.points[i].z, L.points[i + 1].x, L.points[i + 1].z, L.y, L.height, L.thickness);
+    } else if (p && p.width !== undefined && p.depth !== undefined) {
+      const q = m.position, y0 = q.y - p.height / 2;
+      if (p.width >= p.depth) lote.tramo(q.x - p.width / 2, q.z, q.x + p.width / 2, q.z, y0, p.height, p.depth);
+      else lote.tramo(q.x, q.z - p.depth / 2, q.x, q.z + p.depth / 2, y0, p.height, p.width);
+    } else return;
+    tocados.push({ m, mat: m.material });
+    if (nucleo === 'oscuro') m.material = oscuro; else if (nucleo === 'oculto') m.visible = false;
+  });
+  const grupo = lote.cerrar(); root.add(grupo);
+  const aplicar = (si) => {
+    grupo.visible = si;
+    tocados.forEach(t => { if (nucleo === 'oscuro') t.m.material = si ? oscuro : t.mat; else if (nucleo === 'oculto') t.m.visible = !si; });
+  };
+  return { grupo, total: lote.total, truncado: lote.truncado, quitar: () => aplicar(false), poner: () => aplicar(true) };
+}
+
+
+/* ===== escena de día ===== */
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x9ec3d9);scene.fog=new THREE.Fog(0x9ec3d9,25,75);
+const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.1,120);camera.position.set(0,5,24);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+const controls=new OrbitControls(camera,renderer.domElement);controls.target.set(0,1.5,8);controls.update();
+scene.add(new THREE.HemisphereLight(0xdcecff,0x4a5c3a,.9));
+const sun=new THREE.DirectionalLight(0xfff0d0,1.3);sun.position.set(15,25,12);sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-30,right:30,top:30,bottom:-30});scene.add(sun);
+
+/* suelo de tierra */
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(70,70).rotateX(-Math.PI/2),new THREE.MeshStandardMaterial({color:0x3a2e1e,roughness:1}));
+floor.receiveShadow=true;scene.add(floor);
+
+/* ===== el pasadizo: dos muros curvos (datos como los del editor) ===== */
+const PA=[[-4.5,-16],[-5,-8],[-4,0],[-5.5,8],[-4.8,16]],PB=[[4.5,-16],[5,-7],[4,1],[5.5,9],[4.6,16]];
+const pts=a=>a.map(p=>({x:p[0],z:p[1]}));
+const MAPA={rooms:[],holes:[],doors:[],walls:[{id:'wA',points:pts(PA),h:4.5,y:0},{id:'wB',points:pts(PB),h:4.5,y:0}]};
+
+/* ===== pasto (de tu prueba) fuera de los muros y a los lados del sendero ===== */
+function distSeg(px,pz,a,b){const dx=b[0]-a[0],dz=b[1]-a[1],t=Math.max(0,Math.min(1,((px-a[0])*dx+(pz-a[1])*dz)/(dx*dx+dz*dz)));return Math.hypot(px-a[0]-t*dx,pz-a[1]-t*dz)}
+const distMuro=(x,z)=>{let d=99;for(const P of [PA,PB])for(let i=0;i<P.length-1;i++)d=Math.min(d,distSeg(x,z,P[i],P[i+1]));return d};
+function texPasto(){const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d'),gr=g.createLinearGradient(0,128,0,0);
+  gr.addColorStop(0,'#1a2b10');gr.addColorStop(.6,'#2e4a1c');gr.addColorStop(1,'#6b7a28');g.fillStyle=gr;g.beginPath();g.moveTo(64,128);g.quadraticCurveTo(90,64,64,0);g.quadraticCurveTo(38,64,64,128);g.fill();
+  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t}
+const bg=new THREE.BufferGeometry(),w=.3,h=1;
+bg.setAttribute('position',new THREE.Float32BufferAttribute([-w/2,0,0,w/2,0,0,w/2,h,0,-w/2,h,0,0,0,-w/2,0,0,w/2,0,h,w/2,0,h,-w/2],3));
+bg.setAttribute('uv',new THREE.Float32BufferAttribute([0,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1],2));bg.setIndex([0,1,2,0,2,3,4,5,6,4,6,7]);bg.computeVertexNormals();
+const gm=new THREE.MeshStandardMaterial({map:texPasto(),alphaTest:.5,side:THREE.DoubleSide,roughness:.9}),uT={value:0};
+gm.onBeforeCompile=s=>{s.uniforms.uTime=uT;s.vertexShader=s.vertexShader.replace('#include <common>','#include <common>\nuniform float uTime;').replace('#include <begin_vertex>',`#include <begin_vertex>
+ vec3 ip=vec3(instanceMatrix[3][0],instanceMatrix[3][1],instanceMatrix[3][2]);float bf=position.y*position.y;
+ float wd=sin(uTime*2.5+ip.x*.8+ip.z*.6)*.2;transformed.x+=wd*bf;transformed.z+=wd*.5*bf;`)};
+const NB=18000,gmesh=new THREE.InstancedMesh(bg,gm,NB),dm=new THREE.Object3D(),col=new THREE.Color();
+for(let n=0;n<NB;){const x=(Math.random()-.5)*60,z=(Math.random()-.5)*60,dm_=distMuro(x,z);
+  if(dm_<.9)continue;                                  /* debajo/junto al muro: nada */
+  if(Math.abs(x)<2.2&&Math.abs(z)<17&&Math.random()>.05)continue;  /* centro del sendero despejado */
+  const alto=Math.min(1,dm_/6),sy=.2+alto*.8+Math.random()*.3,sx=.8+Math.random()*.4;
+  dm.position.set(x,0,z);dm.rotation.y=Math.random()*6.28;dm.scale.set(sx,sy,sx);dm.updateMatrix();gmesh.setMatrixAt(n,dm.matrix);
+  const t=Math.random();col.setHSL(.25+t*.1,.5,.3+t*.2);gmesh.setColorAt(n,col);n++}
+gmesh.receiveShadow=true;scene.add(gmesh);
+
+/* ===== muros de piedra ===== */
+const hud=document.getElementById('hud');
+let semilla=3,tam=.9,lados=2,root=null,res=null,conPiedras=true;
+function construir(){
+  if(root){scene.remove(root);destruirMapa(scene,root)}
+  root=construirMapa(scene,MAPA);
+  res=cubrirMuros(root,{tam,semilla,lados,detalle:1,maxPiedras:7000});
+  if(!conPiedras)res.quitar();
+  hud.textContent='Piedras: '+res.total+(res.truncado?' (tope alcanzado)':'')+' · tamaño '+tam+' · semilla '+semilla;
+}
+construir();
+
+const bp=document.getElementById('bp'),bs=document.getElementById('bs'),bt=document.getElementById('bt'),bl=document.getElementById('bl');
+bp.onclick=()=>{conPiedras=!conPiedras;conPiedras?res.poner():res.quitar();bp.textContent='Piedras: '+(conPiedras?'SÍ':'NO')};
+bs.onclick=()=>{semilla++;construir()};
+const TAMS=[.6,.9,1.2,1.6];bt.onclick=()=>{tam=TAMS[(TAMS.indexOf(tam)+1)%TAMS.length];bt.textContent='Tamaño: '+tam;construir()};
+bl.onclick=()=>{lados=lados===2?1:2;bl.textContent='Lados: '+lados;construir()};
+
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+const clock=new THREE.Clock();
+(function loop(){requestAnimationFrame(loop);uT.value=clock.getElapsedTime();controls.update();renderer.render(scene,camera)})();
+</script>
+</body></html>

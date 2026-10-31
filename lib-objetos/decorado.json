@@ -1,0 +1,29 @@
+{
+  "_ayuda": "Las claves de 'salas' son el id o el nombre de la sala tal como sale en el editor. Abre mapa_decorado.html: el panel muestra los nombres. Los campos que empiezan con _ se ignoran.",
+  "variante": 0,
+  "salas": {
+    "Patio Libre": {
+      "semilla": 3,
+      "pedidos": [
+        { "tipo": "puesto", "n": 3, "modo": "pared", "params": { "w": [2, 3], "tono": [0, 2] } },
+        { "tipo": "cajon_fruta", "n": 8, "modo": "centro", "params": { "fruta": [0, 3], "llenado": [-0.35, 1] } },
+        { "tipo": "canasta", "n": 4, "modo": "centro" },
+        { "tipo": "saco", "n": 6, "modo": "pared" },
+        { "tipo": "barril", "n": 4, "modo": "pared", "params": { "r": [0.25, 0.4], "h": [0.7, 1.1] } },
+        { "tipo": "carreta", "n": 2, "modo": "centro" },
+        { "tipo": "banca", "n": 3, "modo": "pared", "params": { "w": [1.4, 2.2], "resp": 1 } },
+        { "tipo": "tinaja", "n": 3, "modo": "pared" }
+      ]
+    }
+  },
+  "objetos": [
+    { "activo": false, "id": "reja1", "tipo": "reja", "x": 0, "y": 0, "z": 0, "giro": 0, "params": { "w": 3, "h": 3.8 } },
+    { "activo": false, "id": "puente1", "tipo": "puente_levadizo", "x": 0, "y": 0, "z": 0, "giro": 0, "params": { "w": 3, "l": 4, "marco": 0 } },
+    { "activo": false, "id": "pal1", "tipo": "palanca", "x": 0, "y": 0, "z": 0, "alto": 1.1, "giro": 0 }
+  ],
+  "enlaces": [
+    { "palanca": "pal1", "acciona": [ { "id": "reja1", "on": "abrir", "off": "soltar" }, { "id": "puente1", "on": "abrir", "off": "cerrar" } ] }
+  ],
+  "_piedras": { "tam": 0.9, "salas": ["Patio Libre"] },
+  "_piedras_ayuda": "Cambia _piedras por piedras para convertir los muros lisos en muros de piedra. Sin salas = todos los muros."
+}

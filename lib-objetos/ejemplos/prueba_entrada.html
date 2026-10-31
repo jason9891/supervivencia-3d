@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Entrada del castillo</title>
+<style>
+body{margin:0;overflow:hidden;background:#1a1e15;font:13px system-ui;color:#fff}
+canvas{display:block}
+#hud{position:absolute;top:10px;left:10px;right:10px;background:#0008;padding:6px 10px;border-radius:8px;pointer-events:none;line-height:1.4}
+#bar{position:absolute;bottom:12px;left:8px;right:8px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+button{background:#2a2622e0;color:#eee;border:1px solid #6a5a44;border-radius:8px;padding:10px 12px;font:inherit}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head><body>
+<div id="hud">Cargando…</div>
+<div id="bar"><button id="bpal">Palanca</button><button id="breja">Reja ↑/cae</button><button id="bpue">Puente</button><button id="bver">Ver palanca</button><button id="bsem">Otra semilla</button></div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+
+
+/* ================= utilidades ================= */
+const rng = s => () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+const vnoise = (r, n) => { const a = Array.from({ length: n }, () => r()); return x => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return a[((i % n) + n) % n] * (1 - u) + a[(((i + 1) % n) + n) % n] * u; }; };
+const mixc = (a, b, k) => 'rgb(' + a.map((v, i) => Math.round(v + (b[i] - v) * k)).join(',') + ')';
+function canvasTex(S, draw) {
+  const c = document.createElement('canvas'); c.width = S; c.height = S; draw(c.getContext('2d'), S);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return t;
+}
+const TC = {};
+
+/* UV en metros para cajas */
+function uvm(geo) {
+  const p = geo.parameters; if (!p || p.width === undefined || p.depth === undefined) return;
+  const S = [[p.depth, p.height], [p.depth, p.height], [p.width, p.depth], [p.width, p.depth], [p.width, p.height], [p.width, p.height]], uv = geo.attributes.uv;
+  for (let f = 0; f < 6; f++) for (let i = 0; i < 4; i++) { const k = f * 4 + i; uv.setXY(k, uv.getX(k) * S[f][0], uv.getY(k) * S[f][1]); }
+  uv.needsUpdate = true;
+}
+
+/* ================= texturas por código ================= */
+const PALETAS = [
+  { n: 'Roble oscuro', dark: [66, 43, 24], light: [112, 78, 45], vein: '28,16,8' },
+  { n: 'Pino claro', dark: [134, 101, 62], light: [176, 139, 92], vein: '72,48,22' },
+  { n: 'Madera vieja gris', dark: [80, 74, 66], light: [126, 118, 106], vein: '38,34,30' }];
+const PAL = PALETAS;
+let V = 0;
+function setVariante(i) { V = ((i % PAL.length) + PAL.length) % PAL.length; return PAL[V].n; }
+const getVariante = () => V;
+
+function woodTex(v, rx, ry) {
+  const key = 'w' + v + '_' + rx + '_' + ry; if (TC[key]) return TC[key]; const P = PAL[v];
+  const t = canvasTex(256, (g, S) => {
+    const r = rng(11 + v), n1 = vnoise(r, 32), n2 = vnoise(r, 64);
+    for (let x = 0; x < S; x++) { const k = n1(x * .09) * .6 + n2(x * .4) * .4; g.fillStyle = mixc(P.dark, P.light, k); g.fillRect(x, 0, 1, S); }
+    g.lineWidth = 1;
+    for (let i = 0; i < 70; i++) {
+      const x0 = r() * S, amp = 1 + r() * 3, f = .02 + r() * .04, ph = r() * 6.3; g.strokeStyle = 'rgba(' + P.vein + ',' + (.1 + r() * .25) + ')';
+      for (const o of [-S, 0, S]) { g.beginPath(); for (let y = 0; y <= S; y += 8) { const x = x0 + o + Math.sin(y * f + ph) * amp; if (y) g.lineTo(x, y); else g.moveTo(x, y); } g.stroke(); }
+    }
+    for (let i = 0; i < 3; i++) {
+      const x = r() * S, y = r() * S, gr = g.createRadialGradient(x, y, 1, x, y, 10 + r() * 8); gr.addColorStop(0, 'rgba(' + P.vein + ',.55)'); gr.addColorStop(1, 'rgba(' + P.vein + ',0)');
+      g.save(); g.translate(x, y); g.scale(.55, 1.5); g.translate(-x, -y); g.fillStyle = gr; g.fillRect(x - 30, y - 30, 60, 60); g.restore();
+    }
+  });
+  t.repeat.set(rx, ry); return TC[key] = t;
+}
+function ironTex() {
+  if (TC.iron) return TC.iron;
+  return TC.iron = canvasTex(256, (g, S) => {
+    const r = rng(5); g.fillStyle = '#3c3c40'; g.fillRect(0, 0, S, S);
+    for (let i = 0; i < 5000; i++) { g.fillStyle = 'rgba(' + (r() < .5 ? '0,0,0' : '120,120,125') + ',' + r() * .18 + ')'; g.fillRect(r() * S, r() * S, 1 + r() * 2, 1 + r() * 2); }
+    for (let i = 0; i < 9; i++) { const x = r() * S, y = r() * S, R = 14 + r() * 26, gr = g.createRadialGradient(x, y, 1, x, y, R); gr.addColorStop(0, 'rgba(120,62,28,.55)'); gr.addColorStop(1, 'rgba(120,62,28,0)'); g.fillStyle = gr; g.fillRect(x - R, y - R, R * 2, R * 2); }
+  });
+}
+function clothTex() {
+  if (TC.cloth) return TC.cloth;
+  return TC.cloth = canvasTex(256, (g, S) => {
+    const r = rng(9); g.fillStyle = '#9a8a6a'; g.fillRect(0, 0, S, S);
+    for (let i = 0; i < S; i += 3) { g.fillStyle = 'rgba(40,28,14,' + (.1 + r() * .18) + ')'; g.fillRect(0, i, S, 1); g.fillStyle = 'rgba(255,240,200,' + (.04 + r() * .1) + ')'; g.fillRect(i, 0, 1, S); }
+    for (let i = 0; i < 1200; i++) { g.fillStyle = 'rgba(30,20,10,' + r() * .2 + ')'; g.fillRect(r() * S, r() * S, 2, 1); }
+  });
+}
+function stoneTex() {
+  if (TC.stone) return TC.stone;
+  return TC.stone = canvasTex(256, (g, S) => {
+    const r = rng(3); g.fillStyle = '#6a6864'; g.fillRect(0, 0, S, S);
+    for (let i = 0; i < 7000; i++) { g.fillStyle = 'rgba(' + (r() < .5 ? '0,0,0' : '200,200,195') + ',' + r() * .14 + ')'; const s = 1 + r() * 3; g.fillRect(r() * S, r() * S, s, s); }
+    g.strokeStyle = 'rgba(20,18,16,.45)'; g.lineWidth = 1;
+    for (let i = 0; i < 4; i++) { let x = r() * S, y = r() * S; g.beginPath(); g.moveTo(x, y); for (let k = 0; k < 9; k++) { x += (r() - .5) * 28; y += (r() - .2) * 22; g.lineTo(x, y); } g.stroke(); }
+  });
+}
+function llamaTex() {
+  if (TC.llama) return TC.llama;
+  return TC.llama = canvasTex(128, g => {
+    const gota = (s, col) => {
+      g.save(); g.translate(64, 170); g.scale(s, s); g.translate(-64, -170); g.beginPath(); g.moveTo(64, 6);
+      g.bezierCurveTo(78, 70, 118, 120, 118, 170); g.bezierCurveTo(118, 225, 92, 250, 64, 250); g.bezierCurveTo(36, 250, 10, 225, 10, 170); g.bezierCurveTo(10, 120, 50, 70, 64, 6);
+      g.closePath(); g.fillStyle = col; g.fill(); g.restore();
+    };
+    g.canvas.height = 256; g.clearRect(0, 0, 128, 256);
+    [[1, 'rgba(255,90,10,.16)'], [.88, 'rgba(255,110,20,.22)'], [.74, 'rgba(255,150,40,.3)'], [.58, 'rgba(255,200,90,.4)'], [.4, 'rgba(255,235,170,.6)'], [.22, 'rgba(255,255,235,.85)']].forEach(a => gota(a[0], a[1]));
+  });
+}
+const FL = () => { const t = llamaTex(); t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t; };
+
+/* ================= materiales y piezas ================= */
+const M = o => new THREE.MeshStandardMaterial(o);
+const W = (rx = 1.25, ry = 1.25) => M({ map: woodTex(V, rx, ry), roughness: .88 });
+const FE = () => M({ map: ironTex(), roughness: .55, metalness: .35, side: THREE.DoubleSide });
+const TE = (c = 0xffffff) => M({ map: clothTex(), color: c, roughness: 1 });
+const PI = () => M({ map: stoneTex(), roughness: .95 });
+function box(w, h, d, x, y, z, mat, par) { const g = new THREE.BoxGeometry(w, h, d); uvm(g); const m = new THREE.Mesh(g, mat); m.position.set(x, y, z); par.add(m); return m; }
+function cil(rt, rb, h, x, y, z, mat, par, seg = 14) { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat); m.position.set(x, y, z); par.add(m); return m; }
+function lathe(pts, mat, par, seg = 24) { const m = new THREE.Mesh(new THREE.LatheGeometry(pts.map(p => new THREE.Vector2(p[0], p[1])), seg), mat); par.add(m); return m; }
+function toro(R, r, x, y, z, mat, par, rx = Math.PI / 2) { const m = new THREE.Mesh(new THREE.TorusGeometry(R, r, 8, 24), mat); m.position.set(x, y, z); m.rotation.x = rx; par.add(m); return m; }
+function materialPiedra() { return PI(); }
+
+/* ================= fuego: llama en capas + chispas ================= */
+function mkFuego(esc, brasas) {
+  const g = new THREE.Group(), sp = [];
+  [[.20, .42, 0xff6a10, .85], [.14, .34, 0xffa63a, .9], [.07, .2, 0xfff0b8, 1]].forEach(([w, h, c, o], i) => {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: FL(), color: c, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: o }));
+    s.center.set(.5, .08); s.userData = { w: w * esc, h: h * esc, ph: i * 2.1 }; s.scale.set(w * esc, h * esc, 1); g.add(s); sp.push(s);
+  });
+  const N = brasas || 0; let pts = null, pos = null; const fase = [];
+  if (N) {
+    pos = new Float32Array(N * 3); const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffa040, size: .02 * Math.max(1, esc), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+    pts.frustumCulled = false; g.add(pts); for (let i = 0; i < N; i++) fase.push(Math.random());
+  }
+  const upd = t => {
+    sp.forEach(s => { const u = s.userData, f = Math.sin(t * 13 + u.ph) * .5 + Math.sin(t * 23 + u.ph * 1.7) * .5; s.scale.set(u.w * (1 + .07 * f), u.h * (1 + .16 * f + .06 * Math.sin(t * 5 + u.ph)), 1); s.material.rotation = .09 * Math.sin(t * 6.5 + u.ph); });
+    if (pts) { for (let i = 0; i < N; i++) { const l = (t * .45 + fase[i]) % 1; pos[i * 3] = Math.sin(t * 2.7 + i * 1.9) * .05 * l * esc; pos[i * 3 + 1] = .05 * esc + l * .7 * esc; pos[i * 3 + 2] = Math.cos(t * 2.3 + i * 1.3) * .05 * l * esc; } pts.geometry.attributes.position.needsUpdate = true; }
+  };
+  return { g, upd };
+}
+
+/* ================= OBJETOS ================= */
+function buildTorch() {
+  const root = new THREE.Group(), h = new THREE.Group(); root.add(h);
+  const mw = W(1, 3), fe = FE();
+  lathe([[.026, 0], [.03, .1], [.035, .3], [.04, .38], [.049, .42], [.04, .46], [.044, .6], [.047, .8], [.05, .9]], mw, h, 16);
+  lathe([[.05, .84], [.058, .88], [.07, .95], [.082, 1.0], [.078, 1.0], [.066, .95], [.05, .9]], fe, h, 20);
+  toro(.07, .007, 0, .93, 0, fe, h);
+  for (let i = 0; i < 5; i++) { const ga = new THREE.Group(); ga.rotation.y = i / 5 * Math.PI * 2; h.add(ga); const p = box(.014, .2, .01, .082, 1.08, 0, fe, ga); p.rotation.z = -.22; }
+  const tela = TE(0x5e4c3a);
+  lathe([[.0, .96], [.06, .97], [.078, 1.02], [.095, 1.1], [.092, 1.17], [.074, 1.23], [.04, 1.26], [0, 1.268]], tela, h, 20);
+  [[.08, 1.03], [.094, 1.1], [.088, 1.16], [.062, 1.22]].forEach(a => toro(a[0] + .004, .006, 0, a[1], 0, M({ color: 0xb39d73, roughness: 1 }), h));
+  const c = new THREE.Mesh(new THREE.CircleGeometry(.045, 14), M({ color: 0x14100c, emissive: 0xff4a00, emissiveIntensity: .8, roughness: 1 })); c.rotation.x = -Math.PI / 2; c.position.y = 1.262; h.add(c);
+  const f = mkFuego(1, 14); f.g.position.y = 1.24; h.add(f.g);
+  const anchor = new THREE.Object3D(); anchor.position.y = 1.32; h.add(anchor);
+  return { root, anim: f.upd, anchor };
+}
+
+function buildWallTorch(p) {
+  const root = new THREE.Group(), fe = FE();
+  if (p.bloque) box(.9, 1.5, .26, 0, .75, -.13, PI(), root);
+  box(.14, .24, .02, 0, .74, .01, fe, root);
+  [[-.04, .82], [.04, .82], [-.04, .66], [.04, .66]].forEach(q => { const r = new THREE.Mesh(new THREE.SphereGeometry(.012, 8, 6), fe); r.position.set(q[0], q[1], .03); root.add(r); });
+  box(.03, .03, .34, 0, .74, .18, fe, root);
+  const piv = new THREE.Group(); piv.position.set(0, .74, .36); piv.rotation.x = .3; root.add(piv);
+  toro(.058, .011, 0, 0, 0, fe, piv);
+  const t = buildTorch(); t.root.position.set(0, -.5, 0); piv.add(t.root);
+  box(.03, .03, .2, 0, .4, .1, fe, root);
+  return { root, anim: t.anim, anchor: t.anchor };
+}
+
+function buildCandle(esc = 1, par) {
+  const g = par || new THREE.Group(), cera = M({ color: 0xe8dcbc, roughness: .55 });
+  lathe([[0, 0], [.021, 0], [.022, .03], [.019, .15], [.015, .17], [.004, .172]].map(q => [q[0] * esc, q[1] * esc]), cera, g, 14);
+  const d = new THREE.Mesh(new THREE.SphereGeometry(.007 * esc, 8, 6), cera); d.scale.set(1, 2.6, 1); d.position.set(.019 * esc, .12 * esc, 0); g.add(d);
+  cil(.0015 * esc, .0015 * esc, .02 * esc, 0, .182 * esc, 0, M({ color: 0x1a1410 }), g, 5);
+  const f = mkFuego(.16 * esc, 0); f.g.position.y = .186 * esc; g.add(f.g);
+  const a = new THREE.Object3D(); a.position.y = .22 * esc; g.add(a);
+  return { root: g, anim: f.upd, anchor: a };
+}
+function buildVela(p) { const b = new THREE.Group(), c = buildCandle(p.esc); b.add(c.root); return { root: b, anim: c.anim, anchor: c.anchor }; }
+
+function buildCandelabro() {
+  const root = new THREE.Group(), fe = FE(), an = [];
+  lathe([[0, 0], [.12, 0], [.13, .02], [.07, .06], [.035, .12], [.03, .4], [.045, .43], [.03, .46], [.028, .6]], fe, root, 20);
+  const ux = [-.26, 0, .26], uy = [.78, .86, .78];
+  ux.forEach((x, i) => {
+    const cur = new THREE.CatmullRomCurve3([new THREE.Vector3(0, .55, 0), new THREE.Vector3(x * .45, .5, 0), new THREE.Vector3(x, .58, 0), new THREE.Vector3(x, uy[i] - .1, 0)]);
+    root.add(new THREE.Mesh(new THREE.TubeGeometry(cur, 16, .011, 6, false), fe));
+    lathe([[.0, uy[i] - .1], [.03, uy[i] - .1], [.036, uy[i] - .07], [.03, uy[i] - .07]], fe, root, 12).position.x = x;
+    const c = buildCandle(1.3); c.root.position.set(x, uy[i] - .09, 0); root.add(c.root); an.push(c);
+  });
+  return { root, anim: t => an.forEach((c, i) => c.anim(t + i * .7)), anchor: an[1].anchor };
+}
+
+function buildMesa(p) {
+  const { w, d, h } = p, root = new THREE.Group(), wd = W();
+  const lw = Math.max(.06, Math.min(.1, .05 + .012 * w)), ins = .04, n = Math.max(2, Math.round(d / .2)), pw = d / n;
+  for (let i = 0; i < n; i++) { const t = box(w, .05, pw - .004, 0, h - .025 + (i % 2) * .003, -d / 2 + pw * (i + .5), wd, root); t.rotation.y = (i - n / 2) * .002; }
+  const lx = w / 2 - ins - lw / 2, lz = d / 2 - ins - lw / 2, lh = h - .05;
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(s => box(lw, lh, lw, s[0] * lx, lh / 2, s[1] * lz, wd, root));
+  const inX = w - 2 * (ins + lw), inZ = d - 2 * (ins + lw);
+  [-1, 1].forEach(s => {
+    box(inX, .08, .04, 0, lh - .05, s * lz, wd, root);
+    box(.04, .08, inZ, s * lx, lh - .05, 0, wd, root);
+    box(inX, .04, .035, 0, Math.min(.25, lh * .3), s * lz, wd, root);
+  });
+  if (p.vela) {
+    const c = buildCandle(1.3); c.root.position.set(w * .2, h, d * .05); root.add(c.root);
+    const j = new THREE.Group(); lathe([[0, 0], [.06, 0], [.08, .06], [.07, .16], [.04, .2], [.045, .23], [.04, .23]], M({ color: 0x7a4a2c, roughness: .7, side: THREE.DoubleSide }), j, 16); j.position.set(-w * .25, h, -d * .12); root.add(j);
+    return { root, anim: c.anim, anchor: c.anchor };
+  }
+  return { root, anim: () => { }, anchor: null };
+}
+
+function buildSilla(p) {
+  const { w, d, h } = p, root = new THREE.Group(), wd = W(), sh = h * .48, hx = w / 2 - .03, hz = d / 2 - .03;
+  box(w, .045, d, 0, sh, 0, wd, root);
+  [[-1, 1], [1, 1]].forEach(s => box(.04, sh - .02, .04, s[0] * hx, (sh - .02) / 2, hz, wd, root));
+  [-1, 1].forEach(s => box(.04, h, .04, s * hx, h / 2, -hz, wd, root));
+  box(w, .07, .03, 0, h - .05, -hz, wd, root);
+  const hs = h - sh - .17;
+  [-.22, .22].forEach(f => box(.05, hs, .02, f * w, sh + .05 + hs / 2, -hz, wd, root));
+  [-hz, hz].forEach(z => box(w - .06, .025, .025, 0, sh * .6, z, wd, root));
+  box(.025, .025, d - .06, -hx, sh * .6, 0, wd, root); box(.025, .025, d - .06, hx, sh * .6, 0, wd, root);
+  return { root, anim: () => { }, anchor: null };
+}
+
+function buildBanca(p) {
+  const { w, d, h } = p, root = new THREE.Group(), wd = W();
+  box(w, .05, d, 0, h - .025, 0, wd, root);
+  [-1, 1].forEach(s => { box(.05, h - .05, d, s * (w / 2 - .05), (h - .05) / 2, 0, wd, root); });
+  box(w - .15, .04, .05, 0, h * .45, 0, wd, root);
+  return { root, anim: () => { }, anchor: null };
+}
+
+function buildBarril(p) {
+  const { r, h } = p, root = new THREE.Group(), w = W(3, 1), fe = FE(), kx = r / .335, ky = h / .9;
+  lathe([[0, 0], [.25, 0], [.29, .15], [.335, .45], [.29, .75], [.25, .9], [0, .9]].map(q => [q[0] * kx, q[1] * ky]), w, root, 24);
+  [[.15, .29], [.33, .332], [.6, .332], [.77, .285]].forEach(a => toro(a[1] * kx + .004, .014, 0, a[0] * ky, 0, fe, root));
+  const l = new THREE.Mesh(new THREE.CircleGeometry(.245 * kx, 20), W(1, 1)); l.rotation.x = -Math.PI / 2; l.position.y = h; root.add(l);
+  return { root, anim: () => { }, anchor: null };
+}
+
+function buildCaja(p) {
+  const { w, h, d } = p, root = new THREE.Group(), wd = W(), fe = FE();
+  box(w - .02, h, d - .02, 0, h / 2, 0, wd, root);
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(s => box(.05, h + .02, .05, s[0] * (w / 2 - .025), (h + .02) / 2, s[1] * (d / 2 - .025), wd, root));
+  box(w + .02, .04, d + .02, 0, h + .02, 0, wd, root);
+  [-.23, .23].forEach(f => box(.05, .02, d + .02, f * w, h + .045, 0, fe, root));
+  box(.04, .08, .01, 0, h * .85, d / 2 + .005, fe, root);
+  return { root, anim: () => { }, anchor: null };
+}
+
+function buildEstante(p) {
+  const { w, h, d } = p, root = new THREE.Group(), wd = W();
+  [-1, 1].forEach(s => box(.05, h, d, s * (w / 2 - .025), h / 2, 0, wd, root));
+  const n = Math.max(2, Math.round(h / .55)), ys = [];
+  for (let i = 0; i < n; i++) { const y = .15 + i * (h - .17) / (n - 1); ys.push(y); box(w - .05, .04, d, 0, y, 0, wd, root); }
+  box(w - .05, h, .02, 0, h / 2, -d / 2 + .01, wd, root);
+  const vi = M({ color: 0x4a6a5a, roughness: .4, transparent: true, opacity: .85 }), ar = M({ color: 0x8a5a3a, roughness: .8 }), r = rng(7 + Math.round(w * 10));
+  const cols = [0x6a2a2a, 0x2a3a5a, 0x4a3a22, 0x3a4a2a];
+  ys.forEach((y, i) => {
+    if (i === n - 1) return;
+    const k = Math.floor((w - .2) / .24);
+    for (let j = 0; j < k; j++) {
+      const x = (j - (k - 1) / 2) * .24;
+      if (i % 2 === 0) lathe([[0, 0], [.045, 0], [.05, .08], [.025, .14], [.025, .18], [.03, .19], [0, .19]], r() < .6 ? vi : ar, root, 12).position.set(x, y + .02, 0);
+      else box(.05 + r() * .04, .17 + r() * .06, Math.min(.18, d - .06), x, y + .02 + .1, 0, M({ color: cols[Math.floor(r() * 4)], roughness: .9 }), root);
+    }
+  });
+  return { root, anim: () => { }, anchor: null };
+}
+
+function buildArmas(p) {
+  const { w } = p, root = new THREE.Group(), wd = W(), fe = FE();
+  box(w, .06, .4, 0, .03, 0, wd, root);
+  [-1, 1].forEach(s => box(.06, 1.3, .06, s * (w / 2 - .05), .68, -.12, wd, root));
+  box(w - .1, .05, .05, 0, 1.0, -.12, wd, root); box(w - .1, .05, .05, 0, .5, -.12, wd, root);
+  const k = Math.max(1, Math.floor((w - .3) / .3)), lim = w > 1 ? k - 1 : k;
+  for (let i = 0; i < lim; i++) {
+    const x = (i - (lim - 1) / 2) * .3 - (w > 1 ? .12 : 0), s = new THREE.Group(); s.position.set(x, .06, -.05); s.rotation.z = (i - (lim - 1) / 2) * .04; root.add(s);
+    cil(.014, .016, 1.6, 0, .8, 0, W(1, 3), s, 8);
+    const b = new THREE.Mesh(new THREE.ConeGeometry(.04, .26, 4), fe); b.scale.set(1, 1, .25); b.position.y = 1.73; s.add(b);
+  }
+  if (w > 1) {
+    const e = new THREE.Group(); e.position.set(w / 2 - .22, .98, -.04); e.rotation.z = Math.PI; root.add(e);
+    box(.05, .8, .012, 0, .4, 0, fe, e); box(.22, .03, .03, 0, .02, 0, fe, e); cil(.014, .014, .18, 0, -.08, 0, W(1, 2), e, 8);
+  }
+  return { root, anim: () => { }, anchor: null };
+}
+
+function buildBrasero() {
+  const root = new THREE.Group(), fe = FE();
+  lathe([[0, .42], [.17, .42], [.29, .54], [.32, .58], [.3, .58], [.16, .47], [0, .47]], fe, root, 20);
+  for (let i = 0; i < 3; i++) { const a = i / 3 * Math.PI * 2 + .4, l = cil(.016, .02, .48, Math.cos(a) * .17, .24, Math.sin(a) * .17, fe, root, 6); l.rotation.z = Math.cos(a) * .18; l.rotation.x = -Math.sin(a) * .18; }
+  toro(.15, .01, 0, .2, 0, fe, root);
+  const r = rng(2), br = M({ color: 0x301008, emissive: 0xff4a10, emissiveIntensity: 1.1, roughness: 1 });
+  for (let i = 0; i < 14; i++) { const c = new THREE.Mesh(new THREE.DodecahedronGeometry(.035 + r() * .02), br); const a = r() * 6.28, d = r() * .2; c.position.set(Math.cos(a) * d, .5 + r() * .03, Math.sin(a) * d); root.add(c); }
+  const f = mkFuego(2.1, 24); f.g.position.y = .52; root.add(f.g);
+  const a = new THREE.Object3D(); a.position.y = .8; root.add(a);
+  return { root, anim: f.upd, anchor: a };
+}
+
+function buildAltar(p) {
+  const { w, d, h } = p, root = new THREE.Group(), pi = PI(), an = [];
+  box(w, .06, d, 0, .03, 0, pi, root);
+  box(w * .84, h - .16, d * .78, 0, .06 + (h - .16) / 2, 0, pi, root);
+  box(w * 1.1, .1, d * 1.05, 0, h - .05, 0, pi, root);
+  box(w * .5, .012, d * 1.05, 0, h + .006, 0, TE(0x8a1c1c), root);
+  [-1, 1].forEach(s => { const c = buildCandle(1.3); c.root.position.set(s * w * .34, h + .012, 0); root.add(c.root); an.push(c); });
+  lathe([[0, 0], [.05, 0], [.015, .05], [.015, .1], [.05, .14], [.052, .19], [.045, .19], [.04, .15]], M({ color: 0xc9a23a, roughness: .3, metalness: .7, side: THREE.DoubleSide }), root, 14).position.set(0, h + .012, 0);
+  return { root, anim: t => an.forEach((c, i) => c.anim(t + i)), anchor: an[0].anchor };
+}
+
+/* ================= catálogo ================= */
+/* params: nombre: [mínimo, máximo, valor por defecto, paso] */
+const CATALOGO = {
+  mesa: { nombre: 'Mesa', f: buildMesa, params: { w: [.6, 4, 1.6, .05], d: [.4, 1.6, .8, .05], h: [.5, 1.1, .76, .02], vela: [0, 1, 1, 1] }, enSala: { vela: 0 } },
+  silla: { nombre: 'Silla', f: buildSilla, params: { w: [.3, .6, .42, .02], d: [.3, .6, .42, .02], h: [.6, 1.3, .95, .02] } },
+  banca: { nombre: 'Banca', f: buildBanca, params: { w: [.6, 3.5, 1.5, .05], d: [.2, .5, .3, .02], h: [.3, .6, .46, .02] } },
+  barril: { nombre: 'Barril', f: buildBarril, params: { r: [.2, .5, .335, .01], h: [.5, 1.3, .9, .02] } },
+  caja: { nombre: 'Caja de madera', f: buildCaja, params: { w: [.3, 1.4, .64, .02], h: [.2, .9, .42, .02], d: [.25, .9, .48, .02] } },
+  estante: { nombre: 'Estante con frascos', f: buildEstante, params: { w: [.6, 2, 1.05, .05], h: [1, 2.4, 1.7, .05], d: [.2, .5, .3, .02] } },
+  armas: { nombre: 'Soporte de armas', f: buildArmas, params: { w: [.6, 2.4, 1.3, .05] } },
+  altar: { nombre: 'Altar con velas', f: buildAltar, params: { w: [1, 3, 1.6, .05], d: [.5, 1.2, .7, .05], h: [.7, 1.1, .9, .02] } },
+  vela: { nombre: 'Vela', f: buildVela, params: { esc: [.6, 3, 1.4, .1] } },
+  candelabro: { nombre: 'Candelabro', f: buildCandelabro, params: {} },
+  brasero: { nombre: 'Brasero', f: buildBrasero, params: {} },
+  antorcha: { nombre: 'Antorcha de mano', f: buildTorch, params: {} },
+  antorcha_pared: { nombre: 'Antorcha de pared', f: buildWallTorch, params: { bloque: [0, 1, 1, 1] }, enSala: { bloque: 0 }, ancla: 'borde', elev: 1.0 },
+};
+const ETIQUETAS = { w: 'Ancho', d: 'Fondo', h: 'Alto', r: 'Radio', esc: 'Escala', vela: 'Con vela (0/1)', bloque: 'Bloque de pared (0/1)' };
+const HUELLA = {
+  mesa: p => [p.w, p.d], silla: p => [p.w, p.d], banca: p => [p.w, p.d], barril: p => [p.r * 2, p.r * 2], caja: p => [p.w, p.d],
+  estante: p => [p.w, p.d], armas: p => [p.w, .4], altar: p => [p.w * 1.1, p.d * 1.05], vela: () => [.12, .12], candelabro: () => [.5, .3],
+  brasero: () => [.7, .7], antorcha_pared: () => [.35, .4], antorcha: () => [.2, .2],
+};
+const huella = (tipo, p) => HUELLA[tipo](p);
+
+function paramsPorDefecto(tipo, extra) {
+  const p = {}, d = CATALOGO[tipo]; for (const k in d.params) p[k] = d.params[k][2];
+  return Object.assign(p, extra || {});
+}
+function crearObjeto(tipo, params) {
+  const d = CATALOGO[tipo]; if (!d) throw new Error('Objeto desconocido: ' + tipo);
+  const p = paramsPorDefecto(tipo, params), o = d.f(p); o.tipo = tipo; o.params = p; return o;
+}
+
+/* ================= poblador de salas ================= */
+/* sala: {x0,x1,z0,z1,y}  (mismos datos que el editor)
+   pedidos: [{ tipo, n, modo:'pared'|'centro'|'esquina', params:{ clave: número | [min,max] }, sillas }]
+   opts: { puertas:[{x,z,w}], libres:[{x0,x1,z0,z1}], semilla }
+   Devuelve [{ tipo, params, x, y, z, giro }]  (giro en radianes alrededor de Y). Es lógica pura: no usa Three. */
+function colocar(sala, pedidos, opts = {}) {
+  const R = rng(opts.semilla || 1), rand = (a, b) => a + (b - a) * R(), T = .2;
+  const D = { x0: sala.x0 + T, x1: sala.x1 - T, z0: sala.z0 + T, z1: sala.z1 - T };
+  const libres = (opts.libres || []).slice();
+  (opts.puertas || []).forEach(d => { const r = (d.w || 1.5) / 2 + .9; libres.push({ x0: d.x - r, x1: d.x + r, z0: d.z - r, z1: d.z + r }); });
+  const ocup = [], out = [], EPS = 1e-6;
+  const solapa = (a, b, m) => a.x0 < b.x1 + m && a.x1 > b.x0 - m && a.z0 < b.z1 + m && a.z1 > b.z0 - m;
+  const rect = (cx, cz, fw, fd, giro) => { const s = Math.abs(Math.sin(giro)) > .5, hw = (s ? fd : fw) / 2, hd = (s ? fw : fd) / 2; return { x0: cx - hw, x1: cx + hw, z0: cz - hd, z1: cz + hd }; };
+  for (const ped of pedidos) {
+    const tipo = ped.tipo, def = CATALOGO[tipo]; if (!def) continue;
+    const resolver = () => {
+      const p = Object.assign({}, def.enSala || {});
+      for (const k in def.params) {
+        const v = ped.params && ped.params[k];
+        if (Array.isArray(v)) p[k] = rand(v[0], v[1]); else if (typeof v === 'number') p[k] = v; else if (p[k] === undefined) p[k] = def.params[k][2];
+      }
+      return p;
+    };
+    for (let i = 0; i < (ped.n || 1); i++) {
+      for (let intento = 0; intento < 80; intento++) {
+        const p = resolver(), [fw, fd0] = HUELLA[tipo](p), sill = ped.sillas || 0, fd = fd0 + (sill ? 1.1 : 0), borde = def.ancla === 'borde', modo = ped.modo || 'pared';
+        let ox, oz, giro = 0, rc;
+        if (modo === 'pared') {
+          const w = Math.floor(R() * 4);
+          if (w < 2) {
+            if (D.x1 - D.x0 < fw) continue;
+            const x = rand(D.x0 + fw / 2, D.x1 - fw / 2), nz = w === 0 ? 1 : -1, wz = w === 0 ? D.z0 : D.z1; giro = w === 0 ? 0 : Math.PI;
+            ox = x; oz = borde ? wz + nz * .02 : wz + nz * (fd / 2 + .03); rc = rect(x, borde ? wz + nz * fd / 2 : oz, fw, fd, 0);
+          } else {
+            if (D.z1 - D.z0 < fw) continue;
+            const z = rand(D.z0 + fw / 2, D.z1 - fw / 2), nx = w === 2 ? 1 : -1, wx = w === 2 ? D.x0 : D.x1; giro = w === 2 ? Math.PI / 2 : -Math.PI / 2;
+            oz = z; ox = borde ? wx + nx * .02 : wx + nx * (fd / 2 + .03); rc = rect(borde ? wx + nx * fd / 2 : ox, z, fw, fd, Math.PI / 2);
+          }
+        } else if (modo === 'esquina') {
+          const c = Math.floor(R() * 4); ox = (c & 1) ? D.x1 - fw / 2 - .03 : D.x0 + fw / 2 + .03; oz = (c & 2) ? D.z1 - fd / 2 - .03 : D.z0 + fd / 2 + .03;
+          giro = R() < .5 ? 0 : Math.PI / 2; rc = rect(ox, oz, fw, fd, giro);
+        } else {
+          giro = R() < .5 ? 0 : Math.PI / 2; const s = Math.abs(Math.sin(giro)) > .5, hw = (s ? fd : fw) / 2 + .8, hd = (s ? fw : fd) / 2 + .8;
+          if (D.x1 - D.x0 < 2 * hw || D.z1 - D.z0 < 2 * hd) continue;
+          ox = rand(D.x0 + hw, D.x1 - hw); oz = rand(D.z0 + hd, D.z1 - hd); rc = rect(ox, oz, fw, fd, giro);
+        }
+        if (rc.x0 < D.x0 - EPS || rc.x1 > D.x1 + EPS || rc.z0 < D.z0 - EPS || rc.z1 > D.z1 + EPS) continue;
+        if (ocup.some(o => solapa(rc, o, .1)) || libres.some(o => solapa(rc, o, 0))) continue;
+        ocup.push(rc);
+        const y = (sala.y || 0) + .15 + (def.elev || 0);
+        out.push({ tipo, params: p, x: ox, y, z: oz, giro });
+        if (sill) {
+          const n2 = Math.ceil(sill / 2), sd = CATALOGO.silla.params;
+          for (let c = 0; c < sill; c++) {
+            const side = c % 2 ? 1 : -1, idx = Math.floor(c / 2), lx = (idx - (n2 - 1) / 2) * Math.min(.6, p.w / n2), lz = side * (p.d / 2 + .28);
+            out.push({ tipo: 'silla', params: paramsPorDefecto('silla'), x: ox + lx * Math.cos(giro) + lz * Math.sin(giro), y, z: oz - lx * Math.sin(giro) + lz * Math.cos(giro), giro: giro + (side > 0 ? Math.PI : 0) });
+          }
+        }
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+function poblar(sala, pedidos, opts) {
+  const col = colocar(sala, pedidos, opts), root = new THREE.Group(), objs = [];
+  col.forEach(c => { const o = crearObjeto(c.tipo, c.params); o.root.position.set(c.x, c.y, c.z); o.root.rotation.y = c.giro; root.add(o.root); objs.push(o); });
+  return { root, objs, colocados: col, anclas: objs.filter(o => o.anchor), anim: t => objs.forEach((o, i) => o.anim(t + i * .37)) };
+}
+
+
+
+
+
+
+
+const V3 = THREE.Vector3;
+const TCP = {};
+
+/* ================= texturas ================= */
+function maderaMapas(v) {
+  const key = 'madera' + v; if (TCP[key]) return TCP[key];
+  const S = 256, mk = () => { const c = document.createElement('canvas'); c.width = c.height = S; return c; }, cc = mk(), hc = mk(), g = cc.getContext('2d'), h = hc.getContext('2d');
+  const P = PALETAS[v], r = rng(21 + v), n1 = vnoise(r, 32), n2 = vnoise(r, 64);
+  for (let x = 0; x < S; x++) { const k = n1(x * .09) * .6 + n2(x * .4) * .4; g.fillStyle = mixc(P.dark, P.light, k); g.fillRect(x, 0, 1, S); const gv = Math.round(110 + k * 60); h.fillStyle = 'rgb(' + gv + ',' + gv + ',' + gv + ')'; h.fillRect(x, 0, 1, S); }
+  for (let i = 0; i < 80; i++) {
+    const x0 = r() * S, amp = 1 + r() * 3, f = .02 + r() * .04, ph = r() * 6.3, a = .1 + r() * .25;
+    for (const o of [-S, 0, S]) {
+      g.strokeStyle = 'rgba(' + P.vein + ',' + a + ')'; h.strokeStyle = 'rgba(30,30,30,' + Math.min(.9, a * 2.2) + ')';
+      for (const q of [g, h]) { q.lineWidth = 1; q.beginPath(); for (let y = 0; y <= S; y += 8) { const x = x0 + o + Math.sin(y * f + ph) * amp; if (y) q.lineTo(x, y); else q.moveTo(x, y); } q.stroke(); }
+    }
+  }
+  for (let i = 0; i < 3; i++) {
+    const x = r() * S, y = r() * S, R = 9 + r() * 8;
+    let gr = g.createRadialGradient(x, y, 1, x, y, R); gr.addColorStop(0, 'rgba(' + P.vein + ',.7)'); gr.addColorStop(1, 'rgba(' + P.vein + ',0)'); g.fillStyle = gr; g.fillRect(x - R, y - R * 2, R * 2, R * 4);
+    gr = h.createRadialGradient(x, y, 1, x, y, R); gr.addColorStop(0, 'rgba(20,20,20,.9)'); gr.addColorStop(.6, 'rgba(200,200,200,.5)'); gr.addColorStop(1, 'rgba(128,128,128,0)'); h.fillStyle = gr; h.fillRect(x - R, y - R * 2, R * 2, R * 4);
+  }
+  for (let i = 0; i < 5; i++) {
+    const x = r() * S, y = r() * S, len = 50 + r() * 60; g.strokeStyle = 'rgba(' + P.vein + ',.85)'; h.strokeStyle = 'rgba(0,0,0,.9)';
+    for (const q of [g, h]) { q.lineWidth = 1.2; q.beginPath(); q.moveTo(x, y); let xx = x, yy = y; for (let k = 0; k < len; k += 6) { xx += (r() - .5) * 2.2; yy += 6; q.lineTo(xx, yy); } q.stroke(); }
+  }
+  const hd = h.getImageData(0, 0, S, S).data, nor = new Uint8ClampedArray(S * S * 4), ht = (x, y) => hd[(((y + S) % S) * S + ((x + S) % S)) * 4] / 255, K = 3.2;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const dx = (ht(x + 1, y) - ht(x - 1, y)) * K, dy = (ht(x, y + 1) - ht(x, y - 1)) * K, l = Math.hypot(dx, dy, 1), i = (y * S + x) * 4;
+    nor[i] = (-dx / l * .5 + .5) * 255; nor[i + 1] = (dy / l * .5 + .5) * 255; nor[i + 2] = (1 / l * .5 + .5) * 255; nor[i + 3] = 255;
+  }
+  const nc = mk(); nc.getContext('2d').putImageData(new ImageData(nor, S, S), 0, 0);
+  const T = (c, srgb) => { const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
+  return TCP[key] = { map: T(cc, true), nor: T(nc, false), rug: T(hc, false) };
+}
+function strawTex() {
+  if (TCP.straw) return TCP.straw;
+  return TCP.straw = canvasTex(256, (g, S) => {
+    const r = rng(31); g.fillStyle = '#b8984e'; g.fillRect(0, 0, S, S);
+    for (let i = 0; i < 1500; i++) {
+      const x = r() * S, y = r() * S, l = 14 + r() * 40, dy = (r() - .5) * 3; g.strokeStyle = 'rgba(' + (r() < .5 ? '235,205,120' : '110,80,34') + ',' + (.25 + r() * .4) + ')'; g.lineWidth = 1;
+      for (const o of [0, -S]) { g.beginPath(); g.moveTo(x + o, y); g.lineTo(x + o + l, y + dy); g.stroke(); }
+    }
+  });
+}
+function wickerTex() {
+  if (TCP.wicker) return TCP.wicker;
+  return TCP.wicker = canvasTex(256, (g, S) => {
+    g.fillStyle = '#4a3216'; g.fillRect(0, 0, S, S); const cw = 16, ch = 8;
+    for (let row = 0; row < S / ch; row++) for (let c = 0; c <= S / cw; c++) {
+      const x = c * cw + (row % 2) * cw / 2, y = row * ch; g.fillStyle = mixc([112, 80, 40], [176, 132, 72], ((row * 7 + c * 13) % 10) / 10);
+      g.fillRect(x, y, cw - 1.5, ch - 1.5); g.fillRect(x - S, y, cw - 1.5, ch - 1.5);
+    }
+  });
+}
+function toldoTex() {
+  if (TCP.toldo) return TCP.toldo;
+  return TCP.toldo = canvasTex(256, (g, S) => {
+    const n = 8, w = S / n, r = rng(41);
+    for (let i = 0; i < n; i++) { g.fillStyle = i % 2 ? '#e8dcc0' : '#a3281f'; g.fillRect(i * w, 0, w, S); }
+    for (let i = 0; i < S; i += 3) { g.fillStyle = 'rgba(0,0,0,' + (.04 + r() * .06) + ')'; g.fillRect(0, i, S, 1); }
+    for (let i = 0; i < 1500; i++) { g.fillStyle = 'rgba(40,30,20,' + r() * .12 + ')'; g.fillRect(r() * S, r() * S, 2, 1); }
+  });
+}
+
+/* ================= materiales (uno por variante de madera) ================= */
+const MC = {};
+const MATERIALES_EXTRA = {};   // otros módulos añaden aquí: clave -> función que crea el material
+const MX = {};
+function pMats() {
+  const v = getVariante(); if (MC[v]) return MC[v];
+  const m = maderaMapas(v), std = o => new THREE.MeshStandardMaterial(Object.assign({ vertexColors: true }, o));
+  return MC[v] = {
+    mad: std({ map: m.map, normalMap: m.nor, normalScale: new THREE.Vector2(1.1, 1.1), roughnessMap: m.rug, roughness: 1 }),
+    fe: std({ map: ironTex(), roughness: .55, metalness: .4 }),
+    tela: std({ map: clothTex(), roughness: 1 }),
+    toldo: std({ map: toldoTex(), roughness: 1, side: THREE.DoubleSide }),
+    paja: std({ map: strawTex(), roughness: 1 }),
+    mimbre: std({ map: wickerTex(), roughness: .9 }),
+    liso: std({ roughness: .55 }),
+    agua: new THREE.MeshStandardMaterial({ color: 0x3f6572, roughness: .08, transparent: true, opacity: .82 }),
+  };
+}
+
+/* ================= piezas ================= */
+const RB = (w, h, d, r = .006, seg = 2) => new RoundedBoxGeometry(w, h, d, seg, Math.max(.001, Math.min(r, Math.min(w, h, d) / 2 - .0005)));
+
+/* Mueve la pieza, calcula UV en metros según la veta (eje 0=x,1=y,2=z) y color por vértice:
+   sombra cerca del suelo, cara inferior más oscura, aristas gastadas más claras. */
+function pPrep(geo, o) {
+  if (o.pos || o.rot || o.esc) {
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(...(o.rot || [0, 0, 0]), o.order || 'XYZ'));
+    geo.applyMatrix4(new THREE.Matrix4().compose(new V3(...(o.pos || [0, 0, 0])), q, new V3(...(o.esc || [1, 1, 1]))));
+  }
+  const P = geo.attributes.position, N = geo.attributes.normal, n = P.count, col = new Float32Array(n * 3), e = o.eje === undefined ? 1 : o.eje, tile = o.tile || .8, t = o.tint || 1, rgb = o.rgb || [1, 1, 1];
+  const uv = o.uvEsc ? geo.attributes.uv.array.slice() : new Float32Array(n * 2);
+  for (let i = 0; i < n; i++) {
+    const p = [P.getX(i), P.getY(i), P.getZ(i)], nn = [N.getX(i), N.getY(i), N.getZ(i)];
+    if (o.uvEsc) { uv[i * 2] *= o.uvEsc[0]; uv[i * 2 + 1] *= o.uvEsc[1]; }
+    else {
+      let d = 0; if (Math.abs(nn[1]) > Math.abs(nn[d])) d = 1; if (Math.abs(nn[2]) > Math.abs(nn[d])) d = 2; let u, v;
+      if (d === e) { const a = [0, 1, 2].filter(k => k !== e); u = p[a[0]]; v = p[a[1]]; } else { v = p[e]; u = p[[0, 1, 2].find(k => k !== d && k !== e)]; }
+      uv[i * 2] = u / tile; uv[i * 2 + 1] = v / tile;
+    }
+    const mx = Math.max(Math.abs(nn[0]), Math.abs(nn[1]), Math.abs(nn[2]));
+    let b = t * (.78 + .22 * Math.min(1, Math.max(0, p[1] / .5)));
+    if (nn[1] < -.5) b *= .75;
+    if (o.desg) b *= 1 + o.desg * Math.max(0, (.96 - mx) / .1);
+    col[i * 3] = b * rgb[0]; col[i * 3 + 1] = b * .98 * rgb[1]; col[i * 3 + 2] = b * .95 * rgb[2];
+  }
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return geo;
+}
+function pNuevo() {
+  const p = {};
+  const add = (k, g, o) => { (p[k] = p[k] || []).push(pPrep(g, Object.assign({ desg: k === 'mad' ? 1.1 : 0 }, o))); };
+  const fin = extra => {
+    const M3 = pMats(), root = new THREE.Group();
+    for (const k in p) {
+      let arr = p[k]; if (arr.some(g => !g.index)) arr = arr.map(g => g.index ? g.toNonIndexed() : g);
+      const mesh = new THREE.Mesh(mergeGeometries(arr, false), M3[k] || (MX[k] = MX[k] || MATERIALES_EXTRA[k]())); mesh.castShadow = mesh.receiveShadow = true; root.add(mesh);
+    }
+    return Object.assign({ root, anim: () => { }, anchor: null }, extra || {});
+  };
+  return { add, fin };
+}
+const LA = (pts, seg = 20) => new THREE.LatheGeometry(pts.map(q => new THREE.Vector2(q[0], q[1])), seg);
+
+/* ================= mesa, banca, barril, caja (nivel 2) ================= */
+function mesaPro(p) {
+  const { w, d, h } = p, s = pNuevo(), R = rng(5), a = s.add;
+  const lw = Math.max(.06, Math.min(.1, .05 + .012 * w)), ins = .04, n = Math.max(2, Math.round(d / .2)), pw = d / n;
+  for (let i = 0; i < n; i++) {
+    const j = R() - .5, z = -d / 2 + pw * (i + .5);
+    a('mad', RB(w, .05, pw - .006, .009, 3), { pos: [0, h - .025 + j * .004, z], rot: [0, j * .008, 0], eje: 0, tint: .85 + R() * .25 });
+    [-1, 1].forEach(sx => [-1, 1].forEach(q => a('fe', new THREE.CylinderGeometry(.007, .007, .005, 8), { pos: [sx * (w / 2 - .05), h + .001 + j * .004, z + q * pw * .28], eje: 1 })));
+  }
+  const lx = w / 2 - ins - lw / 2, lz = d / 2 - ins - lw / 2, lh = h - .05, inX = w - 2 * (ins + lw), inZ = d - 2 * (ins + lw);
+  [-1, 1].forEach(sx => [-1, 1].forEach(sz => {
+    a('mad', RB(lw, .14, lw, .01, 3), { pos: [sx * lx, lh - .07, sz * lz], eje: 1 });
+    a('mad', RB(lw, .07, lw, .01, 3), { pos: [sx * lx, .035, sz * lz], eje: 1 });
+    const L = lh - .21, pts = [];
+    for (let i = 0; i <= 14; i++) { const t = i / 14, anillo = [.2, .5, .8].some(c => Math.abs(t - c) < .035) ? .78 : 1; pts.push([lw * .42 * anillo * (1 + .1 * Math.sin(t * Math.PI * 3)) * (1 - .12 * t), t * L]); }
+    pts.unshift([0, 0]); pts.push([0, L]);
+    a('mad', LA(pts, 14), { pos: [sx * lx, .07, sz * lz], uvEsc: [lw * 1.3 / .8, L / .8] });
+  }));
+  [-1, 1].forEach(sg => {
+    a('mad', RB(inX, .08, .035), { pos: [0, lh - .05, sg * lz], eje: 0 });
+    a('mad', RB(.035, .08, inZ), { pos: [sg * lx, lh - .05, 0], eje: 2 });
+    a('mad', RB(inX, .04, .035), { pos: [0, Math.min(.25, lh * .3), sg * lz], eje: 0 });
+  });
+  if (p.vela) {
+    const c = buildCandle(1.3); c.root.position.set(w * .2, h, d * .05);
+    a('liso', LA([[0, 0], [.06, 0], [.08, .06], [.07, .16], [.04, .2], [.045, .23], [.038, .23], [.033, .2], [.06, .16], [.07, .06], [0, .04]], 16), { pos: [-w * .25, h, -d * .12], rgb: [.48, .29, .17], uvEsc: [1, 1] });
+    const r = s.fin({ anim: c.anim, anchor: c.anchor }); r.root.add(c.root); return r;
+  }
+  return s.fin();
+}
+
+function bancoPro(p) {
+  const { w, d, h, resp } = p, s = pNuevo(), a = s.add;
+  a('mad', RB(w, .05, d, .008, 3), { pos: [0, h - .025, 0], eje: 0 });
+  [-1, 1].forEach(x => a('mad', RB(.05, h - .05, d * .88, .006), { pos: [x * (w / 2 - .06), (h - .05) / 2, 0], eje: 1 }));
+  a('mad', RB(w - .2, .04, .04), { pos: [0, h * .4, 0], eje: 0 });
+  if (resp >= .5) {
+    [-1, 1].forEach(x => a('mad', RB(.05, .5, .05, .008), { pos: [x * (w / 2 - .05), h + .25, -d / 2 + .04], eje: 1 }));
+    a('mad', RB(w - .06, .13, .025), { pos: [0, h + .34, -d / 2 + .04], eje: 0 });
+    a('mad', RB(w - .06, .1, .025), { pos: [0, h + .17, -d / 2 + .04], eje: 0 });
+  }
+  return s.fin();
+}
+
+function barrilPro(p) {
+  const { r, h } = p, s = pNuevo(), R = rng(8), a = s.add, kx = r / .335, rEnd = .25 * kx, rad = y => rEnd + (r - rEnd) * (1 - Math.pow(2 * y / h - 1, 2));
+  const hoopY = [.15, .33, .6, .77].map(f => f * h / .9), N = 22, SG = 8, th = .03;
+  for (let k = 0; k < N; k++) {
+    const an = (k + .5) / N * Math.PI * 2, tint = .82 + R() * .3;
+    for (let j = 0; j < SG; j++) {
+      const y0 = j / SG * h, y1 = (j + 1) / SG * h, ym = (y0 + y1) / 2, rm = rad(ym), slope = (rad(y1) - rad(y0)) / (y1 - y0), wd = 2 * Math.PI * rm / N * .96, seg = (y1 - y0) * 1.04 / Math.cos(Math.atan(slope));
+      a('mad', new RoundedBoxGeometry(wd, seg, th, 1, .005), { pos: [Math.cos(an) * (rm - th / 2), ym, Math.sin(an) * (rm - th / 2)], rot: [Math.atan(slope), Math.PI / 2 - an, 0], order: 'YXZ', eje: 1, tint });
+    }
+  }
+  hoopY.forEach(y => {
+    const ro = rad(y) + .012, ri = rad(y) - .002, bw = .045;
+    a('fe', LA([[ri, -bw / 2], [ro, -bw / 2], [ro, bw / 2], [ri, bw / 2], [ri, -bw / 2]], 40), { pos: [0, y, 0], uvEsc: [3, .3] });
+    for (let i = 0; i < 14; i++) { const an = i / 14 * Math.PI * 2 + y; a('fe', new THREE.SphereGeometry(.009, 6, 4), { pos: [Math.cos(an) * (ro + .002), y, Math.sin(an) * (ro + .002)] }); }
+  });
+  a('mad', new THREE.CylinderGeometry(rEnd - .012, rEnd - .012, .03, 24), { pos: [0, h - .03, 0], eje: 0 });
+  a('mad', new THREE.CylinderGeometry(.026, .026, .02, 10), { pos: [rEnd * .4, h - .012, rEnd * .2], eje: 0, tint: .6 });
+  return s.fin();
+}
+
+function cajaPro(p) {
+  const { w, h, d } = p, s = pNuevo(), a = s.add, ns = Math.max(2, Math.round(h / .09)), hs = h / ns - .008;
+  for (let i = 0; i < ns; i++) {
+    const y = hs / 2 + i * (h / ns) + .01;
+    [-1, 1].forEach(z => a('mad', RB(w, hs, .02, .004, 1), { pos: [0, y, z * (d / 2 - .01)], eje: 0 }));
+    [-1, 1].forEach(x => a('mad', RB(.02, hs, d - .04, .004, 1), { pos: [x * (w / 2 - .01), y, 0], eje: 2 }));
+  }
+  [-1, 1].forEach(x => [-1, 1].forEach(z => a('mad', RB(.045, h + .02, .045, .006), { pos: [x * (w / 2 - .022), (h + .02) / 2, z * (d / 2 - .022)], eje: 1 })));
+  a('mad', RB(w - .04, .02, d - .04, .004, 1), { pos: [0, .012, 0], eje: 0 });
+  [-.23, .23].forEach(f => a('fe', RB(.04, .015, d + .02, .003, 1), { pos: [f * w, h + .03, 0] }));
+  a('mad', RB(w + .02, .035, d + .02, .005), { pos: [0, h + .0175, 0], eje: 0, tint: .9 });
+  return s.fin();
+}
+
+/* ================= mercado ================= */
+function puestoPro(p) {
+  const { w, d, h, H, tono } = p, s = pNuevo(), R = rng(13), a = s.add, tint = [[1, 1, 1], [.55, .78, 1.15], [.7, 1.05, .6]][Math.min(2, Math.round(tono))];
+  a('mad', RB(w, .06, d, .008, 3), { pos: [0, h, 0], eje: 0 });
+  const n = Math.max(3, Math.round(w / .18)), bw = w / n;
+  for (let i = 0; i < n; i++) a('mad', RB(bw - .008, h - .06, .025, .005, 1), { pos: [-w / 2 + bw * (i + .5), (h - .06) / 2, d / 2 - .02], eje: 1, tint: .85 + R() * .25 });
+  [-1, 1].forEach(x => a('mad', RB(.025, h - .06, d - .05, .005, 1), { pos: [x * (w / 2 - .015), (h - .06) / 2, 0], eje: 1 }));
+  a('mad', RB(w - .05, .03, d - .05, .005, 1), { pos: [0, .3, 0], eje: 0 });
+  [-1, 1].forEach(x => {
+    a('mad', RB(.08, H, .08, .01), { pos: [x * (w / 2 - .02), H / 2, -d / 2 + .04], eje: 1 });
+    a('mad', RB(.07, H - .25, .07, .01), { pos: [x * (w / 2 - .02), (H - .25) / 2, d / 2 + .4], eje: 1 });
+  });
+  const dz = d + .36, dy = .25, len = Math.hypot(dz, dy), ang = Math.atan2(dy, dz), zm = (d / 2 + .4 + (-d / 2 + .04)) / 2;
+  a('toldo', new THREE.BoxGeometry(w + .3, .012, len + .1), { pos: [0, H - .125 + .02, zm], rot: [ang, 0, 0], eje: 2, rgb: tint });
+  a('toldo', new THREE.BoxGeometry(w + .3, .12, .012), { pos: [0, H - .25 - .04, d / 2 + .45], eje: 1, rgb: tint });
+  [-1, 1].forEach(x => a('mad', RB(.04, .04, len, .006), { pos: [x * (w / 2 - .02), H - .125 - .01, zm], rot: [ang, 0, 0], eje: 2 }));
+  return s.fin();
+}
+
+const FRUTAS = [
+  [[.8, .1, .08], [.9, .25, .1], [.7, .5, .12]],
+  [[.95, .5, .08], [1, .62, .15], [.9, .42, .06]],
+  [[.5, .7, .15], [.62, .8, .2], [.7, .75, .25]]];
+
+/* Deja caer frutas al azar: cada una reposa sobre las que ya hay debajo, así se forma un montón irregular.
+   o: { rs, n, ymax, x0,x1,z0,z1, y0, en(x,z,rs), fruta (0 manzana, 1 naranja, 2 verde, 3 mezcla) } */
+function apilar(a, R, o) {
+  const fr = [], tipoFijo = Math.round(o.fruta);
+  let tries = 0;
+  while (fr.length < o.n && tries < o.n * 12) {
+    tries++;
+    const rs = o.rs * (.85 + R() * .3), x = o.x0 + R() * (o.x1 - o.x0), z = o.z0 + R() * (o.z1 - o.z0);
+    if (!o.en(x, z, rs)) continue;
+    let y = o.y0 + rs;
+    for (const f of fr) { const dd = Math.hypot(x - f.x, z - f.z), m = rs + f.rs; if (dd < m) y = Math.max(y, f.y + Math.sqrt(m * m - dd * dd)); }
+    if (y > o.ymax) continue;
+    fr.push({ x, y, z, rs });
+  }
+  fr.forEach(f => {
+    const tipo = tipoFijo >= 3 ? Math.floor(R() * 3) : tipoFijo, pal = FRUTAS[Math.min(2, tipo)], c = pal[R() < .55 ? 0 : R() < .8 ? 1 : 2], mag = R() < .08 ? .55 : 1;
+    a('liso', new THREE.SphereGeometry(1, 7, 5), { pos: [f.x, f.y, f.z], esc: [f.rs, f.rs * (.88 + R() * .1), f.rs], rgb: c.map(v => v * mag), tint: .88 + R() * .24 });
+  });
+  return fr.length;
+}
+
+function cajonFrutaPro(p) {
+  const { w, d, h } = p, llen = Math.max(0, Math.min(1, p.llenado)), s = pNuevo(), R = rng(Math.round(w * 1000 + d * 100 + h * 10 + llen * 100 + p.fruta * 7)), a = s.add, ns = Math.max(2, Math.round(h / .07)), hs = h / ns - .006;
+  for (let i = 0; i < ns; i++) {
+    const y = hs / 2 + i * (h / ns) + .01;
+    [-1, 1].forEach(z => a('mad', RB(w, hs, .016, .003, 1), { pos: [0, y, z * (d / 2 - .008)], eje: 0 }));
+    [-1, 1].forEach(x => a('mad', RB(.016, hs, d - .032, .003, 1), { pos: [x * (w / 2 - .008), y, 0], eje: 2 }));
+  }
+  [-1, 1].forEach(x => [-1, 1].forEach(z => a('mad', RB(.035, h + .02, .035, .005, 1), { pos: [x * (w / 2 - .0175), (h + .02) / 2, z * (d / 2 - .0175)], eje: 1 })));
+  a('mad', RB(w - .03, .014, d - .03, .003, 1), { pos: [0, .012, 0], eje: 0 });
+  const rs = .034, ymax = h + .04 + .03 * llen, lim = { x0: -(w / 2 - .03 - rs), x1: w / 2 - .03 - rs, z0: -(d / 2 - .03 - rs), z1: d / 2 - .03 - rs };
+  const cap = (w - .06) * (d - .06) / (Math.PI * rs * rs * 1.3) * Math.max(1, (ymax - .02) / (rs * 1.55));
+  if (llen < .06) {       /* cajón vacío: a lo sumo una fruta caída y un poco de paja */
+    if (R() < .5) apilar(a, R, Object.assign({ rs, n: 1, ymax, y0: .02, en: () => true, fruta: p.fruta }, lim));
+    for (let k = 0; k < 2; k++) a('paja', new THREE.SphereGeometry(.07, 6, 4), { pos: [(R() - .5) * (w - .15), .03, (R() - .5) * (d - .15)], esc: [1.6, .18, 1.1], eje: 0 });
+  } else apilar(a, R, Object.assign({ rs, n: Math.min(90, Math.round(llen * cap)), ymax, y0: .02, en: () => true, fruta: p.fruta }, lim));
+  return s.fin();
+}
+
+function sacoPro(p) {
+  const { r, h } = p, s = pNuevo(), R = rng(Math.round(r * 100 + h * 10));
+  const pts = [[0, 0], [.78 * r, 0], [.98 * r, .06 * h], [1.04 * r, .3 * h], [1.0 * r, .5 * h], [.8 * r, .7 * h], [.45 * r, .84 * h], [.2 * r, .9 * h], [.26 * r, .95 * h], [.34 * r, h], [.1 * r, .98 * h], [0, .96 * h]];
+  const g = LA(pts, 18), ar = g.attributes.position.array;
+  for (let i = 0; i < ar.length; i += 3) { ar[i] += Math.sin(ar[i + 1] * 9 + ar[i + 2] * 5) * r * .05; ar[i + 2] += Math.sin(ar[i + 1] * 7 + ar[i] * 4) * r * .05; }
+  g.computeVertexNormals();
+  s.add('tela', g, { uvEsc: [2 * Math.PI * r / .5, h / .5], rgb: [.95, .82, .6], tint: .9 + R() * .15 });
+  s.add('tela', new THREE.TorusGeometry(.2 * r, .012, 6, 12), { pos: [0, .9 * h, 0], rot: [Math.PI / 2, 0, 0], rgb: [.6, .5, .35] });
+  return s.fin();
+}
+
+function canastaPro(p) {
+  const { r, h } = p, llen = Math.max(0, Math.min(1, p.llenado)), s = pNuevo(), R = rng(Math.round(r * 1000 + h * 100 + llen * 50)), a = s.add;
+  a('mimbre', LA([[0, 0], [.72 * r, 0], [.8 * r, .02 * h], [r, h], [.93 * r, h], [.7 * r, .08 * h], [0, .05 * h]], 20), { uvEsc: [2 * Math.PI * r / .35, h / .35] });
+  a('mimbre', new THREE.TorusGeometry(r * .97, .014, 6, 20), { pos: [0, h, 0], rot: [Math.PI / 2, 0, 0], uvEsc: [3, .3] });
+  a('mimbre', new THREE.TorusGeometry(r * .97, .012, 6, 18, Math.PI), { pos: [0, h, 0], uvEsc: [3, .3] });
+  if (p.fruta >= .5 && llen > .05) {
+    const rs = .03, ymax = h * .92 + .02, cap = (r * .78) * (r * .78) / (rs * rs * 1.3) * Math.max(1, (ymax - .05 * h) / (rs * 1.55));
+    apilar(a, R, { rs, n: Math.min(70, Math.round(llen * cap)), ymax, x0: -r * .75, x1: r * .75, z0: -r * .75, z1: r * .75, y0: .05 * h + .01, en: (x, z, q) => Math.hypot(x, z) <= r * .78 - q * .3, fruta: Math.floor(R() * 3) });
+  }
+  return s.fin();
+}
+
+function carretaPro(p) {
+  const { w, l } = p, s = pNuevo(), a = s.add, y0 = .6, wy = .42, wz = -.1;
+  a('mad', RB(w, .04, l, .006), { pos: [0, y0, 0], eje: 2 });
+  [-1, 1].forEach(x => a('mad', RB(.03, .28, l, .005), { pos: [x * (w / 2 - .015), y0 + .16, 0], eje: 2 }));
+  a('mad', RB(w, .28, .03, .005), { pos: [0, y0 + .16, -l / 2 + .015], eje: 0 });
+  a('mad', RB(w, .14, .03, .005), { pos: [0, y0 + .09, l / 2 - .015], eje: 0 });
+  [-1, 1].forEach(x => a('mad', RB(.06, .06, l + .9, .008), { pos: [x * (w / 2 - .1), y0 - .05, .45], eje: 2 }));
+  a('fe', new THREE.CylinderGeometry(.025, .025, w + .18, 8), { pos: [0, wy, wz], rot: [0, 0, Math.PI / 2] });
+  [-1, 1].forEach(x => {
+    const X = x * (w / 2 + .06);
+    a('mad', new THREE.TorusGeometry(.38, .035, 8, 24), { pos: [X, wy, wz], rot: [0, Math.PI / 2, 0], eje: 1 });
+    a('fe', new THREE.TorusGeometry(.415, .008, 6, 24), { pos: [X, wy, wz], rot: [0, Math.PI / 2, 0] });
+    a('mad', new THREE.CylinderGeometry(.06, .06, .08, 10), { pos: [X, wy, wz], rot: [0, 0, Math.PI / 2], eje: 0 });
+    for (let k = 0; k < 10; k++) { const an = k / 10 * Math.PI * 2; a('mad', RB(.03, .34, .03, .006), { pos: [X, wy + Math.cos(an) * .2, wz + Math.sin(an) * .2], rot: [an, 0, 0], eje: 1 }); }
+  });
+  return s.fin();
+}
+
+/* ================= establo ================= */
+function pesebrePro(p) {
+  const { w, d, h } = p, s = pNuevo(), R = rng(9), a = s.add, yb = h - .22;
+  [-1, 1].forEach(x => [-1, 1].forEach(z => a('mad', RB(.07, h - .02, .07, .01), { pos: [x * (w / 2 - .05), (h - .02) / 2, z * (d / 2 - .05)], eje: 1 })));
+  a('mad', RB(w, .03, d, .005), { pos: [0, yb, 0], eje: 0 });
+  [-1, 1].forEach(z => a('mad', RB(w, .24, .03, .005), { pos: [0, yb + .12, z * (d / 2 - .015)], rot: [z * .12, 0, 0], eje: 0 }));
+  [-1, 1].forEach(x => a('mad', RB(.03, .24, d - .04, .005), { pos: [x * (w / 2 - .015), yb + .12, 0], eje: 2 }));
+  [-1, 1].forEach(x => a('mad', RB(.04, .04, d - .1), { pos: [x * (w / 2 - .05), .22, 0], eje: 2 }));
+  for (let k = 0; k < Math.max(3, Math.round(w * 4)); k++) a('paja', new THREE.SphereGeometry(.09, 8, 6), { pos: [(R() - .5) * (w - .2), yb + .1, (R() - .5) * (d - .15)], esc: [1.5, .7, 1.2], tint: .9 + R() * .2, eje: 0 });
+  return s.fin();
+}
+
+function abrevaderoPro(p) {
+  const { w, d, h } = p, s = pNuevo(), a = s.add, t = .07;
+  [-1, 1].forEach(x => a('mad', RB(.1, .1, d + .1, .01), { pos: [x * (w / 2 - .2), .05, 0], eje: 2 }));
+  a('mad', RB(w - .02, .05, d - .02, .005), { pos: [0, .125, 0], eje: 0 });
+  [-1, 1].forEach(z => a('mad', RB(w, h - .1, t, .008), { pos: [0, .1 + (h - .1) / 2, z * (d / 2 - t / 2)], eje: 0 }));
+  [-1, 1].forEach(x => a('mad', RB(t, h - .1, d - 2 * t, .008), { pos: [x * (w / 2 - t / 2), .1 + (h - .1) / 2, 0], eje: 1 }));
+  [-.3, .3].forEach(f => a('fe', RB(.03, h + .012, d + .02, .004, 1), { pos: [f * w, (h + .012) / 2 + .02, 0] }));
+  a('agua', new THREE.BoxGeometry(w - 2 * t - .02, .01, d - 2 * t - .02), { pos: [0, h - .14, 0] });
+  return s.fin();
+}
+
+function fardoPro(p) {
+  const { w, h, d } = p, s = pNuevo(), R = rng(Math.round(w * 100 + h * 10)), a = s.add;
+  a('paja', RB(w, h, d, .02, 3), { eje: 0, pos: [0, h / 2, 0], tint: .9 + R() * .2 });
+  [-.28, .28].forEach(f => a('tela', RB(.016, h + .014, d + .014, .004, 1), { pos: [f * w, h / 2, 0], rgb: [.8, .65, .45] }));
+  for (let i = 0; i < 6; i++) a('paja', new THREE.CylinderGeometry(.004, .004, .18 + R() * .12, 4), { pos: [(R() - .5) * w, h + .003, (R() - .5) * d], rot: [Math.PI / 2, 0, R() * 3], eje: 0 });
+  return s.fin();
+}
+
+function horcaPro(p) {
+  const { h } = p, s = pNuevo(), a = s.add, th = -.14, c = Math.cos(th), sn = Math.sin(th), zo = Math.abs(sn) * h + .03;
+  a('mad', new THREE.CylinderGeometry(.016, .02, h, 8), { pos: [0, c * h / 2, sn * h / 2 + zo], rot: [th, 0, 0], eje: 1 });
+  const hy = c * h, hz = sn * h + zo;
+  a('fe', RB(.2, .022, .022, .005, 1), { pos: [0, hy, hz], rot: [th, 0, 0] });
+  [-.09, 0, .09].forEach(x => a('fe', new THREE.CylinderGeometry(.005, .006, .24, 6), { pos: [x, hy + c * .12, hz + sn * .12], rot: [th, 0, 0] }));
+  return s.fin();
+}
+
+function cuboPro(p) {
+  const { r, h } = p, s = pNuevo(), a = s.add;
+  a('mad', LA([[0, 0], [.78 * r, 0], [r, h], [.9 * r, h], [.72 * r, .1 * h], [0, .1 * h]], 18), { uvEsc: [2 * Math.PI * r / .5, h / .5] });
+  [.25, .75].forEach(f => { const rr = .78 * r + (r - .78 * r) * f + .004; a('fe', new THREE.TorusGeometry(rr, .007, 6, 18), { pos: [0, f * h, 0], rot: [Math.PI / 2, 0, 0] }); });
+  a('fe', new THREE.TorusGeometry(r * .95, .007, 6, 16, Math.PI), { pos: [0, h, 0] });
+  return s.fin();
+}
+
+function posteAmarrePro(p) {
+  const { h } = p, s = pNuevo(), a = s.add;
+  a('mad', RB(.12, h, .12, .015), { pos: [0, h / 2, 0], eje: 1 });
+  a('mad', new THREE.SphereGeometry(.075, 10, 8), { pos: [0, h, 0], eje: 1 });
+  a('fe', RB(.05, .06, .012, .004, 1), { pos: [0, h * .7 + .05, .064] });
+  a('fe', new THREE.TorusGeometry(.05, .008, 6, 14), { pos: [0, h * .7, .08] });
+  return s.fin();
+}
+
+/* ================= registro ================= */
+const DEFS = {
+  mesa: { f: mesaPro },
+  banca: { f: bancoPro, params: { w: [.6, 3.5, 1.5, .05], d: [.2, .5, .3, .02], h: [.3, .6, .46, .02], resp: [0, 1, 0, 1] } },
+  barril: { f: barrilPro },
+  caja: { f: cajaPro },
+  puesto: { nombre: 'Puesto de mercado', f: puestoPro, params: { w: [1.4, 4, 2.4, .1], d: [.8, 1.6, 1.1, .05], h: [.8, 1.1, .95, .02], H: [2, 3, 2.5, .05], tono: [0, 2, 0, 1] } },
+  cajon_fruta: { nombre: 'Cajón de fruta', f: cajonFrutaPro, params: { w: [.3, .8, .5, .02], d: [.25, .5, .35, .02], h: [.12, .3, .18, .01], fruta: [0, 3, 3, 1], llenado: [0, 1, .75, .05] } },
+  saco: { nombre: 'Saco', f: sacoPro, params: { r: [.15, .3, .22, .01], h: [.4, 1, .7, .02] } },
+  canasta: { nombre: 'Canasta', f: canastaPro, params: { r: [.15, .4, .25, .01], h: [.15, .4, .25, .01], fruta: [0, 1, 1, 1], llenado: [0, 1, .75, .05] } },
+  carreta: { nombre: 'Carreta de mano', f: carretaPro, params: { w: [.8, 1.4, 1.1, .05], l: [1.2, 2.4, 1.8, .05] } },
+  pesebre: { nombre: 'Pesebre', f: pesebrePro, params: { w: [.8, 3, 1.6, .05], d: [.3, .6, .45, .02], h: [.4, .9, .7, .02] } },
+  abrevadero: { nombre: 'Abrevadero', f: abrevaderoPro, params: { w: [1, 3.5, 2, .05], d: [.4, .8, .55, .02], h: [.4, .8, .6, .02] } },
+  fardo: { nombre: 'Fardo de heno', f: fardoPro, params: { w: [.6, 1.2, .9, .02], h: [.3, .6, .4, .02], d: [.3, .6, .45, .02] } },
+  horca: { nombre: 'Horca', f: horcaPro, params: { h: [1.2, 2, 1.7, .05] }, ancla: 'borde' },
+  cubo: { nombre: 'Cubo', f: cuboPro, params: { r: [.1, .2, .14, .01], h: [.18, .4, .28, .01] } },
+  poste_amarre: { nombre: 'Poste de amarre', f: posteAmarrePro, params: { h: [.9, 1.6, 1.2, .05] } },
+};
+const HUELLAS_PRO = {
+  banca: p => [p.w, p.d], puesto: p => [p.w, p.d + .7], cajon_fruta: p => [p.w, p.d], saco: p => [p.r * 2, p.r * 2], canasta: p => [p.r * 2, p.r * 2],
+  carreta: p => [p.w + .3, p.l + 1.0], pesebre: p => [p.w, p.d], abrevadero: p => [p.w, p.d], fardo: p => [p.w, p.d], horca: () => [.5, .5], cubo: p => [p.r * 2, p.r * 2], poste_amarre: () => [.2, .2],
+};
+const TIPOS_PRO = Object.keys(DEFS);
+
+function registrarPro() {
+  for (const k in DEFS) CATALOGO[k] = Object.assign({}, CATALOGO[k] || {}, DEFS[k]);
+  Object.assign(HUELLA, HUELLAS_PRO);
+  Object.assign(ETIQUETAS, { H: 'Alto toldo', tono: 'Color toldo', fruta: 'Fruta (0-3, 3 = mezcla)', resp: 'Respaldo (0/1)', l: 'Largo', llenado: 'Llenado' });
+}
+
+/* piezas para otros módulos de objetos */
+
+
+
+
+
+
+
+const P3 = Math.PI, TC3 = {};
+
+/* ================= materiales ================= */
+function tierraTex() {
+  if (TC3.tierra) return TC3.tierra;
+  return TC3.tierra = canvasTex(256, (g, S) => {
+    const r = rng(71); g.fillStyle = '#7a5c3c'; g.fillRect(0, 0, S, S);
+    for (let i = 0; i < 9000; i++) { g.fillStyle = 'rgba(' + (r() < .5 ? '30,18,8' : '190,150,100') + ',' + r() * .2 + ')'; const s = 1 + r() * 3; g.fillRect(r() * S, r() * S, s, s); }
+    for (let i = 0; i < 40; i++) { const x = r() * S, y = r() * S, R = 6 + r() * 14, gr = g.createRadialGradient(x, y, 1, x, y, R); gr.addColorStop(0, 'rgba(40,26,12,.25)'); gr.addColorStop(1, 'rgba(40,26,12,0)'); g.fillStyle = gr; g.fillRect(x - R, y - R, R * 2, R * 2); }
+  });
+}
+function pastoTex() {
+  if (TC3.pasto) return TC3.pasto;
+  return TC3.pasto = canvasTex(128, g => {
+    g.clearRect(0, 0, 128, 128); const gr = g.createLinearGradient(0, 128, 0, 0);
+    gr.addColorStop(0, '#1a2b10'); gr.addColorStop(.6, '#2e4a1c'); gr.addColorStop(1, '#6b7a28');
+    g.fillStyle = gr; g.beginPath(); g.moveTo(64, 128); g.quadraticCurveTo(90, 64, 64, 0); g.quadraticCurveTo(38, 64, 64, 128); g.fill();
+  });
+}
+MATERIALES_EXTRA.piedra = () => new THREE.MeshStandardMaterial({ map: stoneTex(), roughness: .95, vertexColors: true });
+MATERIALES_EXTRA.roca = () => new THREE.MeshStandardMaterial({ map: stoneTex(), roughness: 1, vertexColors: true, flatShading: true });
+const matTierra = () => TC3.mTierra || (TC3.mTierra = new THREE.MeshStandardMaterial({ map: tierraTex(), roughness: 1, vertexColors: true }));
+const matHierro = () => TC3.mHierro || (TC3.mHierro = new THREE.MeshStandardMaterial({ map: ironTex(), roughness: .55, metalness: .4 }));
+const UT3 = { value: 0 };
+function matPasto() {
+  if (TC3.mPasto) return TC3.mPasto;
+  const m = new THREE.MeshStandardMaterial({ map: pastoTex(), alphaTest: .5, side: THREE.DoubleSide, roughness: .9 });
+  m.onBeforeCompile = sh => {
+    sh.uniforms.uTime = UT3;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;').replace('#include <begin_vertex>',
+      '#include <begin_vertex>\n vec3 ip = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);\n float bf = position.y * position.y;\n float wd = sin(uTime * 2.5 + ip.x * .8 + ip.z * .6) * .2;\n transformed.x += wd * bf;\n transformed.z += wd * .5 * bf;');
+  };
+  return TC3.mPasto = m;
+}
+
+/* ================= mecanismo: valor 0..1 con movimiento lento o caída con rebote ================= */
+function crearMec(vLento, g) {
+  const m = { valor: 0, v: 0, objetivo: 0, modo: 'lento', t0: null, mov: false };
+  m.ir = (o, modo) => { m.objetivo = o; m.modo = modo || 'lento'; m.v = 0; m.mov = true; };
+  m.paso = t => {
+    const dt = m.t0 === null ? 0 : Math.min(.05, Math.max(0, t - m.t0)); m.t0 = t;
+    if (!dt || !m.mov) return m.valor;
+    if (m.modo === 'lento') {
+      const d = m.objetivo - m.valor, s = vLento * dt;
+      if (Math.abs(d) <= s) { m.valor = m.objetivo; m.mov = false; } else m.valor += Math.sign(d) * s;
+    } else {
+      const gd = m.objetivo >= .5 ? 1 : -1; m.v += gd * g * dt; m.valor += m.v * dt;
+      const pasa = gd > 0 ? m.valor > 1 : m.valor < 0;
+      if (pasa) { m.valor = m.objetivo; if (Math.abs(m.v) > .45) m.v = -m.v * .22; else { m.v = 0; m.mov = false; } }
+      else if (gd > 0 ? m.valor < 0 : m.valor > 1) { m.valor = gd > 0 ? 0 : 1; m.v = 0; }
+    }
+    return m.valor;
+  };
+  return m;
+}
+const marcar = (obj) => { obj.root.traverse(o => { o.userData = o.userData || {}; o.userData.mecanismo = obj; }); return obj; };
+
+/* ================= suelo ================= */
+function alturaSuelo(x, z, sem, rug) {
+  const s = sem * 1.7;
+  return rug * (.22 * Math.sin(x * .35 + s) * Math.sin(z * .3 + s * 1.3) + .12 * Math.sin(x * .9 + s * 2) * Math.sin(z * 1.1 + s) + .05 * Math.sin(x * 2.3 + z * 1.9 + s * 3));
+}
+const trazo = (z, sem, w) => ({ cx: Math.sin(z * .15 + sem) * w * .06, mitad: .16 * w });
+const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+function tierraPro(p) {
+  const { w, d, rug, semilla, sendero, piedritas } = p, R = rng(Math.round(semilla * 131 + w * 7 + d)), root = new THREE.Group();
+  const sx = Math.min(80, Math.max(4, Math.round(w * 2))), sz = Math.min(80, Math.max(4, Math.round(d * 2)));
+  const geo = new THREE.PlaneGeometry(w, d, sx, sz); geo.rotateX(-P3 / 2);
+  const pos = geo.attributes.position, n = pos.count, col = new Float32Array(n * 3), uv = new Float32Array(n * 2);
+  const altura = (x, z) => {
+    let y = alturaSuelo(x, z, semilla, rug);
+    if (sendero >= .5) { const t = trazo(z, semilla, w), dist = Math.abs(x - t.cx), ip = 1 - sstep(t.mitad * .6, t.mitad, dist); y = y * (1 - .7 * ip) - .03 * ip - .04 * Math.exp(-Math.pow((dist - .55) / .14, 2)) * ip; }
+    return y;
+  };
+  for (let i = 0; i < n; i++) {
+    const x = pos.getX(i), z = pos.getZ(i), y = altura(x, z);
+    pos.setY(i, y);
+    uv[i * 2] = (x + w / 2) / 2.5; uv[i * 2 + 1] = (z + d / 2) / 2.5;
+    const nn = .5 + .5 * Math.sin(x * 1.3 + z * .9 + semilla) * Math.sin(x * .7 - z * 1.7), j = .9 + R() * .2;
+    let c = [.36 + .14 * nn, .26 + .12 * nn, .17 + .07 * nn];
+    if (sendero >= .5) { const t = trazo(z, semilla, w), ip = 1 - sstep(t.mitad * .6, t.mitad, Math.abs(x - t.cx)); c = c.map((v, k) => v + ip * ([.2, .19, .15][k])); }
+    col[i * 3] = c[0] * j; col[i * 3 + 1] = c[1] * j; col[i * 3 + 2] = c[2] * j;
+  }
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, matTierra()); mesh.receiveShadow = true; root.add(mesh);
+  const np = Math.min(300, Math.round(w * d * .5 * piedritas));
+  if (np > 0) {
+    const im = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ roughness: 1, flatShading: true }), np), dm = new THREE.Object3D();
+    for (let i = 0; i < np; i++) {
+      const x = (R() - .5) * (w - .2), z = (R() - .5) * (d - .2), s = .03 + .07 * R() * R();
+      dm.position.set(x, altura(x, z) + s * .3, z); dm.rotation.set(R() * 3, R() * 3, R() * 3); dm.scale.set(s, s * .6, s * (.8 + R() * .4)); dm.updateMatrix();
+      im.setMatrixAt(i, dm.matrix); const g = .35 + R() * .3; im.setColorAt(i, new THREE.Color(g, g * .96, g * .9));
+    }
+    im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false; root.add(im);
+  }
+  return { root, anim: () => { }, anchor: null };
+}
+
+function pastoPro(p) {
+  const { w, d, altura, densidad, semilla, borde, rug, semillaSuelo, ox, oz, sendero, wSuelo } = p, R = rng(Math.round(semilla * 211 + w * 3 + d));
+  const bg = new THREE.BufferGeometry(), bw = .3, bh = 1;
+  bg.setAttribute('position', new THREE.Float32BufferAttribute([-bw / 2, 0, 0, bw / 2, 0, 0, bw / 2, bh, 0, -bw / 2, bh, 0, 0, 0, -bw / 2, 0, 0, bw / 2, 0, bh, bw / 2, 0, bh, -bw / 2], 3));
+  bg.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1], 2)); bg.setIndex([0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7]); bg.computeVertexNormals();
+  const cand = Math.min(24000, Math.round(w * d * 30 * densidad)), dm = new THREE.Object3D(), col = new THREE.Color(), lista = [];
+  for (let i = 0; i < cand; i++) {
+    const x = (R() - .5) * w, z = (R() - .5) * d, ed = Math.min(w / 2 - Math.abs(x), d / 2 - Math.abs(z)), manchas = .55 + .45 * Math.sin(x * .9 + semilla) * Math.sin(z * .8 + semilla * 1.3);
+    if (R() > Math.min(1, ed / (borde * 1.5 + .01)) * (1 - borde * .5 + borde * .5 * manchas)) continue;
+    if (sendero >= .5) { const t = trazo(z + oz, semillaSuelo, wSuelo); if (Math.abs(x + ox - t.cx) < t.mitad * .95) continue; }
+    const y = alturaSuelo(x + ox, z + oz, semillaSuelo, rug), sy = altura * (.6 + R() * .6) * (.7 + .3 * Math.min(1, ed / 1.5)), sxz = .8 + R() * .5;
+    dm.position.set(x, y, z); dm.rotation.y = R() * 6.28; dm.scale.set(sxz, sy, sxz); dm.updateMatrix(); col.setHSL(.22 + R() * .09, .5, .26 + R() * .2);
+    lista.push([dm.matrix.clone(), col.clone()]);
+  }
+  const im = new THREE.InstancedMesh(bg, matPasto(), Math.max(1, lista.length));
+  lista.forEach((e, i) => { im.setMatrixAt(i, e[0]); im.setColorAt(i, e[1]); });
+  im.count = Math.max(1, lista.length); im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.frustumCulled = false; im.receiveShadow = true;
+  const root = new THREE.Group(); root.add(im);
+  return { root, anim: () => { UT3.value = performance.now() / 1000; }, anchor: null, cuchillas: lista.length };
+}
+
+/* ================= rocas ================= */
+function ruido3(x, y, z, ph) {
+  return Math.sin(x * 2.1 + ph[0]) * Math.sin(y * 2.3 + ph[1]) * Math.sin(z * 2.0 + ph[2]) + .5 * Math.sin(x * 4.7 + ph[3]) * Math.sin(y * 4.1 + ph[4]) * Math.sin(z * 5.3 + ph[5]) + .25 * Math.sin(x * 9.3 + ph[6]) * Math.sin(y * 8.7 + ph[7]) * Math.sin(z * 10.1 + ph[8]);
+}
+function geoRoca(r, alto, forma, sem) {
+  const g = new THREE.IcosahedronGeometry(1, 2), a = g.attributes.position.array, R = rng(Math.round(sem * 977) + 3), ph = Array.from({ length: 9 }, () => R() * 60), amp = .16 + .2 * forma, bajo = -.62;
+  for (let i = 0; i < a.length; i += 3) {
+    const l = Math.hypot(a[i], a[i + 1], a[i + 2]) || 1, dx = a[i] / l, dy = a[i + 1] / l, dz = a[i + 2] / l, n = ruido3(dx, dy, dz, ph), q = Math.round(n * 2) / 2, k = 1 + amp * (n * (1 - forma * .6) + q * forma * .6);
+    const y = Math.max(dy * k * r * alto, bajo * r * alto);
+    a[i] = dx * k * r; a[i + 1] = y - bajo * r * alto - .05 * r * alto; a[i + 2] = dz * k * r;
+  }
+  g.computeVertexNormals();
+  return g;
+}
+function pintarMusgo(g, musgo, sem) {
+  const N = g.attributes.normal, C = g.attributes.color, P = g.attributes.position;
+  for (let i = 0; i < N.count; i++) {
+    const ny = N.getY(i), m = musgo * sstep(.4, .85, ny) * (.6 + .4 * Math.sin(P.getX(i) * 6 + P.getZ(i) * 4 + sem)), sombra = ny < -.3 ? .7 : 1;
+    C.setXYZ(i, (C.getX(i) * (1 - m) + .38 * m) * sombra, (C.getY(i) * (1 - m) + .52 * m) * sombra, (C.getZ(i) * (1 - m) + .22 * m) * sombra);
+  }
+}
+function rocaPro(p) {
+  const { r, alto, forma, musgo, semilla } = p, s = pNuevo(), g = geoRoca(r, alto, forma, semilla);
+  s.add('roca', g, { tile: 1.4, tint: .85 + .3 * rng(Math.round(semilla * 31))() });
+  pintarMusgo(g, musgo, semilla);
+  return s.fin();
+}
+function rocalPro(p) {
+  const { n, r, forma, musgo, semilla } = p, s = pNuevo(), R = rng(Math.round(semilla * 53 + n));
+  for (let i = 0; i < Math.round(n); i++) {
+    const rr = i === 0 ? r : r * (.3 + .35 * R()), an = R() * 6.28, dist = i === 0 ? 0 : r * (.55 + .8 * R()), g = geoRoca(rr, .7 + .5 * R(), forma, semilla + i * 3.1);
+    s.add('roca', g, { pos: [Math.cos(an) * dist, 0, Math.sin(an) * dist], rot: [0, R() * 6.28, 0], tile: 1.4, tint: .8 + R() * .35 });
+    pintarMusgo(g, musgo, semilla + i);
+  }
+  return s.fin();
+}
+
+/* ================= mecanismos ================= */
+function marcoPiedra(s, w, hAbertura, prof, hJamba) {
+  [-1, 1].forEach(x => s.add('piedra', RB(.5, hJamba, prof, .02), { pos: [x * (w / 2 + .25), hJamba / 2, 0], eje: 1, tile: 1.2 }));
+  s.add('piedra', RB(w + 1, .6, prof, .02), { pos: [0, hAbertura + .2, 0], eje: 0, tile: 1.2 });
+}
+
+function rejaPro(p) {
+  const { w, h, sep, marco } = p, mec = crearMec(.22, 3.0), travel = h * .92, root = new THREE.Group();
+  if (marco >= .5) { const f = pNuevo(); marcoPiedra(f, w, h, .7, h + .5); [-1, 1].forEach(x => f.add('fe', RB(.03, h + .3, .05, .004, 1), { pos: [x * (w / 2 - .005), (h + .3) / 2, .0] })); root.add(f.fin().root); }
+  const g = pNuevo(), a = g.add, n = Math.floor(w / sep) + 1, paso = (w - .06) / Math.max(1, n - 1);
+  for (let i = 0; i < n; i++) {
+    const x = -w / 2 + .03 + i * paso;
+    a('fe', RB(.032, h, .032, .006, 1), { pos: [x, h / 2, 0] });
+    a('fe', new THREE.ConeGeometry(.026, .16, 4), { pos: [x, -.06, 0], rot: [P3, 0, 0] });
+  }
+  [.3, h * .5, h - .25].forEach(y => a('fe', RB(w - .02, .05, .05, .006, 1), { pos: [0, y, 0] }));
+  [-1, 1].forEach(x => a('fe', new THREE.TorusGeometry(.05, .012, 6, 10), { pos: [x * (w / 2 - .12), h - .05, 0] }));
+  const gate = g.fin().root; gate.position.z = .05; root.add(gate);
+  const obj = { root, anchor: null, hueco: { w, h }, mec,
+    anim: t => { const v = mec.paso(t); gate.position.y = v * travel; gate.position.x = (mec.mov && v > 0 && v < 1) ? Math.sin(t * 38) * .003 : 0; },
+    abrir: () => mec.ir(1, 'lento'), cerrar: () => mec.ir(0, 'lento'), soltar: () => mec.ir(0, 'caida'),
+    alternar: () => { if (mec.objetivo >= .5) obj.soltar(); else obj.abrir(); }, estado: () => mec.valor, esAbierto: () => mec.objetivo >= .5 };
+  return marcar(obj);
+}
+
+function puentePro(p) {
+  const { w, l, marco } = p, mec = crearMec(.28, 2.2), t = .14, root = new THREE.Group(), R = rng(Math.round(w * 10 + l));
+  if (marco >= .5) { const f = pNuevo(); marcoPiedra(f, w, l, .9, l + .8); root.add(f.fin().root); }
+  const d = pNuevo(), a = d.add, n = Math.max(4, Math.round(w / .22)), bw = w / n;
+  for (let i = 0; i < n; i++) a('mad', RB(bw - .008, l, t, .006, 1), { pos: [-w / 2 + bw * (i + .5), l / 2, 0], eje: 1, tint: .85 + R() * .25 });
+  [.18, .5, .82].forEach(f => [-1, 1].forEach(sg => {
+    a('fe', RB(w + .02, .11, .025, .004, 1), { pos: [0, f * l, sg * (t / 2 + .0125)] });
+    [-1, 1].forEach(x => a('fe', new THREE.SphereGeometry(.014, 6, 4), { pos: [x * (w / 2 - .05), f * l, sg * (t / 2 + .027)] }));
+  }));
+  [-1, 1].forEach(x => a('fe', new THREE.TorusGeometry(.05, .012, 6, 10), { pos: [x * (w / 2 - .12), l - .02, t / 2 + .03] }));
+  const pivot = new THREE.Group(); pivot.position.set(0, -t / 2, .35); pivot.add(d.fin().root); root.add(pivot);
+  const cad = [-1, 1].map(x => { const m = new THREE.Mesh(new THREE.CylinderGeometry(.018, .018, 1, 6), matHierro()); m.rotation.order = 'ZXY'; m.castShadow = true; root.add(m); return { m, x: x * (w / 2 - .12) }; });
+  const actualizar = th => {
+    pivot.rotation.x = th;
+    cad.forEach(c => {
+      const ty = -t / 2 + l * Math.cos(th), tz = .35 + l * Math.sin(th), ay = l + .45, az = .47, dx = 0, dy = ay - ty, dz = az - tz, len = Math.hypot(dy, dz) || 1;
+      c.m.position.set(c.x, (ty + ay) / 2, (tz + az) / 2); c.m.scale.set(1, len, 1); c.m.rotation.set(Math.asin(dz / len), 0, Math.atan2(-dx, dy));
+    });
+  };
+  actualizar(0);
+  const obj = { root, anchor: null, mec, anim: tt => { actualizar(mec.paso(tt) * P3 / 2); },
+    abrir: () => mec.ir(1, 'lento'), cerrar: () => mec.ir(0, 'lento'), soltar: () => mec.ir(1, 'caida'),
+    alternar: () => { if (mec.objetivo >= .5) obj.cerrar(); else obj.abrir(); }, estado: () => mec.valor, esAbierto: () => mec.objetivo >= .5 };
+  return marcar(obj);
+}
+
+function palancaPro(p) {
+  const { modo, largo } = p, mec = crearMec(3.2, 0), root = new THREE.Group(), suelo = modo >= .5, escucha = [];
+  const b = pNuevo(), ba = b.add, m = pNuevo(), ma = m.add, L = suelo ? largo * 1.6 : largo;
+  if (!suelo) {
+    ba('mad', RB(.34, .46, .03, .006), { pos: [0, 0, -.015], eje: 1 });
+    ba('fe', RB(.26, .36, .02, .004, 1), { pos: [0, 0, .01] });
+    [[-.1, .15], [.1, .15], [-.1, -.15], [.1, -.15]].forEach(q => ba('fe', new THREE.SphereGeometry(.014, 6, 4), { pos: [q[0], q[1], .024] }));
+    ba('fe', new THREE.CylinderGeometry(.04, .04, .03, 10), { pos: [0, 0, .035], rot: [P3 / 2, 0, 0] });
+    [-1, 1].forEach(sg => ba('fe', RB(.03, .05, .03, .004, 1), { pos: [sg * Math.sin(.95) * L, Math.cos(.95) * L, .03] }));
+  } else {
+    ba('fe', RB(.34, .16, .26, .01), { pos: [0, .08, 0] });
+    ba('piedra', RB(.4, .04, .32, .008), { pos: [0, .02, 0], eje: 0, tile: 1 });
+    [-1, 1].forEach(sg => ba('fe', RB(.03, .05, .03, .004, 1), { pos: [0, .17, sg * Math.sin(.8) * L * .5] }));
+  }
+  ma('fe', new THREE.CylinderGeometry(.012, .012, L, 6), { pos: [0, L / 2, 0] });
+  ma('fe', new THREE.CylinderGeometry(.012, .012, .1, 6), { pos: [0, -.05, 0] });
+  ma('mad', new THREE.SphereGeometry(.035, 8, 6), { pos: [0, L + .02, 0], tint: .9 });
+  const maneta = new THREE.Group(); maneta.add(m.fin().root); maneta.position.set(0, suelo ? .17 : 0, suelo ? 0 : .05);
+  root.add(b.fin().root); root.add(maneta);
+  const obj = { root, anchor: null, mec, en: false,
+    anim: t => { const v = mec.paso(t), ang = .8 - 1.6 * v; if (suelo) maneta.rotation.x = ang * .9; else maneta.rotation.z = ang; },
+    fijar: on => { obj.en = !!on; mec.ir(obj.en ? 1 : 0, 'lento'); escucha.forEach(f => f(obj.en)); },
+    alternar: () => obj.fijar(!obj.en), conectar: fn => { escucha.push(fn); return obj; },
+    abrir: () => obj.fijar(true), cerrar: () => obj.fijar(false), soltar: () => obj.fijar(false), estado: () => mec.valor, esAbierto: () => obj.en };
+  maneta.rotation.z = .8;
+  return marcar(obj);
+}
+
+/* ================= registro ================= */
+const DEFS_L3 = {
+  roca: { nombre: 'Roca', f: rocaPro, params: { r: [.2, 3, .8, .05], alto: [.4, 1.5, .8, .05], forma: [0, 1, .4, .05], musgo: [0, 1, .5, .05], semilla: [1, 60, 1, 1] } },
+  rocal: { nombre: 'Conjunto de rocas', f: rocalPro, params: { n: [1, 12, 5, 1], r: [.3, 2, .8, .05], forma: [0, 1, .4, .05], musgo: [0, 1, .5, .05], semilla: [1, 60, 1, 1] } },
+  parche_tierra: { nombre: 'Parche de tierra', f: tierraPro, params: { w: [2, 40, 12, 1], d: [2, 40, 10, 1], rug: [0, 1, .5, .05], semilla: [1, 60, 1, 1], sendero: [0, 1, 0, 1], piedritas: [0, 1, .5, .05] } },
+  parche_pasto: { nombre: 'Parche de pasto', f: pastoPro, params: { w: [1, 40, 10, 1], d: [1, 40, 8, 1], altura: [.2, 1.2, .6, .05], densidad: [.2, 3, 1, .1], semilla: [1, 60, 1, 1], borde: [0, 1, .6, .05], rug: [0, 1, .5, .05], semillaSuelo: [1, 60, 1, 1], ox: [-100, 100, 0, .5], oz: [-100, 100, 0, .5], sendero: [0, 1, 0, 1], wSuelo: [2, 40, 12, 1] } },
+  reja: { nombre: 'Reja levadiza', f: rejaPro, params: { w: [1.2, 5, 2.4, .1], h: [2, 5, 3.2, .1], sep: [.1, .3, .16, .01], marco: [0, 1, 1, 1] } },
+  puente_levadizo: { nombre: 'Puerta-puente levadizo', f: puentePro, params: { w: [2, 5, 3, .1], l: [2.5, 6, 4, .1], marco: [0, 1, 1, 1] } },
+  palanca: { nombre: 'Palanca', f: palancaPro, params: { modo: [0, 1, 0, 1], largo: [.3, .8, .5, .02] }, ancla: 'borde', elev: 1.1 },
+};
+const HUELLAS_L3 = {
+  roca: p => [p.r * 2.2, p.r * 2.2], rocal: p => [p.r * 4, p.r * 4], parche_tierra: p => [p.w, p.d], parche_pasto: p => [p.w, p.d],
+  reja: p => [p.w + 1, .8], puente_levadizo: p => [p.w + 1.2, p.l + 1], palanca: () => [.4, .3],
+};
+const TIPOS_LOTE3 = Object.keys(DEFS_L3);
+
+function registrarLote3() {
+  for (const k in DEFS_L3) CATALOGO[k] = Object.assign({}, CATALOGO[k] || {}, DEFS_L3[k]);
+  Object.assign(HUELLA, HUELLAS_L3);
+  Object.assign(ETIQUETAS, { largo: 'Largo', rug: 'Rugosidad', semilla: 'Semilla', sendero: 'Sendero (0/1)', piedritas: 'Piedritas', altura: 'Altura', densidad: 'Densidad', borde: 'Borde irregular', ox: 'Desfase x', oz: 'Desfase z', semillaSuelo: 'Semilla del suelo', wSuelo: 'Ancho del suelo', sep: 'Separación barras', forma: 'Forma (0 redonda, 1 angular)', musgo: 'Musgo', alto: 'Alto (proporción)', modo: 'Modo (0 pared, 1 suelo)', marco: 'Marco de piedra (0/1)' });
+}
+
+registrarPro();registrarLote3();
+
+/* ===== escena de día ===== */
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x9ec3d9);scene.fog=new THREE.Fog(0x9ec3d9,35,90);
+const camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,.1,150);camera.position.set(2,3.2,16);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;document.body.appendChild(renderer.domElement);
+const ctl=new OrbitControls(camera,renderer.domElement);ctl.target.set(0,2.2,2);ctl.maxPolarAngle=Math.PI*.49;ctl.update();
+scene.add(new THREE.HemisphereLight(0xdcecff,0x4a5c3a,.9));
+const sun=new THREE.DirectionalLight(0xfff0d0,1.4);sun.position.set(14,22,18);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-26,right:26,top:26,bottom:-26,near:1,far:80});scene.add(sun);
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+
+/* ===== muralla de piedra con la abertura ===== */
+const mw=pNuevo();
+mw.add('piedra',RB(12,7,.8,.02),{pos:[-8,3.5,0],eje:1,tile:1.6});
+mw.add('piedra',RB(12,7,.8,.02),{pos:[8,3.5,0],eje:1,tile:1.6});
+mw.add('piedra',RB(4,2.9,.8,.02),{pos:[0,5.55,0],eje:1,tile:1.6});
+for(let i=-13;i<=13;i+=2)mw.add('piedra',RB(1,.7,.9,.02),{pos:[i,7.35,0],eje:1,tile:1.6});
+const muralla=mw.fin().root;scene.add(muralla);
+
+/* ===== suelo: tierra con sendero, patio, pasto y rocas ===== */
+let semilla=3;const objetos=[];
+function agregar(o,x,y,z,ry){o.root.position.set(x,y,z);if(ry)o.root.rotation.y=ry;scene.add(o.root);objetos.push(o);return o}
+let reja,puente,palanca,antorchas=[];
+function construirEntorno(){
+  objetos.splice(0).forEach(o=>scene.remove(o.root));antorchas=[];
+  agregar(crearObjeto('parche_tierra',{w:30,d:22,rug:.45,semilla,sendero:1,piedritas:.8}),0,0,11.5);
+  agregar(crearObjeto('parche_tierra',{w:30,d:14,rug:.3,semilla:semilla+2,piedritas:.4}),0,0,-7.5);
+  const P=[[-11.5,12,9,12],[12.5,13,9,12],[-11,19,12,6]];
+  P.forEach((q,i)=>agregar(crearObjeto('parche_pasto',{w:q[2],d:q[3],altura:.6,densidad:1.2,semilla:semilla+i,borde:.7,rug:.45,semillaSuelo:semilla,ox:q[0],oz:q[1]-11.5,sendero:0,wSuelo:30}),q[0],0,q[1]));
+  agregar(crearObjeto('parche_pasto',{w:20,d:10,altura:.5,densidad:1,semilla:semilla+9,borde:.6,rug:.3,semillaSuelo:semilla+2,ox:0,oz:-7.5-(-7.5),sendero:0,wSuelo:30}),0,0,-7.5);
+  const R=((s)=>()=>{s=(s*16807)%2147483647;return s/2147483647})(semilla*97+11);
+  agregar(crearObjeto('rocal',{n:6,r:1.1,forma:.5,musgo:.6,semilla}),-7.5,0,3);
+  agregar(crearObjeto('rocal',{n:7,r:1.4,forma:.6,musgo:.5,semilla:semilla+4}),9,0,4.5);
+  agregar(crearObjeto('roca',{r:2.1,alto:1.2,forma:.7,musgo:.6,semilla:semilla+7}),-13,0,9);
+  agregar(crearObjeto('roca',{r:1.7,alto:1,forma:.6,musgo:.4,semilla:semilla+8}),14,0,12);
+  for(let i=0;i<9;i++){const lado=i%2?1:-1;agregar(crearObjeto('roca',{r:.3+R()*.5,alto:.6+R()*.4,forma:.3+R()*.5,musgo:R(),semilla:semilla+20+i}),lado*(5.6+R()*1.6),0,2.5+i*2.1+R(),R()*6)}
+  agregar(crearObjeto('rocal',{n:4,r:.8,forma:.4,musgo:.5,semilla:semilla+12}),-4.6,0,-4,0);
+  /* mecanismos */
+  reja=agregar(crearObjeto('reja',{w:3,h:3.8,marco:1}),0,0,0);
+  puente=agregar(crearObjeto('puente_levadizo',{w:3,l:4,marco:0}),0,0,0);
+  palanca=agregar(crearObjeto('palanca',{modo:0}),-4.4,1.5,.4);
+  palanca.conectar(on=>{if(on){reja.abrir();puente.abrir()}else{reja.soltar();puente.cerrar()}});
+  [-1,1].forEach(x=>antorchas.push(agregar(crearObjeto('antorcha_pared',{bloque:0}),x*3.1,2.1,.4)));
+}
+construirEntorno();
+
+/* ===== controles ===== */
+const hud=document.getElementById('hud');
+document.getElementById('bpal').onclick=()=>palanca.alternar();
+document.getElementById('breja').onclick=()=>reja.alternar();
+document.getElementById('bpue').onclick=()=>puente.alternar();
+document.getElementById('bsem').onclick=()=>{semilla++;construirEntorno()};
+document.getElementById('bver').onclick=()=>{camera.position.set(-4.4,1.9,3.2);ctl.target.set(-4.4,1.5,.4);ctl.update()};
+/* tocar la palanca (o la reja/puente) para accionarla */
+const ray=new THREE.Raycaster(),pt=new THREE.Vector2();let d0=null;
+renderer.domElement.addEventListener('pointerdown',e=>{d0={x:e.clientX,y:e.clientY}});
+renderer.domElement.addEventListener('pointerup',e=>{
+  if(!d0||Math.hypot(e.clientX-d0.x,e.clientY-d0.y)>6)return;
+  pt.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(pt,camera);
+  const hit=ray.intersectObjects(objetos.filter(o=>o.alternar).map(o=>o.root),true)[0];
+  if(hit){let o=hit.object;while(o&&!(o.userData&&o.userData.mecanismo))o=o.parent;if(o)o.userData.mecanismo.alternar()}});
+const pct=v=>Math.round(v*100)+'%';
+(function loop(ms){const t=ms/1000;objetos.forEach(o=>o.anim&&o.anim(t));
+  hud.innerHTML='Toca la palanca (o usa los botones) · reja '+pct(reja.estado())+' abierta · puente '+pct(puente.estado())+' bajado · palanca '+(palanca.en?'ACTIVADA':'desactivada');
+  ctl.update();renderer.render(scene,camera);requestAnimationFrame(loop)})(0);
+</script></body></html>
