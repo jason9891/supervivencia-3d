@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { construirMapa, destruirMapa } from './mapa.js?v=8';
+import { montarDecorado } from '../lib-objetos/biblioteca.js';
 
 const zoneEl = document.getElementById('zone');
 const overlay = document.getElementById('overlay');
@@ -52,7 +53,7 @@ const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);
 
 const LS_KEY = 'castillo-v20';
-let mapaData = null;
+let mapaData = null, decorado = null;
 
 function leerLocal() {
     try {
@@ -68,8 +69,14 @@ function leerExtra(k) { try { const s = localStorage.getItem(k); return s ? JSON
 function reconstruir(json, origen) {
     json = { ...json, texturas: leerExtra(LS_TEX) || json.texturas, ref: leerExtra(LS_REF) || json.ref };
     try {
+        if (decorado) { decorado.quitar(); decorado = null; }
         if (mapaData) destruirMapa(scene, mapaData);
         mapaData = construirMapa(scene, json);
+        // objetos de lib-objetos colocados desde el editor (data.objetos)
+        if (Array.isArray(json.objetos) && json.objetos.length) {
+            try { decorado = montarDecorado(scene, mapaData, json, { objetos: json.objetos }); }
+            catch (err) { console.error('❌ Error en los objetos:', err); }
+        }
         console.log(`✅ Mapa construido desde ${origen}`);
     } catch (error) {
         console.error('❌ Error construyendo el mapa:', error);
@@ -110,6 +117,13 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => keys[e.code] = false);
 
 const clock = new THREE.Clock();
+const raycaster = new THREE.Raycaster();
+// clic con el cursor bloqueado: acciona palancas, rejas y puentes que apunta la mira
+window.addEventListener('mousedown', () => {
+    if (!controls.isLocked || !decorado) return;
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    decorado.clic(raycaster);
+});
 
 function animate() {
     requestAnimationFrame(animate);
@@ -131,6 +145,7 @@ function animate() {
 
         zoneEl.textContent = `X:${camera.position.x.toFixed(1)} Y:${camera.position.y.toFixed(1)} Z:${camera.position.z.toFixed(1)}`;
     }
+    if (decorado) decorado.anim(clock.elapsedTime, camera.position);
     renderer.render(scene, camera);
 }
 

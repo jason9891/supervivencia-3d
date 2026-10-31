@@ -161,3 +161,4 @@ Acceso: botón «EDITOR · MAPAS» en el index del juego → `./generador-mapas/
 - generador-mapas/editor-extras.js: propiedades + diseñador de puertas en celdas (sustituye renderProps/updateProp/openDoorDesigner de editor.js). editor.html carga editor.js y luego editor-extras.js (?v=234).
 - generador-mapas v23.6: personaje de referencia (editor-ref.js) y ranuras de texturas por superficie (mapa.js, UV en mundo).
 - lib-objetos/: biblioteca de objetos, mecanismos y decorado (aportada por el usuario). Probada en navegador headless: galería y mapa_decorado.html funcionan con el plano del editor (castillo-v20). Su mapa.js propio es una versión anterior del constructor (salas con muros).
+- generador-mapas v23.7: herramienta Objeto en el editor (editor-obj.js) y visor con montarDecorado (main.js v=9).

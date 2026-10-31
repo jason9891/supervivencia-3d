@@ -53,3 +53,9 @@ npx serve .
 - **🧍 Personaje** (editor): clic o arrastre en el plano coloca una figura de 1,75 m (altura editable) en el nivel Y activo; se ve en el plano y en el visor 3D para comparar escalas.
 - **🎨 Texturas** (editor): una imagen por superficie (muros/bloques, pisos, techos, rampas, escaleras, puertas) con «metros por repetición». El visor la proyecta en coordenadas de mundo, así la escala se mantiene en cualquier pieza. Las imágenes se reducen a 512 px.
 - Se guardan aparte del mapa (`castillo-v20-ref`, `castillo-v20-tex`) y se incluyen en el JSON exportado como `ref` y `texturas`.
+
+## v23.7 · Herramienta «🪑 Objeto» (lib-objetos)
+- Elige un tipo del catálogo de `lib-objetos` (mesa, puesto, barril, reja, palanca, torre, techos…) y haz clic en el plano para colocarlo. Clic sobre uno existente = seleccionarlo; arrastrar = mover; **R** = girar 15° (Mayús+R al revés); Supr = eliminar.
+- El panel permite X, Z, Y, giro, altura extra y los parámetros propios del objeto (ancho, fondo, alto…). Duplicar y eliminar incluidos.
+- Se guardan en `data.objetos` (mismo formato que «objetos» de `decorado.json`): entran en deshacer/rehacer y en el JSON exportado. El visor 3D los dibuja con `montarDecorado` y las palancas/rejas/puentes se accionan con clic apuntando con la mira.
+- Para el decorado por pedidos (`salas`, `techo`, `piedras`) sigue valiendo `lib-objetos/decorado.json`.
