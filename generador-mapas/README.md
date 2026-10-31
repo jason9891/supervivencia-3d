@@ -48,3 +48,8 @@ npx serve .
 
 - generador-mapas: la rampa es un prisma inclinado con extremos cortados en vertical (empieza en Y y termina en Y final, grosor vertical constante). Visor v=6.
 - generador-mapas: rampas con muros laterales (1 celda de grosor, alto configurable en 'Muros laterales', 0 = sin) que siguen la pendiente y acaban en corte vertical. Visor v=7.
+
+## v23.6 · Personaje de referencia y texturas
+- **🧍 Personaje** (editor): clic o arrastre en el plano coloca una figura de 1,75 m (altura editable) en el nivel Y activo; se ve en el plano y en el visor 3D para comparar escalas.
+- **🎨 Texturas** (editor): una imagen por superficie (muros/bloques, pisos, techos, rampas, escaleras, puertas) con «metros por repetición». El visor la proyecta en coordenadas de mundo, así la escala se mantiene en cualquier pieza. Las imágenes se reducen a 512 px.
+- Se guardan aparte del mapa (`castillo-v20-ref`, `castillo-v20-tex`) y se incluyen en el JSON exportado como `ref` y `texturas`.

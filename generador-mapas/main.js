@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-import { construirMapa, destruirMapa } from './mapa.js?v=7';
+import { construirMapa, destruirMapa } from './mapa.js?v=8';
 
 const zoneEl = document.getElementById('zone');
 const overlay = document.getElementById('overlay');
@@ -62,7 +62,11 @@ function leerLocal() {
     } catch (e) { return null; }
 }
 
+const LS_TEX = LS_KEY + '-tex', LS_REF = LS_KEY + '-ref';
+function leerExtra(k) { try { const s = localStorage.getItem(k); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+
 function reconstruir(json, origen) {
+    json = { ...json, texturas: leerExtra(LS_TEX) || json.texturas, ref: leerExtra(LS_REF) || json.ref };
     try {
         if (mapaData) destruirMapa(scene, mapaData);
         mapaData = construirMapa(scene, json);
@@ -92,7 +96,7 @@ async function cargarMapa() {
 cargarMapa();
 
 window.addEventListener('storage', (e) => {
-    if (e.key !== LS_KEY || !e.newValue) return;
+    if (![LS_KEY, LS_TEX, LS_REF].includes(e.key)) return;
     if (new URLSearchParams(location.search).get('src') === 'file') return;
     const j = leerLocal();
     if (j) reconstruir(j, 'el editor (actualización en vivo)');

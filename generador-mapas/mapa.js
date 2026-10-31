@@ -275,6 +275,62 @@ export function construirMapa(scene, json) {
   });
 
   if (json.doors) json.doors.forEach(d => createDoor(d, !cutDoors.has(d)));
+
+  // ---------- TEXTURAS (ranuras por tipo de superficie) ----------
+  // json.texturas = { muro|piso|techo|rampa|escalera|puerta: { img: dataURL, m: metros por repetición } }
+  const SLOTS = { muro: [matWall, matWallRamp], piso: [matFloor, matHighFloor], techo: [matRoof], rampa: [matRampa], escalera: [matEscalera], puerta: [matDoorPanel, matDoorFrame] };
+  const tex = json.texturas || {};
+  const tiles = new Map(); // material -> metros por repetición
+  Object.keys(SLOTS).forEach(slot => {
+    const t = tex[slot]; if (!t || !t.img) return;
+    const m = t.m > 0 ? +t.m : 1;
+    SLOTS[slot].forEach(mat => {
+      tiles.set(mat, m); mat.color.set(0xffffff);
+      new THREE.TextureLoader().load(t.img, (tx) => {
+        tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = 8;
+        mat.map = tx; mat.needsUpdate = true;
+      });
+    });
+  });
+  if (tiles.size) {
+    // UV en coordenadas de mundo (proyección según la normal) para que la textura mantenga su escala en cualquier pieza
+    root.updateMatrixWorld(true);
+    root.traverse(o => {
+      if (!o.isMesh || !tiles.has(o.material)) return;
+      const g = o.geometry, pos = g.attributes.position, nor = g.attributes.normal; if (!pos || !nor) return;
+      const k = 1 / tiles.get(o.material), uv = new Float32Array(pos.count * 2), p = new THREE.Vector3(), n = new THREE.Vector3();
+      const nm = new THREE.Matrix3().getNormalMatrix(o.matrixWorld);
+      for (let i = 0; i < pos.count; i++) {
+        p.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+        n.fromBufferAttribute(nor, i).applyMatrix3(nm).normalize();
+        const ax = Math.abs(n.x), ay = Math.abs(n.y), az = Math.abs(n.z);
+        let u, v;
+        if (ay >= ax && ay >= az) { u = p.x; v = p.z; } else if (ax >= az) { u = p.z; v = p.y; } else { u = p.x; v = p.y; }
+        uv[i * 2] = u * k; uv[i * 2 + 1] = v * k;
+      }
+      g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    });
+  }
+
+  // ---------- PERSONAJE DE REFERENCIA (1,75 m) ----------
+  const ref = json.ref;
+  if (ref && ref.visible !== false && isFinite(ref.x) && isFinite(ref.z)) {
+    const H = ref.h > 0 ? +ref.h : 1.75, k = H / 1.75;
+    const mat = new THREE.MeshStandardMaterial({ color: 0xe0a458, roughness: 0.7 });
+    const cloth = new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.8 });
+    const fig = new THREE.Group();
+    const add = (geo, m, x, y, z) => { const me = new THREE.Mesh(geo, m); me.position.set(x * k, y * k, z * k); me.castShadow = true; me.receiveShadow = true; fig.add(me); };
+    add(new THREE.CylinderGeometry(0.075 * k, 0.065 * k, 0.85 * k, 12), cloth, -0.1, 0.425, 0);   // pierna izq
+    add(new THREE.CylinderGeometry(0.075 * k, 0.065 * k, 0.85 * k, 12), cloth, 0.1, 0.425, 0);    // pierna der
+    add(new THREE.BoxGeometry(0.4 * k, 0.55 * k, 0.22 * k), cloth, 0, 1.125, 0);                  // torso
+    add(new THREE.CylinderGeometry(0.05 * k, 0.045 * k, 0.6 * k, 10), mat, -0.25, 1.15, 0);       // brazo izq
+    add(new THREE.CylinderGeometry(0.05 * k, 0.045 * k, 0.6 * k, 10), mat, 0.25, 1.15, 0);        // brazo der
+    add(new THREE.SphereGeometry(0.115 * k, 16, 12), mat, 0, 1.64, 0);                              // cabeza
+    fig.position.set(+ref.x, +ref.y || 0, +ref.z);
+    // la cara superior del piso está a y + T_SLAB/2: se apoya sobre ella
+    fig.position.y += T_SLAB / 2;
+    root.add(fig);
+  }
   return root;
 }
 
