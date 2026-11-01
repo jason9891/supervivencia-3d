@@ -17,3 +17,4 @@ export * from './objetos_lote4.js';
 export * from './objetos_lote5.js';
 export * from './decorado.js';
 export * from './rocas/rocas.js';
+export * from './pasto/pasto.js';

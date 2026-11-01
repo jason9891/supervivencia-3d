@@ -83,8 +83,11 @@
         <label class="n">${nom}<br><small>${t ? (t.lib ? 'biblioteca' : 'tu imagen') : 'sin textura (color liso)'}</small></label>
         <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">${libSelect(k)}<input type="file" accept="image/*" onchange="loadTex('${k}',this)"></div>
         <label>m/repetición <input type="number" min="0.1" step="0.1" value="${t ? t.m : 1}" ${t ? '' : 'disabled'} onchange="setTexM('${k}',this.value)"></label>
-        <button ${t ? '' : 'disabled'} onclick="clearTex('${k}')">Quitar</button></div>`;
+        <button ${t ? '' : 'disabled'} onclick="clearTex('${k}')">Quitar</button>
+        ${t && t.pasto ? `<details style="flex-basis:100%"><summary style="cursor:pointer;color:#8c8">⚙ Ajustes del pasto</summary><div id="tx-pa-${k}"></div></details>` : ''}</div>`;
     }).join('');
+    SLOTS.forEach(([k]) => { const t = tex[k], el = document.getElementById('tx-pa-' + k); if (!t || !t.pasto || !el) return;
+      import('../lib-objetos/pasto/pasto.js?v=1').then(M => { t.pasto = M.normalizarPasto(t.pasto); el.appendChild(M.formularioPasto(t.pasto, c => { t.pasto = c; wr(K_TEX, tex); })); }).catch(e => console.warn(e)); });
   }
   window.openTexturas = () => { renderTex(); modal.classList.add('open'); };
   window.closeTexturas = () => modal.classList.remove('open');

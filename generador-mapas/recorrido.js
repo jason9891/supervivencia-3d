@@ -1,6 +1,7 @@
 /* Recorrido a pie con colisiones + elegir la textura de la pieza a la que apuntas.
    G = caminar / volar · WASD mover · Mayús correr · Espacio saltar · T = textura de la pieza apuntada · clic = palancas */
 import * as THREE from 'three';
+import { formularioPasto, normalizarPasto } from '../lib-objetos/pasto/pasto.js';
 
 const R = 0.3, STEP = 0.4, GRAV = 22, SALTO = 6.5;
 
@@ -96,33 +97,57 @@ export function crearRecorrido(ctx) {
   const GN = { pasto: '🌿 Pasto (con volumen)', muro: 'Muros', piso: 'Pisos', cubierta: 'Cubiertas', material: 'Materiales' };
   const ORDEN = { muro: ['muro', 'piso', 'cubierta', 'material'], piso: ['pasto', 'piso', 'muro', 'cubierta', 'material'], techo: ['cubierta', 'piso', 'muro', 'material'], rampa: ['pasto', 'piso', 'muro', 'cubierta', 'material'], escalera: ['piso', 'muro', 'cubierta', 'material'] };
 
-  function abrirSelector(o) {
+  function abrirSelector(o, alcanceInicial) {
     if (!cat) return;
-    const tag = o.userData.tag, slot = o.userData.slot || 'muro';
+    const pieza = o.userData && o.userData.tag ? { tag: o.userData.tag, slot: o.userData.slot || 'muro', nom: nombrePieza(o) } : o;   // o = malla, o ya una pieza
+    const { tag, slot } = pieza;
     const tx = ctx.leer(ctx.LS_TEX) || {}, tp = ctx.leer(ctx.LS_TOBJ) || {};
     const actual = tp[tag.id] ? 'esta pieza' : (tx[slot] ? 'todas' : null);
+    // el pasto que se ajusta es el de la pieza si tiene textura propia; si no, el de la ranura general
+    const alc0 = alcanceInicial || (tp[tag.id] ? 'pieza' : (tx[slot] && tx[slot].pasto ? 'tipo' : 'pieza'));
+    const pastoAct = () => { const a = ctx.leer(ctx.LS_TOBJ) || {}, b = ctx.leer(ctx.LS_TEX) || {}; return tp0(a, b, alcance()); };
+    const tp0 = (a, b, sc) => (sc === 'tipo' ? (b[slot] && b[slot].pasto) : (a[tag.id] && a[tag.id].pasto)) || null;
     pickerAbierto = true; if (controls.isLocked) controls.unlock(); overlay.style.display = 'none';
     modal.innerHTML = `<div style="background:#171a21;color:#e5e7eb;border:1px solid #2a2f3a;border-radius:12px;padding:14px;width:min(860px,95vw);max-height:90vh;overflow:auto">
-      <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">🎯 ${nombrePieza(o)} · textura</h3><button id="rt-x" style="font-size:16px">✕</button></div>
+      <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">🎯 ${pieza.nom} · textura</h3><button id="rt-x" style="font-size:16px">✕</button></div>
       <div style="margin:8px 0;display:flex;gap:16px;flex-wrap:wrap;align-items:center">
-        <label><input type="radio" name="rt-sc" value="pieza" checked> Solo esta pieza</label>
-        <label><input type="radio" name="rt-sc" value="tipo"> Todos los «${NOM[slot] || slot}»</label>
+        <label><input type="radio" name="rt-sc" value="pieza" ${alc0 === 'pieza' ? 'checked' : ''}> Solo esta pieza</label>
+        <label><input type="radio" name="rt-sc" value="tipo" ${alc0 === 'tipo' ? 'checked' : ''}> Todos los «${NOM[slot] || slot}»</label>
         <label>m/repetición <input id="rt-m" type="number" min="0.1" step="0.1" placeholder="auto" style="width:70px"></label>
         <button id="rt-q">Quitar textura</button><small style="color:#94a3b8">${actual ? 'Ahora: ' + actual : 'Sin textura'}</small></div>
+      <div id="rt-pasto"></div>
       ${ORDEN[slot].map(g => `<h4 style="margin:10px 0 4px;color:#e8c37a">${GN[g]}</h4><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px">${cat.filter(t => t.grupo === g).map(t => `<div data-id="${t.id}" title="${t.nombre} — ${t.uso}" style="cursor:pointer;text-align:center;font-size:11px"><img src="../lib-objetos/tex/${t.archivo}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:2px solid #2a2f3a"><div>${t.nombre}</div></div>`).join('')}</div>`).join('')}</div>`;
     modal.style.display = 'flex';
     const cerrar = () => { modal.style.display = 'none'; pickerAbierto = false; try { controls.lock(); } catch (_) { overlay.style.display = 'flex'; } };
     const alcance = () => modal.querySelector('input[name=rt-sc]:checked').value;
-    const guardar = (valor) => {
+    const guardar = (valor, quedar) => {
       if (alcance() === 'tipo') { const t = ctx.leer(ctx.LS_TEX) || {}; if (valor) t[slot] = valor; else delete t[slot]; ctx.guardar(ctx.LS_TEX, t); }
       else { const t = ctx.leer(ctx.LS_TOBJ) || {}; if (valor) t[tag.id] = valor; else delete t[tag.id]; ctx.guardar(ctx.LS_TOBJ, t); }
-      ctx.reconstruir(); cerrar();
+      ctx.reconstruir();
+      if (quedar) abrirSelector(pieza, alcance()); else cerrar();
     };
+    // ajustes del pasto (viento, tamaño, densidad, color…): se ven al instante
+    const caja = modal.querySelector('#rt-pasto');
+    const montarPastoUI = () => {
+      caja.innerHTML = ''; const cur = pastoAct(); if (!cur) return;
+      const t = document.createElement('div'); t.style.cssText = 'border:1px solid #2a2f3a;border-radius:10px;padding:10px;margin:6px 0';
+      t.innerHTML = '<div style="font-weight:700;margin-bottom:6px">🌿 Ajustes del pasto <small style="color:#94a3b8;font-weight:400">(se aplican al instante; ' + (alcance() === 'tipo' ? 'todos los ' + (NOM[slot] || slot).toLowerCase() : 'esta pieza') + ')</small></div>';
+      let tm = 0;
+      t.appendChild(formularioPasto(cur, (cfg) => {
+        const sc = alcance(), alm = sc === 'tipo' ? ctx.LS_TEX : ctx.LS_TOBJ, d = ctx.leer(alm) || {}, k = sc === 'tipo' ? slot : tag.id;
+        if (!d[k]) return; d[k].pasto = cfg; ctx.guardar(alm, d);
+        clearTimeout(tm); tm = setTimeout(() => ctx.reconstruirPasto(), 60);
+      }));
+      const ok = document.createElement('button'); ok.textContent = 'Listo'; ok.style.marginTop = '8px'; ok.onclick = cerrar; t.appendChild(ok);
+      caja.appendChild(t);
+    };
+    montarPastoUI();
+    modal.querySelectorAll('input[name=rt-sc]').forEach(i => i.onchange = montarPastoUI);
     modal.querySelector('#rt-x').onclick = cerrar;
     modal.querySelector('#rt-q').onclick = () => guardar(null);
     modal.querySelectorAll('[data-id]').forEach(el => el.onclick = () => {
       const t = cat.find(q => q.id === el.dataset.id), m = parseFloat(modal.querySelector('#rt-m').value);
-      guardar(Object.assign({ img: '../lib-objetos/tex/' + t.archivo, m: m > 0 ? m : (t.tile || 1), lib: t.id }, t.pasto ? { pasto: t.pasto } : {}));
+      guardar(Object.assign({ img: '../lib-objetos/tex/' + t.archivo, m: m > 0 ? m : (t.tile || 1), lib: t.id }, t.pasto ? { pasto: normalizarPasto(t.pasto) } : {}), !!t.pasto);   // con pasto se queda abierto para ajustarlo
     });
     modal.onmousedown = (e) => { if (e.target === modal) cerrar(); };
   }

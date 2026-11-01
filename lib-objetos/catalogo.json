@@ -448,8 +448,11 @@
    "nombre": "Pasto corto",
    "uso": "Praderas, jardines, bordes",
    "pasto": {
-    "d": 160,
-    "h": 0.18
+    "tam": 0.15,
+    "dens": 600,
+    "hoja": 2.5,
+    "viento": 0.35,
+    "var": 25
    }
   },
   {
@@ -461,8 +464,8 @@
    "nombre": "Pasto medio",
    "uso": "Campo abierto",
    "pasto": {
-    "d": 110,
-    "h": 0.4
+    "tam": 0.4,
+    "dens": 350
    }
   },
   {
@@ -474,8 +477,12 @@
    "nombre": "Pasto alto",
    "uso": "Maleza, terrenos abandonados",
    "pasto": {
-    "d": 80,
-    "h": 0.85
+    "tam": 0.9,
+    "dens": 260,
+    "hoja": 4,
+    "viento": 0.8,
+    "arqueo": 0.7,
+    "var": 45
    }
   },
   {
@@ -487,9 +494,10 @@
    "nombre": "Pasto con sendero",
    "uso": "Camino de tierra al centro, pasto más alto hacia los lados",
    "pasto": {
-    "d": 130,
-    "h": 0.75,
-    "camino": 1.4
+    "tam": 0.75,
+    "dens": 300,
+    "camino": 1.4,
+    "crece": 0.8
    }
   },
   {
@@ -501,9 +509,12 @@
    "nombre": "Pasto seco",
    "uso": "Terreno árido, otoño",
    "pasto": {
-    "d": 100,
-    "h": 0.5,
-    "tono": "seco"
+    "tam": 0.5,
+    "dens": 260,
+    "matiz": 42,
+    "clar": 0.4,
+    "seco": 0.5,
+    "viento": 0.7
    }
   }
  ],

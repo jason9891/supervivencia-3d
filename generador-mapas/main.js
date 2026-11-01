@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { construirMapa, destruirMapa } from './mapa.js?v=8';
-import { montarDecorado, pastoSobre } from '../lib-objetos/biblioteca.js';
-import { crearRecorrido } from './recorrido.js?v=3';
-import { crearObjetosVisor } from './objetos-visor.js?v=2';
+import { montarDecorado, crearPasto } from '../lib-objetos/biblioteca.js';
+import { crearRecorrido } from './recorrido.js?v=4';
+import { crearObjetosVisor } from './objetos-visor.js?v=3';
 
 const zoneEl = document.getElementById('zone');
 const overlay = document.getElementById('overlay');
@@ -75,13 +75,13 @@ function leerExtra(k) { try { const s = localStorage.getItem(k); return s ? JSON
 // {d: cuchillas/m², h: alto, camino?: ancho de sendero, tono?}. Compatible con room.pasto = {d,h,s} del editor.
 const hashId = (s) => { let h = 7; String(s).split('').forEach(c => { h = (h * 31 + c.charCodeAt(0)) % 9973; }); return h + 1; };
 function montarPasto(json) {
-    pastos.forEach(p => scene.remove(p.root)); pastos = [];
+    pastos.forEach(p => { scene.remove(p.root); p.dispose(); }); pastos = [];
     (json.rooms || []).forEach(r => {
         if (r.type === 'escalera' || (r.points && r.points.length > 2) || r.x0 === undefined) return;
         const slot = r.type === 'rampa' ? 'rampa' : 'piso';
         const to = json.texobj && json.texobj[r.id];
         const c = to ? to.pasto : (r.pasto && r.pasto.d > 0 ? r.pasto : (json.texturas && json.texturas[slot] && json.texturas[slot].pasto));
-        if (!c || !(c.d > 0)) return;
+        if (!c) return;
         const x0 = Math.min(r.x0, r.x1), x1 = Math.max(r.x0, r.x1), z0 = Math.min(r.z0, r.z1), z1 = Math.max(r.z0, r.z1), cara = 0.15;
         let altura = () => (r.y || 0) + cara, eje = (x1 - x0) >= (z1 - z0) ? 'x' : 'z';
         if (r.type === 'rampa') {
@@ -90,8 +90,8 @@ function montarPasto(json) {
             altura = (x, z) => { const t = ((alongX ? x : z) - a0) / (a1 - a0 || 1); return yA + (yB - yA) * t; };
             eje = alongX ? 'x' : 'z';
         }
-        const g = pastoSobre({ x0, x1, z0, z1, altura, alto: c.h > 0 ? c.h : 0.35, densidad: c.d, semilla: c.s || hashId(r.id), camino: c.camino || 0, ejeCamino: eje, tono: c.tono,
-            margen: (r.type === 'rampa' && !(r.lat === 0)) ? 0.32 : 0.12 });
+        const cfg = Object.assign({ sem: hashId(r.id) }, c);   // sin semilla propia: una distinta por pieza
+        const g = crearPasto(cfg, { x0, x1, z0, z1 }, altura, { ejeCamino: eje, margen: (r.type === 'rampa' && !(r.lat === 0)) ? 0.32 : 0.12 });
         scene.add(g.root); pastos.push(g);
     });
 }
@@ -154,6 +154,7 @@ rec = crearRecorrido({
     reconstruir: () => { if (ultimoJson) reconstruir(ultimoJson, 'el visor (textura)'); },
     LS_TEX, LS_TOBJ,
     apuntaObjeto: () => !!(ov && ov.apuntaObjeto()),
+    reconstruirPasto: () => { if (ultimoJson) montarPasto(jsonCompleto(ultimoJson)); },
 });
 ov = crearObjetosVisor({
     camera, controls, overlay, scene,
@@ -213,7 +214,7 @@ function animate() {
         zoneEl.textContent = `VOLANDO · X:${camera.position.x.toFixed(1)} Y:${camera.position.y.toFixed(1)} Z:${camera.position.z.toFixed(1)} · G caminar · T textura`;
     }
     if (decorado) decorado.anim(clock.elapsedTime, camera.position);
-    pastos.forEach(p => p.anim());
+    pastos.forEach(p => p.anim(clock.elapsedTime));
     renderer.render(scene, camera);
 }
 

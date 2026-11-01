@@ -82,6 +82,9 @@ npx serve .
 - Valores de partida: 60–120 cuchillas/m² y 0,3 m de alto. En el editor no se dibuja (solo en el visor 3D).
 - Nueva función `pastoSobre()` en `lib-objetos/objetos_lote3.js` (pasto sobre cualquier superficie, con una función de altura); el pasto de la biblioteca se aclaró.
 
+## v23.13 · Pasto como semilla configurable
+Hojas finas y curvas con viento proporcional a su altura (corto ≈ quieto, alto ondula). Panel «Ajustes del pasto»: tamaño, variación, grosor, arqueo, inclinación, densidad, borde suave, viento (fuerza/velocidad/dirección/turbulencia), color, sendero y semilla. Disponible en 🎨 del editor y en el selector del recorrido (por pieza o por tipo). Ver `lib-objetos/pasto/README.md`.
+
 ## v23.12 · El pasto es una textura
 - En el selector de texturas (🎨 del editor y **T** en el visor) hay un grupo «🌿 Pasto (con volumen)»: pasto corto, medio, alto, seco y **pasto con sendero** (camino de tierra al centro y pasto que crece hacia los lados, como `deepseek_html…`). Se elige igual que cualquier textura: «Todos los pisos/rampas» o «Solo esta pieza» (apuntando con la mira y T), así lo pones donde lo necesites.
 - La textura pone el suelo (pasto o tierra) y el visor siembra además cuchillas 3D que se mecen. En pisos y rampas rectangulares; en rampas siguen la pendiente y respetan los muros laterales. En muros, bloques y escaleras solo se aplica el suelo.
