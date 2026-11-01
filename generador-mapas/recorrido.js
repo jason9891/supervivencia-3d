@@ -93,8 +93,8 @@ export function crearRecorrido(ctx) {
   const modal = document.createElement('div');
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:200;font-family:system-ui,sans-serif';
   document.body.appendChild(modal);
-  const GN = { muro: 'Muros', piso: 'Pisos', cubierta: 'Cubiertas', material: 'Materiales' };
-  const ORDEN = { muro: ['muro', 'piso', 'cubierta', 'material'], piso: ['piso', 'muro', 'cubierta', 'material'], techo: ['cubierta', 'piso', 'muro', 'material'], rampa: ['piso', 'muro', 'cubierta', 'material'], escalera: ['piso', 'muro', 'cubierta', 'material'] };
+  const GN = { pasto: '🌿 Pasto (con volumen)', muro: 'Muros', piso: 'Pisos', cubierta: 'Cubiertas', material: 'Materiales' };
+  const ORDEN = { muro: ['muro', 'piso', 'cubierta', 'material'], piso: ['pasto', 'piso', 'muro', 'cubierta', 'material'], techo: ['cubierta', 'piso', 'muro', 'material'], rampa: ['pasto', 'piso', 'muro', 'cubierta', 'material'], escalera: ['piso', 'muro', 'cubierta', 'material'] };
 
   function abrirSelector(o) {
     if (!cat) return;
@@ -122,7 +122,7 @@ export function crearRecorrido(ctx) {
     modal.querySelector('#rt-q').onclick = () => guardar(null);
     modal.querySelectorAll('[data-id]').forEach(el => el.onclick = () => {
       const t = cat.find(q => q.id === el.dataset.id), m = parseFloat(modal.querySelector('#rt-m').value);
-      guardar({ img: '../lib-objetos/tex/' + t.archivo, m: m > 0 ? m : (t.tile || 1), lib: t.id });
+      guardar(Object.assign({ img: '../lib-objetos/tex/' + t.archivo, m: m > 0 ? m : (t.tile || 1), lib: t.id }, t.pasto ? { pasto: t.pasto } : {}));
     });
     modal.onmousedown = (e) => { if (e.target === modal) cerrar(); };
   }

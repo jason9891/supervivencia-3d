@@ -438,6 +438,73 @@
    "uso": "Muros húmedos",
    "w": 2.5,
    "h": 2.5
+  },
+  {
+   "id": "pasto_corto",
+   "archivo": "piso_pasto.jpg",
+   "tipo": "repetida",
+   "tile": 2,
+   "grupo": "pasto",
+   "nombre": "Pasto corto",
+   "uso": "Praderas, jardines, bordes",
+   "pasto": {
+    "d": 160,
+    "h": 0.18
+   }
+  },
+  {
+   "id": "pasto_medio",
+   "archivo": "piso_pasto.jpg",
+   "tipo": "repetida",
+   "tile": 2,
+   "grupo": "pasto",
+   "nombre": "Pasto medio",
+   "uso": "Campo abierto",
+   "pasto": {
+    "d": 110,
+    "h": 0.4
+   }
+  },
+  {
+   "id": "pasto_alto",
+   "archivo": "piso_pasto.jpg",
+   "tipo": "repetida",
+   "tile": 2,
+   "grupo": "pasto",
+   "nombre": "Pasto alto",
+   "uso": "Maleza, terrenos abandonados",
+   "pasto": {
+    "d": 80,
+    "h": 0.85
+   }
+  },
+  {
+   "id": "pasto_sendero",
+   "archivo": "piso_tierra.jpg",
+   "tipo": "repetida",
+   "tile": 3,
+   "grupo": "pasto",
+   "nombre": "Pasto con sendero",
+   "uso": "Camino de tierra al centro, pasto más alto hacia los lados",
+   "pasto": {
+    "d": 130,
+    "h": 0.75,
+    "camino": 1.4
+   }
+  },
+  {
+   "id": "pasto_seco",
+   "archivo": "piso_paja.jpg",
+   "tipo": "repetida",
+   "tile": 2,
+   "grupo": "pasto",
+   "nombre": "Pasto seco",
+   "uso": "Terreno árido, otoño",
+   "pasto": {
+    "d": 100,
+    "h": 0.5,
+    "tono": "seco"
+   }
   }
  ],
  "temas": {

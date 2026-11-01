@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { construirMapa, destruirMapa } from './mapa.js?v=8';
 import { montarDecorado, pastoSobre } from '../lib-objetos/biblioteca.js';
-import { crearRecorrido } from './recorrido.js?v=2';
+import { crearRecorrido } from './recorrido.js?v=3';
 import { crearObjetosVisor } from './objetos-visor.js?v=2';
 
 const zoneEl = document.getElementById('zone');
@@ -71,21 +71,34 @@ let ultimoJson = null, rec = null, ov = null;
 function leerExtra(k) { try { const s = localStorage.getItem(k); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
 
 // objetos de lib-objetos colocados desde el editor o desde el propio visor (data.objetos)
-// Pasto sobre rampas y pisos con r.pasto = { d: cuchillas/m², h: alto (m), s: semilla }
+// Pasto como textura: la ranura (todos los pisos / rampas) o la pieza elegida con T lleva un preset `pasto`
+// {d: cuchillas/m², h: alto, camino?: ancho de sendero, tono?}. Compatible con room.pasto = {d,h,s} del editor.
+const hashId = (s) => { let h = 7; String(s).split('').forEach(c => { h = (h * 31 + c.charCodeAt(0)) % 9973; }); return h + 1; };
 function montarPasto(json) {
     pastos.forEach(p => scene.remove(p.root)); pastos = [];
     (json.rooms || []).forEach(r => {
-        const c = r.pasto; if (!c || !(c.d > 0) || r.type === 'escalera' || (r.points && r.points.length > 2)) return;
+        if (r.type === 'escalera' || (r.points && r.points.length > 2) || r.x0 === undefined) return;
+        const slot = r.type === 'rampa' ? 'rampa' : 'piso';
+        const to = json.texobj && json.texobj[r.id];
+        const c = to ? to.pasto : (r.pasto && r.pasto.d > 0 ? r.pasto : (json.texturas && json.texturas[slot] && json.texturas[slot].pasto));
+        if (!c || !(c.d > 0)) return;
         const x0 = Math.min(r.x0, r.x1), x1 = Math.max(r.x0, r.x1), z0 = Math.min(r.z0, r.z1), z1 = Math.max(r.z0, r.z1), cara = 0.15;
-        let altura = () => (r.y || 0) + cara;
+        let altura = () => (r.y || 0) + cara, eje = (x1 - x0) >= (z1 - z0) ? 'x' : 'z';
         if (r.type === 'rampa') {
             const y2 = r.y2 != null ? r.y2 : (r.y || 0) + 3, dir = r.dir || '+x', alongX = dir.includes('x'), a0 = alongX ? x0 : z0, a1 = alongX ? x1 : z1, fwd = dir[0] === '+';
             const yA = (fwd ? r.y : y2) + cara, yB = (fwd ? y2 : r.y) + cara;
             altura = (x, z) => { const t = ((alongX ? x : z) - a0) / (a1 - a0 || 1); return yA + (yB - yA) * t; };
+            eje = alongX ? 'x' : 'z';
         }
-        const g = pastoSobre({ x0, x1, z0, z1, altura, alto: c.h > 0 ? c.h : 0.35, densidad: c.d, semilla: c.s || 1, margen: (r.type === 'rampa' && !(r.lat === 0)) ? 0.32 : 0.12 });
+        const g = pastoSobre({ x0, x1, z0, z1, altura, alto: c.h > 0 ? c.h : 0.35, densidad: c.d, semilla: c.s || hashId(r.id), camino: c.camino || 0, ejeCamino: eje, tono: c.tono,
+            margen: (r.type === 'rampa' && !(r.lat === 0)) ? 0.32 : 0.12 });
         scene.add(g.root); pastos.push(g);
     });
+}
+
+// mapa + texturas + personaje tal como los ve el visor (para reconstruir sin perder nada)
+function jsonCompleto(json) {
+    return { ...json, texturas: leerExtra(LS_TEX) || json.texturas, ref: leerExtra(LS_REF) || json.ref, texobj: leerExtra(LS_TOBJ) || json.texobj };
 }
 
 function montarObjetos(json) {
@@ -104,7 +117,7 @@ function montarObjetos(json) {
 
 function reconstruir(json, origen) {
     ultimoJson = json;
-    json = { ...json, texturas: leerExtra(LS_TEX) || json.texturas, ref: leerExtra(LS_REF) || json.ref, texobj: leerExtra(LS_TOBJ) || json.texobj };
+    json = jsonCompleto(json);
     try {
         if (decorado) { decorado.quitar(); decorado = null; }
         if (mapaData) destruirMapa(scene, mapaData);
@@ -146,7 +159,7 @@ ov = crearObjetosVisor({
     camera, controls, overlay, scene,
     json: () => ultimoJson, mapa: () => mapaData, deco: () => decorado,
     guardar: () => { try { localStorage.setItem(LS_KEY, JSON.stringify(ultimoJson)); } catch (e) { console.warn(e); } },
-    remontar: () => { if (ultimoJson) { montarObjetos(ultimoJson); rec.actualizarSolidos(); } },
+    remontar: () => { if (ultimoJson) { montarObjetos(jsonCompleto(ultimoJson)); rec.actualizarSolidos(); } },
 });
 window.__ov = ov; window.__deco = () => decorado;
 window.__rec = rec;

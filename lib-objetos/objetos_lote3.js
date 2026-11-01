@@ -183,21 +183,32 @@ function rocalPro(p) {
 
 /* Pasto sobre cualquier superficie (rampa, piso…): `altura(x, z)` da la y del suelo en cada punto.
    Devuelve { root, anim, cuchillas }. densidad = cuchillas por m². La misma semilla da el mismo pasto. */
-export function pastoSobre({ x0, x1, z0, z1, altura = () => 0, alto = .35, densidad = 60, semilla = 1, margen = .08 }) {
+export function pastoSobre({ x0, x1, z0, z1, altura = () => 0, alto = .35, densidad = 60, semilla = 1, margen = .08, camino = 0, ejeCamino = 'z', tono = 'verde' }) {
   const R = rng(Math.round(semilla * 211) + 5), bg = new THREE.BufferGeometry(), bw = .3, bh = 1;
   bg.setAttribute('position', new THREE.Float32BufferAttribute([-bw / 2, 0, 0, bw / 2, 0, 0, bw / 2, bh, 0, -bw / 2, bh, 0, 0, 0, -bw / 2, 0, 0, bw / 2, 0, bh, bw / 2, 0, bh, -bw / 2], 3));
   bg.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1], 2)); bg.setIndex([0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7]); bg.computeVertexNormals();
   const w = Math.max(.01, x1 - x0 - 2 * margen), d = Math.max(.01, z1 - z0 - 2 * margen), n = Math.min(30000, Math.max(1, Math.round(w * d * densidad)));
-  const im = new THREE.InstancedMesh(bg, matPasto(), n), dm = new THREE.Object3D(), col = new THREE.Color();
+  const im = new THREE.InstancedMesh(bg, matPasto(), n), dm = new THREE.Object3D(), col = new THREE.Color(), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+  const semi = ejeCamino === 'x' ? d / 2 : w / 2;                       // mitad del ancho perpendicular al camino
+  const hue = tono === 'seco' ? .11 : .22, rango = tono === 'seco' ? .05 : .09, luz = tono === 'seco' ? .5 : .45;
+  let k = 0;
   for (let i = 0; i < n; i++) {
     const x = x0 + margen + R() * w, z = z0 + margen + R() * d, m = .55 + .45 * Math.sin(x * .9 + semilla) * Math.sin(z * .8 + semilla * 1.3);
-    dm.position.set(x, altura(x, z) - .01, z); dm.rotation.y = R() * 6.28; const sxz = .8 + R() * .5;
-    dm.scale.set(sxz, alto * (.6 + R() * .6) * (.8 + .2 * m), sxz); dm.updateMatrix(); im.setMatrixAt(i, dm.matrix);
-    col.setHSL(.22 + R() * .09, .6, .45 + R() * .2).multiplyScalar(3.2); im.setColorAt(i, col);
+    let f = 1;
+    if (camino > 0) {                                                    // camino despejado al centro; el pasto crece hacia los lados
+      const dist = Math.abs(ejeCamino === 'x' ? z - cz : x - cx) - camino / 2;
+      if (dist < 0) { if (R() > .05) continue; f = .25; } else f = .25 + .75 * Math.min(1, dist / Math.max(1, semi * .6));
+      if (dist < 0) f = .2;
+    }
+    const sxz = .8 + R() * .5;
+    dm.position.set(x, altura(x, z) - .01, z); dm.rotation.y = R() * 6.28;
+    dm.scale.set(sxz, alto * f * (.7 + R() * .5) * (.8 + .2 * m), sxz); dm.updateMatrix(); im.setMatrixAt(k, dm.matrix);
+    const t = R(); col.setHSL(hue + t * rango, tono === 'seco' ? .45 : .6, luz + t * .2).multiplyScalar(3.2); im.setColorAt(k, col); k++;
   }
+  im.count = Math.max(1, k);
   im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.frustumCulled = false; im.receiveShadow = true;
   const root = new THREE.Group(); root.add(im);
-  return { root, anim: () => { UT3.value = performance.now() / 1000; }, cuchillas: n };
+  return { root, anim: () => { UT3.value = performance.now() / 1000; }, cuchillas: k };
 }
 
 /* ================= mecanismos ================= */

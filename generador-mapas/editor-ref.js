@@ -64,17 +64,17 @@
   // Biblioteca de texturas (lib-objetos/catalogo.json): se elige sin subir archivos
   const LIBTEX = '../lib-objetos/tex/'; let cat = null;
   fetch('../lib-objetos/catalogo.json').then(r => r.json()).then(j => { cat = j.texturas.filter(t => t.tipo === 'repetida'); renderTex(); }).catch(() => {});
-  const GRUPOS = { muro: ['muro'], piso: ['piso'], techo: ['cubierta', 'piso'], rampa: ['piso', 'muro'], escalera: ['piso', 'muro'], puerta: ['material'] };
-  const GNOM = { muro: 'Muros', piso: 'Pisos', cubierta: 'Cubiertas', material: 'Materiales' };
+  const GRUPOS = { muro: ['muro'], piso: ['pasto', 'piso'], techo: ['cubierta', 'piso'], rampa: ['pasto', 'piso', 'muro'], escalera: ['piso', 'muro'], puerta: ['material'] };
+  const GNOM = { pasto: '🌿 Pasto (con volumen)', muro: 'Muros', piso: 'Pisos', cubierta: 'Cubiertas', material: 'Materiales' };
   function libSelect(k) {
     if (!cat) return '';
-    const orden = [...(GRUPOS[k] || []), ...['muro', 'piso', 'cubierta', 'material'].filter(g => !(GRUPOS[k] || []).includes(g))];
+    const orden = [...(GRUPOS[k] || []), ...['pasto', 'muro', 'piso', 'cubierta', 'material'].filter(g => !(GRUPOS[k] || []).includes(g))];
     const cur = tex[k] && tex[k].lib;
     return `<select onchange="libTex('${k}',this.value)"><option value="">Biblioteca…</option>${orden.map(g => `<optgroup label="${GNOM[g]}">${cat.filter(t => t.grupo === g).map(t => `<option value="${t.id}" ${cur === t.id ? 'selected' : ''}>${t.nombre}</option>`).join('')}</optgroup>`).join('')}</select>`;
   }
   window.libTex = (k, id) => {
     if (!id) return; const t = cat.find(x => x.id === id); if (!t) return;
-    tex[k] = { img: LIBTEX + t.archivo, m: t.tile || 1, lib: id }; wr(K_TEX, tex); toast('Textura: ' + t.nombre); renderTex();
+    tex[k] = Object.assign({ img: LIBTEX + t.archivo, m: t.tile || 1, lib: id }, t.pasto ? { pasto: t.pasto } : {}); wr(K_TEX, tex); toast('Textura: ' + t.nombre); renderTex();
   };
   function renderTex() {
     document.getElementById('tx-rows').innerHTML = SLOTS.map(([k, nom]) => {
