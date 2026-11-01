@@ -1,0 +1,523 @@
+{
+ "version": 1,
+ "texturas": [
+  {
+   "id": "muro_sillar",
+   "archivo": "muro_sillar.jpg",
+   "tipo": "repetida",
+   "tile": 3,
+   "grupo": "muro",
+   "nombre": "Sillar de piedra",
+   "uso": "Muros de castillo, plazas"
+  },
+  {
+   "id": "muro_castillo",
+   "archivo": "muro_castillo.jpg",
+   "tipo": "repetida",
+   "tile": 4,
+   "grupo": "muro",
+   "nombre": "Gran sillería oscura",
+   "uso": "Murallas, torres, salones"
+  },
+  {
+   "id": "muro_mamposteria",
+   "archivo": "muro_mamposteria.jpg",
+   "tipo": "repetida",
+   "tile": 3,
+   "grupo": "muro",
+   "nombre": "Mampostería irregular",
+   "uso": "Casas rústicas, muros viejos"
+  },
+  {
+   "id": "muro_ladrillo",
+   "archivo": "muro_ladrillo.jpg",
+   "tipo": "repetida",
+   "tile": 2,
+   "grupo": "muro",
+   "nombre": "Ladrillo cocido",
+   "uso": "Hornos, casas, talleres"
+  },
+  {
+   "id": "muro_adobe",
+   "archivo": "muro_adobe.jpg",
+   "tipo": "repetida",
+   "tile": 3,
+   "grupo": "muro",
+   "nombre": "Revoque de adobe",
+   "uso": "Tabernas, casas, mercado"
+  },
+  {
+   "id": "muro_madera",
+   "archivo": "muro_madera.jpg",
+   "tipo": "repetida",
+   "tile": 2,
+   "grupo": "muro",
+   "nombre": "Tablones verticales",
+   "uso": "Establos, cabañas, cercos"
+  },
+  {
+   "id": "roca_cueva",
+   "archivo": "roca_cueva.jpg",
+   "tipo": "repetida",
+   "tile": 5,
+   "grupo": "muro",
+   "nombre": "Roca natural",
+   "uso": "Cuevas, minas, acantilados"
+  },
+  {
+   "id": "muro_musgo",
+   "archivo": "muro_musgo.jpg",
+   "tipo": "repetida",
+   "tile": 3,
+   "grupo": "muro",
+   "nombre": "Sillar con musgo",
+   "uso": "Ruinas húmedas, patios viejos"
+  },
+  {
+   "id": "muro_ruina",
+   "archivo": "muro_ruina.jpg",
+   "tipo": "repetida",
+   "tile": 3,
+   "grupo": "muro",
+   "nombre": "Muro en ruinas",
+   "uso": "Ruinas, edificios abandonados"
+  },
+  {
+   "id": "piso_adoquin",
+   "archivo": "piso_adoquin.jpg",
+   "tipo": "repetida",
+   "tile": 2,
+   "grupo": "piso",
+   "nombre": "Adoquines",
+   "uso": "Calles, plazas, patios"
+  },
+  {
+   "id": "piso_losa",
+   "archivo": "piso_losa.jpg",
+   "tipo": "repetida",
+   "tile": 3,
+   "grupo": "piso",
+   "nombre": "Losas irregulares",
+   "uso": "Interiores de castillo, capillas, patios"
+  },
+  {
+   "id": "piso_tierra",
+   "archivo": "piso_tierra.jpg",
+   "tipo": "repetida",
+   "tile": 3,
+   "grupo": "piso",
+   "nombre": "Tierra con piedritas",
+   "uso": "Caminos, establos, patios de tierra"
+  },
+  {
+   "id": "piso_tablas",
+   "archivo": "piso_tablas.jpg",
+   "tipo": "repetida",
+   "tile": 2,
+   "grupo": "piso",
+   "nombre": "Tablas de madera",
+   "uso": "Tabernas, casas, puentes"
+  },
+  {
+   "id": "piso_paja",
+   "archivo": "piso_paja.jpg",
+   "tipo": "repetida",
+   "tile": 2,
+   "grupo": "piso",
+   "nombre": "Paja suelta",
+   "uso": "Establos, graneros, jergones"
+  },
+  {
+   "id": "piso_pasto",
+   "archivo": "piso_pasto.jpg",
+   "tipo": "repetida",
+   "tile": 2,
+   "grupo": "piso",
+   "nombre": "Pasto corto",
+   "uso": "Jardines, praderas, bordes de camino"
+  },
+  {
+   "id": "piso_barro",
+   "archivo": "piso_barro.jpg",
+   "tipo": "repetida",
+   "tile": 3,
+   "grupo": "piso",
+   "nombre": "Barro con charcos",
+   "uso": "Caminos lluviosos, corrales"
+  },
+  {
+   "id": "piso_damero",
+   "archivo": "piso_damero.jpg",
+   "tipo": "repetida",
+   "tile": 4,
+   "grupo": "piso",
+   "nombre": "Damero de mármol",
+   "uso": "Salones, capillas nobles"
+  },
+  {
+   "id": "cubierta_teja",
+   "archivo": "cubierta_teja.jpg",
+   "tipo": "repetida",
+   "tile": 1.5,
+   "grupo": "cubierta",
+   "nombre": "Teja de barro",
+   "uso": "Techos de casas, establos, mercado"
+  },
+  {
+   "id": "cubierta_pizarra",
+   "archivo": "cubierta_pizarra.jpg",
+   "tipo": "repetida",
+   "tile": 1.5,
+   "grupo": "cubierta",
+   "nombre": "Pizarra",
+   "uso": "Techos de castillo, torres"
+  },
+  {
+   "id": "cubierta_paja",
+   "archivo": "cubierta_paja.jpg",
+   "tipo": "repetida",
+   "tile": 2,
+   "grupo": "cubierta",
+   "nombre": "Paja de techar",
+   "uso": "Techos rústicos, establos"
+  },
+  {
+   "id": "cubierta_tablillas",
+   "archivo": "cubierta_tablillas.jpg",
+   "tipo": "repetida",
+   "tile": 1.5,
+   "grupo": "cubierta",
+   "nombre": "Tablillas de madera",
+   "uso": "Techos de cabañas, tabernas"
+  },
+  {
+   "id": "hierro",
+   "archivo": "hierro.jpg",
+   "tipo": "repetida",
+   "tile": 1,
+   "grupo": "material",
+   "nombre": "Hierro forjado",
+   "uso": "Rejas, herrajes, aros"
+  },
+  {
+   "id": "hierro_oxidado",
+   "archivo": "hierro_oxidado.jpg",
+   "tipo": "repetida",
+   "tile": 1,
+   "grupo": "material",
+   "nombre": "Hierro oxidado",
+   "uso": "Cadenas, rejas viejas, clavos"
+  },
+  {
+   "id": "madera_oscura",
+   "archivo": "madera_oscura.jpg",
+   "tipo": "repetida",
+   "tile": 1,
+   "grupo": "material",
+   "nombre": "Madera oscura",
+   "uso": "Vigas, muebles, puertas"
+  },
+  {
+   "id": "madera_clara",
+   "archivo": "madera_clara.jpg",
+   "tipo": "repetida",
+   "tile": 1,
+   "grupo": "material",
+   "nombre": "Madera clara",
+   "uso": "Cajas, bancas, tablas nuevas"
+  },
+  {
+   "id": "cuero",
+   "archivo": "cuero.jpg",
+   "tipo": "repetida",
+   "tile": 0.5,
+   "grupo": "material",
+   "nombre": "Cuero",
+   "uso": "Sillas de montar, correas, bolsas"
+  },
+  {
+   "id": "arpillera",
+   "archivo": "arpillera.jpg",
+   "tipo": "repetida",
+   "tile": 0.5,
+   "grupo": "material",
+   "nombre": "Arpillera",
+   "uso": "Sacos, toldos, trapos"
+  },
+  {
+   "id": "mimbre",
+   "archivo": "mimbre.jpg",
+   "tipo": "repetida",
+   "tile": 0.5,
+   "grupo": "material",
+   "nombre": "Mimbre trenzado",
+   "uso": "Canastas, cestos, cercos"
+  },
+  {
+   "id": "decal_sangre",
+   "archivo": "decal_sangre.png",
+   "tipo": "calcomania",
+   "w": 1.5,
+   "h": 1.5,
+   "grupo": "decal",
+   "nombre": "Mancha de sangre",
+   "uso": "Suelos y muros de mazmorra"
+  },
+  {
+   "id": "decal_hollin",
+   "archivo": "decal_hollin.png",
+   "tipo": "calcomania",
+   "w": 1.2,
+   "h": 2.4,
+   "grupo": "decal",
+   "nombre": "Hollín",
+   "uso": "Sobre antorchas, chimeneas, braseros"
+  },
+  {
+   "id": "decal_telarana",
+   "archivo": "decal_telarana.png",
+   "tipo": "calcomania",
+   "w": 1.0,
+   "h": 1.0,
+   "grupo": "decal",
+   "nombre": "Telaraña (esquina)",
+   "uso": "Esquinas de techos y rincones"
+  },
+  {
+   "id": "decal_gotera",
+   "archivo": "decal_gotera.png",
+   "tipo": "calcomania",
+   "w": 1.2,
+   "h": 2.4,
+   "grupo": "decal",
+   "nombre": "Mancha de humedad",
+   "uso": "Muros bajo techos, cerca de goteras"
+  },
+  {
+   "id": "decal_hojas",
+   "archivo": "decal_hojas.png",
+   "tipo": "calcomania",
+   "w": 1.5,
+   "h": 1.5,
+   "grupo": "decal",
+   "nombre": "Hojas secas",
+   "uso": "Esquinas del suelo, bajo árboles"
+  },
+  {
+   "id": "decal_grieta_grande",
+   "archivo": "decal_grieta_grande.png",
+   "tipo": "calcomania",
+   "w": 3.0,
+   "h": 3.0,
+   "grupo": "decal",
+   "nombre": "Grieta grande ramificada",
+   "uso": "Muros agrietados, suelos rotos"
+  },
+  {
+   "id": "estandarte_azul",
+   "archivo": "estandarte_azul.png",
+   "tipo": "calcomania",
+   "w": 1.2,
+   "h": 2.4,
+   "grupo": "estandarte",
+   "nombre": "Estandarte azul con sol",
+   "uso": "Colgado en muros de salones y patios"
+  },
+  {
+   "id": "estandarte_verde",
+   "archivo": "estandarte_verde.png",
+   "tipo": "calcomania",
+   "w": 1.2,
+   "h": 2.4,
+   "grupo": "estandarte",
+   "nombre": "Estandarte verde con cruz",
+   "uso": "Colgado en muros de salones y patios"
+  },
+  {
+   "id": "estandarte_negro",
+   "archivo": "estandarte_negro.png",
+   "tipo": "calcomania",
+   "w": 1.2,
+   "h": 2.4,
+   "grupo": "estandarte",
+   "nombre": "Estandarte negro con espadas",
+   "uso": "Colgado en muros de salones y patios"
+  },
+  {
+   "id": "estandarte_blanco",
+   "archivo": "estandarte_blanco.png",
+   "tipo": "calcomania",
+   "w": 1.2,
+   "h": 2.4,
+   "grupo": "estandarte",
+   "nombre": "Estandarte blanco con cruz roja",
+   "uso": "Colgado en muros de salones y patios"
+  },
+  {
+   "id": "estandarte_torre",
+   "archivo": "estandarte_torre.png",
+   "tipo": "calcomania",
+   "w": 1.2,
+   "h": 2.4,
+   "grupo": "estandarte",
+   "nombre": "Estandarte granate con torre",
+   "uso": "Colgado en muros de salones y patios"
+  },
+  {
+   "id": "muro_armeria",
+   "archivo": "muro_armeria.png",
+   "tipo": "repetida",
+   "grupo": "muro",
+   "nombre": "Muro de armería",
+   "uso": "Armería",
+   "tile": 4
+  },
+  {
+   "id": "piso_armeria",
+   "archivo": "piso_armeria.png",
+   "tipo": "repetida",
+   "grupo": "piso",
+   "nombre": "Piso de armería",
+   "uso": "Armería",
+   "tile": 4
+  },
+  {
+   "id": "muro_capilla",
+   "archivo": "muro_capilla.png",
+   "tipo": "repetida",
+   "grupo": "muro",
+   "nombre": "Muro de capilla",
+   "uso": "Capilla",
+   "tile": 4
+  },
+  {
+   "id": "piso_capilla",
+   "archivo": "piso_capilla.png",
+   "tipo": "repetida",
+   "grupo": "piso",
+   "nombre": "Piso de capilla",
+   "uso": "Capilla",
+   "tile": 4
+  },
+  {
+   "id": "estandarte_rojo",
+   "archivo": "estandarte_rojo.png",
+   "tipo": "calcomania",
+   "grupo": "estandarte",
+   "nombre": "Estandarte rojo",
+   "uso": "Salones",
+   "w": 1.5,
+   "h": 3.0
+  },
+  {
+   "id": "decal_grieta",
+   "archivo": "decal_grieta.png",
+   "tipo": "calcomania",
+   "grupo": "decal",
+   "nombre": "Grieta",
+   "uso": "Muros",
+   "w": 2.0,
+   "h": 2.0
+  },
+  {
+   "id": "decal_runa",
+   "archivo": "decal_runa.png",
+   "tipo": "calcomania",
+   "grupo": "decal",
+   "nombre": "Runa",
+   "uso": "Muros y suelos de capilla",
+   "w": 1.5,
+   "h": 1.5
+  },
+  {
+   "id": "decal_moho",
+   "archivo": "decal_moho.png",
+   "tipo": "calcomania",
+   "grupo": "decal",
+   "nombre": "Moho",
+   "uso": "Muros húmedos",
+   "w": 2.5,
+   "h": 2.5
+  }
+ ],
+ "temas": {
+  "armeria": {
+   "muro": "muro_armeria",
+   "piso": "piso_armeria",
+   "nombre": "Armería"
+  },
+  "capilla": {
+   "muro": "muro_capilla",
+   "piso": "piso_capilla",
+   "nombre": "Capilla"
+  },
+  "castillo": {
+   "muro": "muro_castillo",
+   "piso": "piso_losa",
+   "nombre": "Gran castillo"
+  },
+  "sillar": {
+   "muro": "muro_sillar",
+   "piso": "piso_adoquin",
+   "nombre": "Sillar y adoquín"
+  },
+  "mamposteria": {
+   "muro": "muro_mamposteria",
+   "piso": "piso_tierra",
+   "nombre": "Casa rústica de piedra"
+  },
+  "ladrillo": {
+   "muro": "muro_ladrillo",
+   "piso": "piso_losa",
+   "techo": "cubierta_teja",
+   "nombre": "Taller de ladrillo"
+  },
+  "taberna": {
+   "muro": "muro_adobe",
+   "piso": "piso_tablas",
+   "techo": "piso_tablas",
+   "nombre": "Taberna"
+  },
+  "establo": {
+   "muro": "muro_madera",
+   "piso": "piso_paja",
+   "techo": "piso_tablas",
+   "nombre": "Establo"
+  },
+  "mercado": {
+   "muro": "muro_adobe",
+   "piso": "piso_adoquin",
+   "nombre": "Mercado"
+  },
+  "cueva": {
+   "muro": "roca_cueva",
+   "piso": "piso_tierra",
+   "nombre": "Cueva / mina"
+  },
+  "ruinas": {
+   "muro": "muro_ruina",
+   "piso": "piso_losa",
+   "nombre": "Ruinas"
+  },
+  "musgoso": {
+   "muro": "muro_musgo",
+   "piso": "piso_adoquin",
+   "nombre": "Patio viejo con musgo"
+  },
+  "salon": {
+   "muro": "muro_castillo",
+   "piso": "piso_damero",
+   "nombre": "Salón noble"
+  },
+  "jardin": {
+   "muro": "muro_mamposteria",
+   "piso": "piso_pasto",
+   "nombre": "Jardín"
+  },
+  "patio": {
+   "muro": "muro_sillar",
+   "piso": "piso_barro",
+   "nombre": "Patio de barro"
+  }
+ }
+}

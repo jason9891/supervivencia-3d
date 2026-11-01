@@ -61,12 +61,27 @@
   document.body.appendChild(modal);
   modal.addEventListener('mousedown', (e) => { if (e.target === modal) closeTexturas(); });
 
+  // Biblioteca de texturas (lib-objetos/catalogo.json): se elige sin subir archivos
+  const LIBTEX = '../lib-objetos/tex/'; let cat = null;
+  fetch('../lib-objetos/catalogo.json').then(r => r.json()).then(j => { cat = j.texturas.filter(t => t.tipo === 'repetida'); renderTex(); }).catch(() => {});
+  const GRUPOS = { muro: ['muro'], piso: ['piso'], techo: ['cubierta', 'piso'], rampa: ['piso', 'muro'], escalera: ['piso', 'muro'], puerta: ['material'] };
+  const GNOM = { muro: 'Muros', piso: 'Pisos', cubierta: 'Cubiertas', material: 'Materiales' };
+  function libSelect(k) {
+    if (!cat) return '';
+    const orden = [...(GRUPOS[k] || []), ...['muro', 'piso', 'cubierta', 'material'].filter(g => !(GRUPOS[k] || []).includes(g))];
+    const cur = tex[k] && tex[k].lib;
+    return `<select onchange="libTex('${k}',this.value)"><option value="">Biblioteca…</option>${orden.map(g => `<optgroup label="${GNOM[g]}">${cat.filter(t => t.grupo === g).map(t => `<option value="${t.id}" ${cur === t.id ? 'selected' : ''}>${t.nombre}</option>`).join('')}</optgroup>`).join('')}</select>`;
+  }
+  window.libTex = (k, id) => {
+    if (!id) return; const t = cat.find(x => x.id === id); if (!t) return;
+    tex[k] = { img: LIBTEX + t.archivo, m: t.tile || 1, lib: id }; wr(K_TEX, tex); toast('Textura: ' + t.nombre); renderTex();
+  };
   function renderTex() {
     document.getElementById('tx-rows').innerHTML = SLOTS.map(([k, nom]) => {
       const t = tex[k];
       return `<div class="tx-row"><div class="tx-prev" style="${t ? `background-image:url(${t.img});border-style:solid` : ''}"></div>
-        <label class="n">${nom}<br><small>${t ? 'cargada' : 'sin textura (color liso)'}</small></label>
-        <input type="file" accept="image/*" onchange="loadTex('${k}',this)">
+        <label class="n">${nom}<br><small>${t ? (t.lib ? 'biblioteca' : 'tu imagen') : 'sin textura (color liso)'}</small></label>
+        <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">${libSelect(k)}<input type="file" accept="image/*" onchange="loadTex('${k}',this)"></div>
         <label>m/repetición <input type="number" min="0.1" step="0.1" value="${t ? t.m : 1}" ${t ? '' : 'disabled'} onchange="setTexM('${k}',this.value)"></label>
         <button ${t ? '' : 'disabled'} onclick="clearTex('${k}')">Quitar</button></div>`;
     }).join('');
@@ -80,7 +95,7 @@
       const s = Math.min(1, 512 / Math.max(img.width, img.height)), c = document.createElement('canvas');
       c.width = Math.max(1, Math.round(img.width * s)); c.height = Math.max(1, Math.round(img.height * s));
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
-      const prev = tex[k]; tex[k] = { img: c.toDataURL('image/jpeg', 0.85), m: prev ? prev.m : 1 };
+      const prev = tex[k]; tex[k] = { img: c.toDataURL('image/jpeg', 0.85), m: prev && !prev.lib ? prev.m : 1 };
       if (!wr(K_TEX, tex)) { if (prev) tex[k] = prev; else delete tex[k]; } else toast('Textura: ' + k);
       renderTex();
     };

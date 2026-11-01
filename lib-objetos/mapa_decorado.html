@@ -23,6 +23,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { construirMapa, destruirMapa } from './mapa.js';
 import { montarDecorado, listarSalas } from './decorado.js';
+import { crearTexturas } from './texturas.js';
+const tx=crearTexturas(THREE,{base:'tex/'});
 
 const hud=document.getElementById('hud');
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x9ec3d9);
@@ -50,7 +52,7 @@ async function cargar(){
   construir()}
 function construir(){
   if(dec){dec.quitar();dec=null}if(raiz){destruirMapa(scene,raiz)}
-  raiz=construirMapa(scene,mapa);
+  raiz=construirMapa(scene,mapa,tx.opcionesDeMapa(mapa,decJson));
   const d=JSON.parse(JSON.stringify(decJson));if(d.piedras&&!piedrasOn)delete d.piedras;
   try{dec=montarDecorado(scene,raiz,mapa,d,{semilla,luces:4})}catch(e){console.error(e);hud.innerHTML='<span class="mal">Error en decorado.json o en un objeto:</span> '+e.message;return}
   encuadrar();panel()}

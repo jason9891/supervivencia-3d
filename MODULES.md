@@ -163,3 +163,4 @@ Acceso: botón «EDITOR · MAPAS» en el index del juego → `./generador-mapas/
 - lib-objetos/: biblioteca de objetos, mecanismos y decorado (aportada por el usuario). Probada en navegador headless: galería y mapa_decorado.html funcionan con el plano del editor (castillo-v20). Su mapa.js propio es una versión anterior del constructor (salas con muros).
 - generador-mapas v23.7: herramienta Objeto en el editor (editor-obj.js) y visor con montarDecorado (main.js v=9).
 - generador-mapas: enlaces palanca→reja/puente desde el editor (data.enlaces; visor v=10).
+- lib-objetos: instalado texturas-pack (47 texturas, 15 temas; ver lib-objetos/TEXTURAS.md). Editor: selector de biblioteca en 🎨 Texturas (editor-ref.js v=3).
