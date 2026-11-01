@@ -167,3 +167,4 @@ Acceso: botón «EDITOR · MAPAS» en el index del juego → `./generador-mapas/
 - generador-mapas v23.8: recorrido.js (caminar con colisiones, mira, selector de textura por pieza); mapa.js etiqueta cada malla con userData.tag; main.js v=11.
 - generador-mapas v23.9: objetos-visor.js (colocar/girar/dimensionar/mover desde el visor); editor sincroniza por storage; main.js v=12.
 - lib-objetos/rocas/: 14 tipos de roca con semilla (registrarRocas en registrarTodo); grupo 'rocas' en los selectores (editor-obj.js v=5, objetos-visor.js v=2, main.js v=13).
+- generador-mapas v23.11: pasto sobre rampas/pisos (room.pasto), lib pastoSobre(); main.js v=15, editor-extras v=237.

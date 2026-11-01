@@ -181,6 +181,25 @@ function rocalPro(p) {
   return s.fin();
 }
 
+/* Pasto sobre cualquier superficie (rampa, piso…): `altura(x, z)` da la y del suelo en cada punto.
+   Devuelve { root, anim, cuchillas }. densidad = cuchillas por m². La misma semilla da el mismo pasto. */
+export function pastoSobre({ x0, x1, z0, z1, altura = () => 0, alto = .35, densidad = 60, semilla = 1, margen = .08 }) {
+  const R = rng(Math.round(semilla * 211) + 5), bg = new THREE.BufferGeometry(), bw = .3, bh = 1;
+  bg.setAttribute('position', new THREE.Float32BufferAttribute([-bw / 2, 0, 0, bw / 2, 0, 0, bw / 2, bh, 0, -bw / 2, bh, 0, 0, 0, -bw / 2, 0, 0, bw / 2, 0, bh, bw / 2, 0, bh, -bw / 2], 3));
+  bg.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1], 2)); bg.setIndex([0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7]); bg.computeVertexNormals();
+  const w = Math.max(.01, x1 - x0 - 2 * margen), d = Math.max(.01, z1 - z0 - 2 * margen), n = Math.min(30000, Math.max(1, Math.round(w * d * densidad)));
+  const im = new THREE.InstancedMesh(bg, matPasto(), n), dm = new THREE.Object3D(), col = new THREE.Color();
+  for (let i = 0; i < n; i++) {
+    const x = x0 + margen + R() * w, z = z0 + margen + R() * d, m = .55 + .45 * Math.sin(x * .9 + semilla) * Math.sin(z * .8 + semilla * 1.3);
+    dm.position.set(x, altura(x, z) - .01, z); dm.rotation.y = R() * 6.28; const sxz = .8 + R() * .5;
+    dm.scale.set(sxz, alto * (.6 + R() * .6) * (.8 + .2 * m), sxz); dm.updateMatrix(); im.setMatrixAt(i, dm.matrix);
+    col.setHSL(.22 + R() * .09, .6, .45 + R() * .2).multiplyScalar(3.2); im.setColorAt(i, col);
+  }
+  im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.frustumCulled = false; im.receiveShadow = true;
+  const root = new THREE.Group(); root.add(im);
+  return { root, anim: () => { UT3.value = performance.now() / 1000; }, cuchillas: n };
+}
+
 /* ================= mecanismos ================= */
 function marcoPiedra(s, w, hAbertura, prof, hJamba) {
   [-1, 1].forEach(x => s.add('piedra', RB(.5, hJamba, prof, .02), { pos: [x * (w / 2 + .25), hJamba / 2, 0], eje: 1, tile: 1.2 }));

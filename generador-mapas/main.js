@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { construirMapa, destruirMapa } from './mapa.js?v=8';
-import { montarDecorado } from '../lib-objetos/biblioteca.js';
+import { montarDecorado, pastoSobre } from '../lib-objetos/biblioteca.js';
 import { crearRecorrido } from './recorrido.js?v=2';
 import { crearObjetosVisor } from './objetos-visor.js?v=2';
 
@@ -56,7 +56,7 @@ const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);
 
 const LS_KEY = 'castillo-v20';
-let mapaData = null, decorado = null;
+let mapaData = null, decorado = null, pastos = [];
 
 function leerLocal() {
     try {
@@ -71,7 +71,25 @@ let ultimoJson = null, rec = null, ov = null;
 function leerExtra(k) { try { const s = localStorage.getItem(k); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
 
 // objetos de lib-objetos colocados desde el editor o desde el propio visor (data.objetos)
+// Pasto sobre rampas y pisos con r.pasto = { d: cuchillas/m², h: alto (m), s: semilla }
+function montarPasto(json) {
+    pastos.forEach(p => scene.remove(p.root)); pastos = [];
+    (json.rooms || []).forEach(r => {
+        const c = r.pasto; if (!c || !(c.d > 0) || r.type === 'escalera' || (r.points && r.points.length > 2)) return;
+        const x0 = Math.min(r.x0, r.x1), x1 = Math.max(r.x0, r.x1), z0 = Math.min(r.z0, r.z1), z1 = Math.max(r.z0, r.z1), cara = 0.15;
+        let altura = () => (r.y || 0) + cara;
+        if (r.type === 'rampa') {
+            const y2 = r.y2 != null ? r.y2 : (r.y || 0) + 3, dir = r.dir || '+x', alongX = dir.includes('x'), a0 = alongX ? x0 : z0, a1 = alongX ? x1 : z1, fwd = dir[0] === '+';
+            const yA = (fwd ? r.y : y2) + cara, yB = (fwd ? y2 : r.y) + cara;
+            altura = (x, z) => { const t = ((alongX ? x : z) - a0) / (a1 - a0 || 1); return yA + (yB - yA) * t; };
+        }
+        const g = pastoSobre({ x0, x1, z0, z1, altura, alto: c.h > 0 ? c.h : 0.35, densidad: c.d, semilla: c.s || 1, margen: (r.type === 'rampa' && !(r.lat === 0)) ? 0.32 : 0.12 });
+        scene.add(g.root); pastos.push(g);
+    });
+}
+
 function montarObjetos(json) {
+    montarPasto(json);
     if (decorado) { decorado.quitar(); decorado = null; }
     if (!Array.isArray(json.objetos) || !json.objetos.length) return;
     try {
@@ -182,6 +200,7 @@ function animate() {
         zoneEl.textContent = `VOLANDO · X:${camera.position.x.toFixed(1)} Y:${camera.position.y.toFixed(1)} Z:${camera.position.z.toFixed(1)} · G caminar · T textura`;
     }
     if (decorado) decorado.anim(clock.elapsedTime, camera.position);
+    pastos.forEach(p => p.anim());
     renderer.render(scene, camera);
 }
 

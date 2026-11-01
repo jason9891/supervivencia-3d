@@ -76,3 +76,8 @@ npx serve .
 ## v23.10 · Rocas
 - Nueva carpeta `lib-objetos/rocas/` con 14 formas (roca redonda, larga, ancha, deformada, angular, laja, menhir, columnas de basalto, estalagmita, trilito, pila de lajas, cantos, peñasco, roca hendida). Ver `lib-objetos/rocas/README.md`.
 - Aparecen en el grupo «🪨 Rocas» de la herramienta 🪑 Objeto del editor y de la tecla **O** del visor. Se pueden girar y dimensionar como cualquier objeto (+ / − escala ancho, fondo y alto).
+
+## v23.11 · Pasto en rampas y pisos
+- Al seleccionar una **rampa** (o un piso) aparecen «Pasto (cuchillas/m², 0 = sin)», «Alto del pasto» y «Semilla del pasto». Con una densidad > 0 el visor siembra pasto que sigue la pendiente de la rampa (se mece con el viento); la misma semilla da siempre el mismo pasto. Se guarda en `room.pasto = {d,h,s}`. Con muros laterales, el pasto se queda dentro de ellos.
+- Valores de partida: 60–120 cuchillas/m² y 0,3 m de alto. En el editor no se dibuja (solo en el visor 3D).
+- Nueva función `pastoSobre()` en `lib-objetos/objetos_lote3.js` (pasto sobre cualquier superficie, con una función de altura); el pasto de la biblioteca se aclaró.
