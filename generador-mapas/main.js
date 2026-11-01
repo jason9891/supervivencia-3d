@@ -74,7 +74,7 @@ function reconstruir(json, origen) {
         mapaData = construirMapa(scene, json);
         // objetos de lib-objetos colocados desde el editor (data.objetos)
         if (Array.isArray(json.objetos) && json.objetos.length) {
-            try { decorado = montarDecorado(scene, mapaData, json, { objetos: json.objetos }); }
+            try { decorado = montarDecorado(scene, mapaData, json, { objetos: json.objetos, enlaces: json.enlaces || [] }); }
             catch (err) { console.error('❌ Error en los objetos:', err); }
         }
         console.log(`✅ Mapa construido desde ${origen}`);

@@ -59,3 +59,4 @@ npx serve .
 - El panel permite X, Z, Y, giro, altura extra y los parámetros propios del objeto (ancho, fondo, alto…). Duplicar y eliminar incluidos.
 - Se guardan en `data.objetos` (mismo formato que «objetos» de `decorado.json`): entran en deshacer/rehacer y en el JSON exportado. El visor 3D los dibuja con `montarDecorado` y las palancas/rejas/puentes se accionan con clic apuntando con la mira.
 - Para el decorado por pedidos (`salas`, `techo`, `piedras`) sigue valiendo `lib-objetos/decorado.json`.
+- **Enlaces palanca → mecanismos**: al seleccionar una Palanca, el panel lista las rejas y puentes levadizos del plano con casillas para marcar cuáles acciona (líneas amarillas punteadas en el plano). Se guardan en `data.enlaces` (formato de `decorado.json`) y se limpian solos si borras un objeto. En el visor, clic apuntando a la palanca abre/cierra todo lo enlazado.

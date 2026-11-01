@@ -43,7 +43,45 @@
       ctx.restore();
     });
   }
-  const _draw = window.draw; window.draw = function () { _draw(); drawObjs(); };
+  const _draw = window.draw; window.draw = function () { _draw(); drawEnlaces(); drawObjs(); };
+
+
+  /* ---------- enlaces palanca → mecanismos ---------- */
+  const MEC = { reja: { on: 'abrir', off: 'soltar' }, puente_levadizo: { on: 'abrir', off: 'cerrar' } };
+  const enl = () => (data.enlaces || (data.enlaces = []));
+  const limpiarEnlaces = () => {
+    const ids = new Set(objs().map(o => o.id));
+    data.enlaces = enl().filter(e => ids.has(e.palanca)).map(e => Object.assign({}, e, { acciona: (e.acciona || []).filter(a => ids.has(a.id)) })).filter(e => e.acciona.length);
+  };
+  const enlazados = (pid) => { const e = enl().find(x => x.palanca === pid); return e ? e.acciona.map(a => a.id) : []; };
+  function drawEnlaces() {
+    if (!LIB) return;
+    enl().forEach(e => {
+      const p = objs().find(o => o.id === e.palanca); if (!p) return;
+      const sel = selObj && (selObj.id === p.id);
+      (e.acciona || []).forEach(a => {
+        const t = objs().find(o => o.id === a.id); if (!t) return;
+        const [x0, y0] = W2S(p.x, p.z), [x1, y1] = W2S(t.x, t.z);
+        ctx.save(); ctx.globalAlpha = Math.min(levelAlpha(p.y || 0), levelAlpha(t.y || 0)) * (sel ? 1 : 0.6);
+        ctx.setLineDash([6, 4]); ctx.strokeStyle = '#facc15'; ctx.lineWidth = sel ? 2.2 : 1.2;
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = '#facc15'; ctx.beginPath(); ctx.arc(x1, y1, 3.5, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      });
+    });
+  }
+  const etiqueta = (o) => { const mismos = objs().filter(q => q.tipo === o.tipo); return nombreDe(o.tipo) + ' #' + (mismos.indexOf(o) + 1) + ' (' + o.x + ', ' + o.z + ')'; };
+  function panelEnlaces(o) {
+    const cand = objs().filter(q => MEC[q.tipo]), on = new Set(enlazados(o.id));
+    return `<div class="field-group" style="min-width:240px"><label>Esta palanca acciona</label><div>${cand.length ? cand.map(q => `<label style="display:block;font-weight:normal"><input type="checkbox" ${on.has(q.id) ? 'checked' : ''} onchange="objLink('${o.id}','${q.id}',this.checked)"> ${esc(etiqueta(q))}</label>`).join('') : '<span style="color:#94a3b8">Coloca una reja o un puente levadizo primero</span>'}</div></div>`;
+  }
+  window.objLink = (pid, tid, on) => {
+    const t = objs().find(o => o.id === tid); if (!t || !MEC[t.tipo]) return;
+    let e = enl().find(x => x.palanca === pid);
+    if (!e) { e = { palanca: pid, acciona: [] }; enl().push(e); }
+    e.acciona = e.acciona.filter(a => a.id !== tid);
+    if (on) e.acciona.push({ id: tid, on: MEC[t.tipo].on, off: MEC[t.tipo].off });
+    limpiarEnlaces(); commit(); renderPanel(); draw();
+  };
 
   /* ---------- interacción ---------- */
   function pickObj(e) {
@@ -81,11 +119,12 @@
   const _sel = window.selectHit; window.selectHit = function (h) { if (h) selObj = null; _sel(h); };
   const _del = window.deleteSelected;
   window.deleteSelected = function () {
-    if (selObj) { const i = objs().findIndex(o => o.id === selObj.id); if (i >= 0) objs().splice(i, 1); selObj = null; commit(); renderPanel(); draw(); const b = document.getElementById('btn-del-sel'); if (b) b.style.display = 'none'; return; }
+    if (selObj) { const i = objs().findIndex(o => o.id === selObj.id); if (i >= 0) objs().splice(i, 1); selObj = null; limpiarEnlaces(); commit(); renderPanel(); draw(); const b = document.getElementById('btn-del-sel'); if (b) b.style.display = 'none'; return; }
     _del();
   };
-  const _norm = window.normalizeData; window.normalizeData = function () { _norm(); if (!Array.isArray(data.objetos)) data.objetos = []; };
+  const _norm = window.normalizeData; window.normalizeData = function () { _norm(); if (!Array.isArray(data.objetos)) data.objetos = []; if (!Array.isArray(data.enlaces)) data.enlaces = []; };
   if (!Array.isArray(data.objetos)) data.objetos = [];
+  if (!Array.isArray(data.enlaces)) data.enlaces = [];
 
   /* ---------- panel de propiedades ---------- */
   function paramInputs(o) {
@@ -110,7 +149,7 @@
       const o = selObj, f = (lab, key, v, st) => `<div class="field-group"><label>${lab}</label><input type="number" step="${st}" value="${v}" onchange="objSet('${key}',this.value)"></div>`;
       h += `<div class="field-group"><label>Objeto</label><div><b>${esc(nombreDe(o.tipo))}</b></div></div>`
         + f('X (m)', 'x', o.x, 0.05) + f('Z (m)', 'z', o.z, 0.05) + f('Nivel Y (m)', 'y', o.y || 0, 0.5) + f('Giro (°)', 'giro', o.giro || 0, 15) + f('Altura extra (m)', 'alto', o.alto || 0, 0.1)
-        + paramInputs(o)
+        + paramInputs(o) + (o.tipo === 'palanca' ? panelEnlaces(o) : '')
         + `<div class="field-group"><label>&nbsp;</label><button onclick="objDup()">⧉ Duplicar</button> <button class="danger" onclick="deleteSelected()">🗑️ Eliminar</button></div>`;
     }
     propsEl.innerHTML = h;
