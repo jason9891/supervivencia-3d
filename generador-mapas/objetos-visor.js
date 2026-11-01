@@ -80,7 +80,7 @@ export function crearObjetosVisor(ctx) {
     const tipos = Object.keys(CATALOGO).sort((a, b) => nombre(a).localeCompare(nombre(b)));
     abrirModal(`<div style="display:flex;justify-content:space-between;gap:8px"><h3 style="margin:0">🪑 Colocar objeto</h3><input id="ov-f" placeholder="Buscar…" style="flex:1;max-width:220px"><button id="ov-x">✕</button></div>
       <p style="color:#94a3b8;margin:6px 0">Se pone donde apuntas, mirando hacia ti. Luego: R girar · + / − tamaño · M mover · P panel.</p>
-      <div id="ov-g" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px">${tipos.map(t => `<button data-t="${t}" style="padding:8px;text-align:left">${nombre(t)}</button>`).join('')}</div>`);
+      <div id="ov-g">${['rocas', 'general'].map(g => `<h4 style="margin:10px 0 4px;color:#e8c37a" data-h="${g}">${g === 'rocas' ? '🪨 Rocas' : 'Objetos'}</h4><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px">${tipos.filter(t => (CATALOGO[t].grupo || 'general') === g).map(t => `<button data-t="${t}" style="padding:8px;text-align:left">${nombre(t)}</button>`).join('')}</div>`).join('')}</div>`);
     modal.querySelector('#ov-x').onclick = cerrar;
     modal.querySelector('#ov-f').oninput = (e) => { const q = e.target.value.toLowerCase(); modal.querySelectorAll('[data-t]').forEach(b => b.style.display = b.textContent.toLowerCase().includes(q) ? '' : 'none'); };
     modal.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { const t = b.dataset.t; modal.style.display = 'none'; abierto = false; try { controls.lock(); } catch (_) {} nuevo(t); });

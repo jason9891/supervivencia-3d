@@ -38,9 +38,10 @@ import { registrarLote3 } from './objetos_lote3.js';
 import { registrarLote4 } from './objetos_lote4.js';
 import { registrarLote5 } from './objetos_lote5.js';
 import { cubrirMuros } from './piedras.js';
+import { registrarRocas } from './rocas/rocas.js';
 
 let listo = false;
-export function registrarTodo() { if (listo) return; registrarPro(); registrarLote2(); registrarLote3(); registrarLote4(); registrarLote5(); listo = true; }
+export function registrarTodo() { if (listo) return; registrarPro(); registrarLote2(); registrarLote3(); registrarLote4(); registrarLote5(); registrarRocas(); listo = true; }
 
 const rectDe = r => ({ x0: Math.min(r.x0, r.x1), x1: Math.max(r.x0, r.x1), z0: Math.min(r.z0, r.z1), z1: Math.max(r.z0, r.z1) });
 const cruza = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.z0 < b.z1 && a.z1 > b.z0;

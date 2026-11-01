@@ -72,3 +72,7 @@ npx serve .
 - Con un objeto seleccionado: **R** / **Mayús+R** gira 15°, **+ / −** cambia el tamaño (escala sus medidas propias —ancho, fondo, alto, radio…— dentro de sus límites; si no tiene, usa una escala general `escala` de 0,3 a 4), **M** lo mueve siguiendo la mira (clic = soltar), **P** abre un panel con valores exactos (X, Z, Y, giro, altura extra, escala y todos sus parámetros, duplicar, eliminar) y **Supr** lo borra.
 - El visor guarda en el mismo mapa (`data.objetos`) y el editor abierto en otra pestaña se actualiza solo. «Recargar el mapa» pasó de **R** a **L**.
 - Si el mapa venía de `mapa.json` y no del editor, la primera edición crea una copia local en el navegador que pasa a tener prioridad.
+
+## v23.10 · Rocas
+- Nueva carpeta `lib-objetos/rocas/` con 14 formas (roca redonda, larga, ancha, deformada, angular, laja, menhir, columnas de basalto, estalagmita, trilito, pila de lajas, cantos, peñasco, roca hendida). Ver `lib-objetos/rocas/README.md`.
+- Aparecen en el grupo «🪨 Rocas» de la herramienta 🪑 Objeto del editor y de la tecla **O** del visor. Se pueden girar y dimensionar como cualquier objeto (+ / − escala ancho, fondo y alto).

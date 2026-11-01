@@ -3,7 +3,7 @@ import { PointerLockControls } from 'three/addons/controls/PointerLockControls.j
 import { construirMapa, destruirMapa } from './mapa.js?v=8';
 import { montarDecorado } from '../lib-objetos/biblioteca.js';
 import { crearRecorrido } from './recorrido.js?v=2';
-import { crearObjetosVisor } from './objetos-visor.js?v=1';
+import { crearObjetosVisor } from './objetos-visor.js?v=2';
 
 const zoneEl = document.getElementById('zone');
 const overlay = document.getElementById('overlay');

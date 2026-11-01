@@ -142,7 +142,7 @@
     let h = '';
     if (tool === 'obj') {
       if (!LIB) h += '<div style="padding:8px;color:#94a3b8">Cargando catálogo…</div>';
-      else h += `<div class="field-group"><label>Tipo a colocar</label><select onchange="objTipo(this.value)">${Object.keys(LIB.CATALOGO).sort((a, b) => nombreDe(a).localeCompare(nombreDe(b))).map(k => `<option value="${k}" ${k === tipoSel ? 'selected' : ''}>${esc(nombreDe(k))}</option>`).join('')}</select></div>
+      else h += `<div class="field-group"><label>Tipo a colocar</label><select onchange="objTipo(this.value)">${['general', 'rocas'].map(g => `<optgroup label="${g === 'rocas' ? '🪨 Rocas' : 'Objetos'}">${Object.keys(LIB.CATALOGO).filter(k => (LIB.CATALOGO[k].grupo || 'general') === g).sort((a, b) => nombreDe(a).localeCompare(nombreDe(b))).map(k => `<option value="${k}" ${k === tipoSel ? 'selected' : ''}>${esc(nombreDe(k))}</option>`).join('')}</optgroup>`).join('')}</select></div>
         <div style="padding:4px 8px;color:#94a3b8;align-self:center">Clic = colocar · arrastrar = mover · R = girar 15°</div>`;
     }
     if (selObj && LIB) {
