@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { construirMapa, destruirMapa } from './mapa.js?v=8';
 import { montarDecorado } from '../lib-objetos/biblioteca.js';
-import { crearRecorrido } from './recorrido.js?v=1';
+import { crearRecorrido } from './recorrido.js?v=2';
+import { crearObjetosVisor } from './objetos-visor.js?v=1';
 
 const zoneEl = document.getElementById('zone');
 const overlay = document.getElementById('overlay');
@@ -33,7 +34,7 @@ overlay.addEventListener('click', () => {
 });
 
 controls.addEventListener('unlock', () => {
-    if (rec && rec.pickerAbierto()) return;
+    if ((rec && rec.pickerAbierto()) || (ov && ov.abierto())) return;
     overlay.style.display = 'flex';
 });
 
@@ -66,8 +67,22 @@ function leerLocal() {
 }
 
 const LS_TEX = LS_KEY + '-tex', LS_REF = LS_KEY + '-ref', LS_TOBJ = LS_KEY + '-texobj';
-let ultimoJson = null, rec = null;
+let ultimoJson = null, rec = null, ov = null;
 function leerExtra(k) { try { const s = localStorage.getItem(k); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+
+// objetos de lib-objetos colocados desde el editor o desde el propio visor (data.objetos)
+function montarObjetos(json) {
+    if (decorado) { decorado.quitar(); decorado = null; }
+    if (!Array.isArray(json.objetos) || !json.objetos.length) return;
+    try {
+        decorado = montarDecorado(scene, mapaData, json, { objetos: json.objetos, enlaces: json.enlaces || [] });
+        json.objetos.forEach(d => {
+            const ob = d.id && decorado.porId[d.id]; if (!ob) return;
+            ob.root.userData.objId = d.id;
+            if (d.escala > 0 && d.escala !== 1) ob.root.scale.setScalar(d.escala);
+        });
+    } catch (err) { console.error('❌ Error en los objetos:', err); }
+}
 
 function reconstruir(json, origen) {
     ultimoJson = json;
@@ -76,11 +91,7 @@ function reconstruir(json, origen) {
         if (decorado) { decorado.quitar(); decorado = null; }
         if (mapaData) destruirMapa(scene, mapaData);
         mapaData = construirMapa(scene, json);
-        // objetos de lib-objetos colocados desde el editor (data.objetos)
-        if (Array.isArray(json.objetos) && json.objetos.length) {
-            try { decorado = montarDecorado(scene, mapaData, json, { objetos: json.objetos, enlaces: json.enlaces || [] }); }
-            catch (err) { console.error('❌ Error en los objetos:', err); }
-        }
+        montarObjetos(json);
         console.log(`✅ Mapa construido desde ${origen}`);
         if (rec) { rec.actualizarSolidos(); }
     } catch (error) {
@@ -111,7 +122,15 @@ rec = crearRecorrido({
     leer: leerExtra, guardar: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { console.warn(e); } },
     reconstruir: () => { if (ultimoJson) reconstruir(ultimoJson, 'el visor (textura)'); },
     LS_TEX, LS_TOBJ,
+    apuntaObjeto: () => !!(ov && ov.apuntaObjeto()),
 });
+ov = crearObjetosVisor({
+    camera, controls, overlay, scene,
+    json: () => ultimoJson, mapa: () => mapaData, deco: () => decorado,
+    guardar: () => { try { localStorage.setItem(LS_KEY, JSON.stringify(ultimoJson)); } catch (e) { console.warn(e); } },
+    remontar: () => { if (ultimoJson) { montarObjetos(ultimoJson); rec.actualizarSolidos(); } },
+});
+window.__ov = ov; window.__deco = () => decorado;
 window.__rec = rec;
 cargarMapa();
 
@@ -125,7 +144,7 @@ window.addEventListener('storage', (e) => {
 const keys = {};
 window.addEventListener('keydown', (e) => {
     keys[e.code] = true;
-    if (e.code === 'KeyR') cargarMapa();
+    if (e.code === 'KeyL') cargarMapa();
 });
 window.addEventListener('keyup', (e) => keys[e.code] = false);
 
@@ -144,6 +163,7 @@ function animate() {
     const speed = (keys['ShiftLeft'] ? 50 : 20) * dt;
 
     rec.update(dt, keys, clock.elapsedTime);
+    ov.update(clock.elapsedTime);
     if (controls.isLocked && rec.activo()) {
         zoneEl.textContent = `A PIE · X:${camera.position.x.toFixed(1)} Y:${camera.position.y.toFixed(1)} Z:${camera.position.z.toFixed(1)} · G volar · T textura`;
     } else if (controls.isLocked) {

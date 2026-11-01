@@ -131,14 +131,14 @@ export function crearRecorrido(ctx) {
     if (pickerAbierto) { if (e.code === 'Escape') { modal.style.display = 'none'; pickerAbierto = false; overlay.style.display = 'flex'; } return; }
     if (!controls.isLocked) return;
     if (e.code === 'KeyG') { alternar(); }
-    if (e.code === 'KeyT' && apuntado) abrirSelector(apuntado);
+    if (e.code === 'KeyT' && apuntado && !(ctx.apuntaObjeto && ctx.apuntaObjeto())) abrirSelector(apuntado);
   });
 
   function update(dt, keys, ahora) {
     if (caminar && controls.isLocked) pasos(dt, keys);
     if (controls.isLocked && ahora - tiempoApunte > 0.12) {
       tiempoApunte = ahora; apuntado = mirar();
-      if (apuntado) { etq.textContent = '🎯 ' + nombrePieza(apuntado) + ' · T = textura'; etq.style.display = 'block'; } else etq.style.display = 'none';
+      if (apuntado && !(ctx.apuntaObjeto && ctx.apuntaObjeto())) { etq.textContent = '🎯 ' + nombrePieza(apuntado) + ' · T = textura'; etq.style.display = 'block'; } else etq.style.display = 'none';
     }
     if (!controls.isLocked) etq.style.display = 'none';
   }

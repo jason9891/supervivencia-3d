@@ -66,3 +66,9 @@ npx serve .
 - **G** alterna entre *volar* y *caminar*. Al caminar entras donde dejaste al 🧍 Personaje (si no lo hay, donde estás), a la altura de sus ojos, con gravedad, salto (Espacio), correr (Mayús) y **colisiones**: muros, bloques, pisos, rampas, escaleras y objetos no se traspasan. Se suben escalones de hasta 0,4 m y rampas.
 - La mira (círculo en el centro) indica la pieza apuntada. **T** abre el selector de la biblioteca de texturas: «Solo esta pieza» (se guarda por id en `castillo-v20-texobj`) o «Todos los muros/pisos/…» (cambia la ranura general, la misma de 🎨 Texturas del editor). «Quitar textura» la deshace.
 - Los bloques se pintan uno a uno (cada bloque es una celda): para muros hechos de bloques conviene «Todos los …». Se exporta como `texobj` en el JSON.
+
+## v23.9 · Objetos desde el visor
+- **O** abre el catálogo (con buscador) y pone el objeto donde apuntas, con el frente mirando hacia ti. **E** selecciona el objeto apuntado (se marca con un recuadro rosa; E otra vez lo suelta).
+- Con un objeto seleccionado: **R** / **Mayús+R** gira 15°, **+ / −** cambia el tamaño (escala sus medidas propias —ancho, fondo, alto, radio…— dentro de sus límites; si no tiene, usa una escala general `escala` de 0,3 a 4), **M** lo mueve siguiendo la mira (clic = soltar), **P** abre un panel con valores exactos (X, Z, Y, giro, altura extra, escala y todos sus parámetros, duplicar, eliminar) y **Supr** lo borra.
+- El visor guarda en el mismo mapa (`data.objetos`) y el editor abierto en otra pestaña se actualiza solo. «Recargar el mapa» pasó de **R** a **L**.
+- Si el mapa venía de `mapa.json` y no del editor, la primera edición crea una copia local en el navegador que pasa a tener prioridad.

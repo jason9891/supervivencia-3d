@@ -13,7 +13,7 @@
 
   const nombreDe = t => (LIB && LIB.CATALOGO[t] && LIB.CATALOGO[t].nombre) || t;
   function huellaDe(o) {
-    try { const h = LIB.huella(o.tipo, LIB.paramsPorDefecto(o.tipo, o.params)); return [h[0], h[1]]; } catch (_) { return [0.5, 0.5]; }
+    try { const h = LIB.huella(o.tipo, LIB.paramsPorDefecto(o.tipo, o.params)), k = o.escala > 0 ? o.escala : 1; return [h[0] * k, h[1] * k]; } catch (_) { return [0.5, 0.5]; }
   }
   const corners = (o) => {
     const [w, d] = huellaDe(o), a = (o.giro || 0) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
@@ -148,7 +148,7 @@
     if (selObj && LIB) {
       const o = selObj, f = (lab, key, v, st) => `<div class="field-group"><label>${lab}</label><input type="number" step="${st}" value="${v}" onchange="objSet('${key}',this.value)"></div>`;
       h += `<div class="field-group"><label>Objeto</label><div><b>${esc(nombreDe(o.tipo))}</b></div></div>`
-        + f('X (m)', 'x', o.x, 0.05) + f('Z (m)', 'z', o.z, 0.05) + f('Nivel Y (m)', 'y', o.y || 0, 0.5) + f('Giro (°)', 'giro', o.giro || 0, 15) + f('Altura extra (m)', 'alto', o.alto || 0, 0.1)
+        + f('X (m)', 'x', o.x, 0.05) + f('Z (m)', 'z', o.z, 0.05) + f('Nivel Y (m)', 'y', o.y || 0, 0.5) + f('Giro (°)', 'giro', o.giro || 0, 15) + f('Altura extra (m)', 'alto', o.alto || 0, 0.1) + f('Escala (×)', 'escala', o.escala || 1, 0.05)
         + paramInputs(o) + (o.tipo === 'palanca' ? panelEnlaces(o) : '')
         + `<div class="field-group"><label>&nbsp;</label><button onclick="objDup()">⧉ Duplicar</button> <button class="danger" onclick="deleteSelected()">🗑️ Eliminar</button></div>`;
     }
@@ -165,6 +165,12 @@
   const _rp = window.renderProps; window.renderProps = function () { if (selObj) { renderPanel(); return; } _rp(); };
   const _st = window.setTool; window.setTool = function (t) { if (t !== 'obj' && t !== 'sel') selObj = null; _st(t); renderPanel(); };
   const _us = window.updateStatus; window.updateStatus = function () { _us(); if (tool === 'obj' && statusEl) statusEl.textContent = 'Nivel: ' + activeLevel + ' | Objeto (clic para colocar)'; };
+
+  // El visor también coloca/mueve/borra objetos y guarda el mapa: se recarga aquí si no estás editando
+  window.addEventListener('storage', (e) => {
+    if (e.key !== LS_KEY || !e.newValue || isDraggingNew || isMovingExisting || dragO) return;
+    try { const j = JSON.parse(e.newValue); data = j; normalizeData(); selObj = null; hist = [JSON.stringify(data)]; histIdx = 0; draw(); renderPanel(); toast('Mapa actualizado desde el visor'); } catch (_) {}
+  });
 
   const bar = document.getElementById('topbar'), anchor = document.getElementById('btn-sel');
   const b = document.createElement('button'); b.id = 'btn-obj'; b.innerHTML = '🪑 Objeto'; b.onclick = () => setTool('obj'); bar.insertBefore(b, anchor);
