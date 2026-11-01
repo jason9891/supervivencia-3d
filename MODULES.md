@@ -164,3 +164,4 @@ Acceso: botón «EDITOR · MAPAS» en el index del juego → `./generador-mapas/
 - generador-mapas v23.7: herramienta Objeto en el editor (editor-obj.js) y visor con montarDecorado (main.js v=9).
 - generador-mapas: enlaces palanca→reja/puente desde el editor (data.enlaces; visor v=10).
 - lib-objetos: instalado texturas-pack (47 texturas, 15 temas; ver lib-objetos/TEXTURAS.md). Editor: selector de biblioteca en 🎨 Texturas (editor-ref.js v=3).
+- generador-mapas v23.8: recorrido.js (caminar con colisiones, mira, selector de textura por pieza); mapa.js etiqueta cada malla con userData.tag; main.js v=11.

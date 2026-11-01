@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { construirMapa, destruirMapa } from './mapa.js?v=8';
 import { montarDecorado } from '../lib-objetos/biblioteca.js';
+import { crearRecorrido } from './recorrido.js?v=1';
 
 const zoneEl = document.getElementById('zone');
 const overlay = document.getElementById('overlay');
@@ -32,6 +33,7 @@ overlay.addEventListener('click', () => {
 });
 
 controls.addEventListener('unlock', () => {
+    if (rec && rec.pickerAbierto()) return;
     overlay.style.display = 'flex';
 });
 
@@ -63,11 +65,13 @@ function leerLocal() {
     } catch (e) { return null; }
 }
 
-const LS_TEX = LS_KEY + '-tex', LS_REF = LS_KEY + '-ref';
+const LS_TEX = LS_KEY + '-tex', LS_REF = LS_KEY + '-ref', LS_TOBJ = LS_KEY + '-texobj';
+let ultimoJson = null, rec = null;
 function leerExtra(k) { try { const s = localStorage.getItem(k); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
 
 function reconstruir(json, origen) {
-    json = { ...json, texturas: leerExtra(LS_TEX) || json.texturas, ref: leerExtra(LS_REF) || json.ref };
+    ultimoJson = json;
+    json = { ...json, texturas: leerExtra(LS_TEX) || json.texturas, ref: leerExtra(LS_REF) || json.ref, texobj: leerExtra(LS_TOBJ) || json.texobj };
     try {
         if (decorado) { decorado.quitar(); decorado = null; }
         if (mapaData) destruirMapa(scene, mapaData);
@@ -78,6 +82,7 @@ function reconstruir(json, origen) {
             catch (err) { console.error('❌ Error en los objetos:', err); }
         }
         console.log(`✅ Mapa construido desde ${origen}`);
+        if (rec) { rec.actualizarSolidos(); }
     } catch (error) {
         console.error('❌ Error construyendo el mapa:', error);
         overlay.innerHTML = `<h1 style="color:red;">Error construyendo el mapa</h1><p>${error.message}</p>`;
@@ -100,10 +105,18 @@ async function cargarMapa() {
     }
 }
 
+rec = crearRecorrido({
+    camera, controls, overlay,
+    mapa: () => mapaData, deco: () => decorado, ref: () => (leerExtra(LS_REF) || (ultimoJson && ultimoJson.ref)),
+    leer: leerExtra, guardar: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { console.warn(e); } },
+    reconstruir: () => { if (ultimoJson) reconstruir(ultimoJson, 'el visor (textura)'); },
+    LS_TEX, LS_TOBJ,
+});
+window.__rec = rec;
 cargarMapa();
 
 window.addEventListener('storage', (e) => {
-    if (![LS_KEY, LS_TEX, LS_REF].includes(e.key)) return;
+    if (![LS_KEY, LS_TEX, LS_REF, LS_TOBJ].includes(e.key)) return;
     if (new URLSearchParams(location.search).get('src') === 'file') return;
     const j = leerLocal();
     if (j) reconstruir(j, 'el editor (actualización en vivo)');
@@ -130,7 +143,10 @@ function animate() {
     const dt = Math.min(clock.getDelta(), 0.1);
     const speed = (keys['ShiftLeft'] ? 50 : 20) * dt;
 
-    if (controls.isLocked) {
+    rec.update(dt, keys, clock.elapsedTime);
+    if (controls.isLocked && rec.activo()) {
+        zoneEl.textContent = `A PIE · X:${camera.position.x.toFixed(1)} Y:${camera.position.y.toFixed(1)} Z:${camera.position.z.toFixed(1)} · G volar · T textura`;
+    } else if (controls.isLocked) {
         let moverZ = 0, moverX = 0, moverY = 0;
         if (keys['KeyW']) moverZ += 1;
         if (keys['KeyS']) moverZ -= 1;
@@ -143,7 +159,7 @@ function animate() {
         controls.moveRight(moverX * speed);
         controls.getObject().position.y += moverY * speed;
 
-        zoneEl.textContent = `X:${camera.position.x.toFixed(1)} Y:${camera.position.y.toFixed(1)} Z:${camera.position.z.toFixed(1)}`;
+        zoneEl.textContent = `VOLANDO · X:${camera.position.x.toFixed(1)} Y:${camera.position.y.toFixed(1)} Z:${camera.position.z.toFixed(1)} · G caminar · T textura`;
     }
     if (decorado) decorado.anim(clock.elapsedTime, camera.position);
     renderer.render(scene, camera);

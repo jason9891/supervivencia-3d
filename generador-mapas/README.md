@@ -61,3 +61,8 @@ npx serve .
 - Para el decorado por pedidos (`salas`, `techo`, `piedras`) sigue valiendo `lib-objetos/decorado.json`.
 - **Enlaces palanca → mecanismos**: al seleccionar una Palanca, el panel lista las rejas y puentes levadizos del plano con casillas para marcar cuáles acciona (líneas amarillas punteadas en el plano). Se guardan en `data.enlaces` (formato de `decorado.json`) y se limpian solos si borras un objeto. En el visor, clic apuntando a la palanca abre/cierra todo lo enlazado.
 - **Biblioteca de texturas**: en 🎨 Texturas cada superficie tiene un selector «Biblioteca…» con las 31 texturas repetibles de `lib-objetos/tex/` (muros, pisos, cubiertas, materiales) y su medida por defecto; sigue pudiendo subir una imagen propia. Las elegidas de la biblioteca se guardan como ruta, no como imagen, así que no ocupan almacenamiento.
+
+## v23.8 · Recorrido a pie y textura por pieza (visor)
+- **G** alterna entre *volar* y *caminar*. Al caminar entras donde dejaste al 🧍 Personaje (si no lo hay, donde estás), a la altura de sus ojos, con gravedad, salto (Espacio), correr (Mayús) y **colisiones**: muros, bloques, pisos, rampas, escaleras y objetos no se traspasan. Se suben escalones de hasta 0,4 m y rampas.
+- La mira (círculo en el centro) indica la pieza apuntada. **T** abre el selector de la biblioteca de texturas: «Solo esta pieza» (se guarda por id en `castillo-v20-texobj`) o «Todos los muros/pisos/…» (cambia la ranura general, la misma de 🎨 Texturas del editor). «Quitar textura» la deshace.
+- Los bloques se pintan uno a uno (cada bloque es una celda): para muros hechos de bloques conviene «Todos los …». Se exporta como `texobj` en el JSON.

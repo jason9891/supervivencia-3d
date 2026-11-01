@@ -128,7 +128,8 @@
   const st = window.setTool; window.setTool = function (t) { st(t); renderRefInfo(); };
 
   /* ---------- Exportar / importar incluyendo ref y texturas ---------- */
-  const withExtras = () => Object.assign({}, data, ref ? { ref } : {}, Object.keys(tex).length ? { texturas: tex } : {});
+  const K_TOBJ = LS_KEY + '-texobj';
+  const withExtras = () => { const to = rd(K_TOBJ, {}); return Object.assign({}, data, ref ? { ref } : {}, Object.keys(tex).length ? { texturas: tex } : {}, Object.keys(to).length ? { texobj: to } : {}); };
   window.exportJSON = () => navigator.clipboard.writeText(JSON.stringify(withExtras(), null, 2)).then(() => toast('JSON copiado')).catch(() => toast('Error'));
   window.downloadJSON = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(withExtras(), null, 2)], { type: 'application/json' })); a.download = 'mapa.json'; a.click(); };
   window.importJSON = function (input) {
@@ -136,8 +137,8 @@
     r.onload = () => {
       try {
         const j = JSON.parse(r.result);
-        if (j.texturas) { tex = j.texturas; wr(K_TEX, tex); } if (j.ref) { ref = j.ref; wr(K_REF, ref); }
-        delete j.texturas; delete j.ref; data = j; normalizeData(); selectHit(null); commit(); draw(); toast('Importado');
+        if (j.texturas) { tex = j.texturas; wr(K_TEX, tex); } if (j.ref) { ref = j.ref; wr(K_REF, ref); } if (j.texobj) wr(K_TOBJ, j.texobj);
+        delete j.texturas; delete j.ref; delete j.texobj; data = j; normalizeData(); selectHit(null); commit(); draw(); toast('Importado');
       } catch (_) { toast('JSON inválido'); }
     }; r.readAsText(f); input.value = '';
   };

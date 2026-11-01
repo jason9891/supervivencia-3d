@@ -44,12 +44,15 @@ export function construirMapa(scene, json) {
   const root = new THREE.Group();
   scene.add(root);
   const cutDoors = new Set();
+  // etiqueta de la pieza que se está construyendo: sirve para elegir su textura desde el visor
+  let curTag = null;
+  const addM = (m) => { if (curTag) m.userData.tag = curTag; root.add(m); return m; };
 
   function createBox(w, h, d, x, y, z, mat) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
     mesh.position.set(x, y, z);
     mesh.castShadow = true; mesh.receiveShadow = true;
-    root.add(mesh);
+    addM(mesh);
     return mesh;
   }
   function slabBox(rc, y, mat) {
@@ -102,6 +105,7 @@ export function construirMapa(scene, json) {
   rects.forEach(r => { if (isElev(r)) return; floorPieces.set(r, rectSubtract(r, holesAt(r.y))); });
 
   (json.rooms || []).filter(isPoly).forEach(r => {
+    curTag = { tipo: 'room', id: r.id };
     const cleanPoints = [];
     for (let i = 0; i < r.points.length; i++) {
       const p = r.points[i];
@@ -117,10 +121,12 @@ export function construirMapa(scene, json) {
     const mesh = new THREE.Mesh(geo, matFloor);
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.y = r.y - T_SLAB / 2;
-    mesh.castShadow = true; mesh.receiveShadow = true; root.add(mesh);
+    mesh.castShadow = true; mesh.receiveShadow = true; addM(mesh);
   });
+  curTag = null;
 
   rects.forEach(r => {
+    curTag = { tipo: 'room', id: r.id };
     const w = r.x1 - r.x0, d = r.z1 - r.z0;
     const cx = r.x0 + w / 2, cz = r.z0 + d / 2;
     const dir = r.dir || '+x';
@@ -154,7 +160,7 @@ export function construirMapa(scene, json) {
         geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
         geo.computeVertexNormals();
         const m = new THREE.Mesh(geo, mat);
-        m.castShadow = true; m.receiveShadow = true; root.add(m);
+        m.castShadow = true; m.receiveShadow = true; addM(m);
         return m;
       };
       // Muros laterales (1 celda de grosor) que siguen la pendiente y acaban rectos; r.lat = alto sobre la rampa (0 = sin muros)
@@ -195,9 +201,11 @@ export function construirMapa(scene, json) {
     if (r.y2 != null) rectSubtract(r, holesAt(r.y)).forEach(p => slabBox(p, r.y2, matRoof));
   });
 
+  curTag = null;
   // Muros: cajas por segmento; closed une ultimo con primero
   // Hueco de puerta: se corta el tramo donde cae la puerta
   (json.walls || []).forEach(w => {
+    curTag = { tipo: 'wall', id: w.id };
     const height = w.h || 3, y0 = w.y || 0, half = T_WALL / 2;
     let pts = (w.points || []).map(p => ({ x: +p.x, z: +p.z }));
     if (pts.length < 2) return;
@@ -223,7 +231,7 @@ export function construirMapa(scene, json) {
       mesh.position.set(mx, my, mz);
       mesh.rotation.y = Math.atan2(ux, uz);
       mesh.castShadow = true; mesh.receiveShadow = true;
-      root.add(mesh);
+      addM(mesh);
     };
 
     for (let i = 0; i < segCount; i++) {
@@ -267,13 +275,16 @@ export function construirMapa(scene, json) {
     }
   });
 
+  curTag = null;
   (json.blocks || []).forEach(b => {
     if (!b || !isFinite(b.x) || !isFinite(b.z)) return;
+    curTag = { tipo: 'block', id: b.id };
     const x = +cellOf(b.x).toFixed(1), z = +cellOf(b.z).toFixed(1);
     const y = b.y || 0, h = b.h > 0 ? b.h : 4;
     createBox(GRID, h, GRID, x + GRID / 2, y + h / 2, z + GRID / 2, matWall);
   });
 
+  curTag = null;
   if (json.doors) json.doors.forEach(d => createDoor(d, !cutDoors.has(d)));
 
   // ---------- TEXTURAS (ranuras por tipo de superficie) ----------
@@ -291,6 +302,22 @@ export function construirMapa(scene, json) {
         mat.map = tx; mat.needsUpdate = true;
       });
     });
+  });
+  // Cada malla recuerda su ranura (muro, piso…) y, si tiene una textura propia elegida desde el visor, la usa
+  const slotDe = new Map(); Object.keys(SLOTS).forEach(k => SLOTS[k].forEach(m => slotDe.set(m, k)));
+  const porPieza = json.texobj || {}, clones = new Map();
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    const slot = slotDe.get(o.material); if (slot) o.userData.slot = slot;
+    const t = o.userData.tag && porPieza[o.userData.tag.id];
+    if (!t || !t.img) return;
+    const key = o.userData.tag.id + '|' + o.material.uuid;
+    let mm = clones.get(key);
+    if (!mm) {
+      mm = o.material.clone(); mm.color.set(0xffffff); clones.set(key, mm); tiles.set(mm, t.m > 0 ? +t.m : 1);
+      new THREE.TextureLoader().load(t.img, (tx) => { tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = 8; mm.map = tx; mm.needsUpdate = true; });
+    }
+    o.material = mm;
   });
   if (tiles.size) {
     // UV en coordenadas de mundo (proyección según la normal) para que la textura mantenga su escala en cualquier pieza
@@ -329,6 +356,7 @@ export function construirMapa(scene, json) {
     fig.position.set(+ref.x, +ref.y || 0, +ref.z);
     // la cara superior del piso está a y + T_SLAB/2: se apoya sobre ella
     fig.position.y += T_SLAB / 2;
+    fig.userData.ref = true;
     root.add(fig);
   }
   return root;
