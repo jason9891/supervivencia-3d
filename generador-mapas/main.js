@@ -140,7 +140,7 @@ function montarPasto(json) {
             eje = alongX ? 'x' : 'z';
         }
         const cfg = Object.assign({ sem: hashId(r.id) }, c);   // sin semilla propia: una distinta por pieza
-        const g = crearPasto(cfg, { x0, x1, z0, z1 }, altura, { ejeCamino: eje, margen: (r.type === 'rampa' && !(r.lat === 0)) ? 0.32 : 0.12 });
+        const g = crearPasto(cfg, { x0, x1, z0, z1 }, altura, { ejeCamino: eje, margen: (r.type === 'rampa' && !(r.lat === 0)) ? 0.15 : 0 });
         scene.add(g.root); pastos.push(g);
     });
 }

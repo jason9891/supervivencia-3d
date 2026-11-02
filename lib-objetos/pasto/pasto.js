@@ -19,7 +19,7 @@ export const PASTO_PARAMS = [
   { g: 'Tamaño',   k: 'arqueo',  n: 'Arqueo (hojas dobladas)',        min: 0,   max: 1,    step: .05, def: .55 },
   { g: 'Tamaño',   k: 'lean',    n: 'Inclinación al azar (°)',        min: 0,   max: 45,   step: 1,   def: 12 },
   { g: 'Densidad', k: 'dens',    n: 'Densidad (hojas por m²)',        min: 10,  max: 1500, step: 10,  def: 350 },
-  { g: 'Densidad', k: 'suave',   n: 'Borde suave (m)',                min: 0,   max: 3,    step: .05, def: .3 },
+  { g: 'Densidad', k: 'suave',   n: 'Borde suave (m)',                min: 0,   max: 3,    step: .05, def: 0 },
   { g: 'Viento',   k: 'viento',  n: 'Fuerza del viento',              min: 0,   max: 2,    step: .05, def: .6 },
   { g: 'Viento',   k: 'vel',     n: 'Velocidad del viento',           min: 0,   max: 4,    step: .05, def: 1.1 },
   { g: 'Viento',   k: 'dir',     n: 'Dirección del viento (°)',       min: 0,   max: 360,  step: 5,   def: 40 },

@@ -172,3 +172,4 @@ Acceso: botón «EDITOR · MAPAS» en el index del juego → `./generador-mapas/
 - lib-objetos/pasto/: semilla de pasto configurable (crearPasto/formularioPasto); generador-mapas v23.13: main.js v=17, recorrido.js v=4, editor-ref.js v=7, editor-obj.js v=6, objetos-visor.js v=3.
 - generador-mapas v23.14: hora del día (aplicarHora en main.js, input en index.html); main.js v=18.
 - generador-mapas v23.15: piso en dos clics (editor.js v=235, piso2/piso2fin).
+- pasto: sin margen en bordes y borde suave por defecto 0 (main.js v=19).
