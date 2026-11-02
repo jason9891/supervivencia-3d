@@ -82,6 +82,9 @@ npx serve .
 - Valores de partida: 60–120 cuchillas/m² y 0,3 m de alto. En el editor no se dibuja (solo en el visor 3D).
 - Nueva función `pastoSobre()` en `lib-objetos/objetos_lote3.js` (pasto sobre cualquier superficie, con una función de altura); el pasto de la biblioteca se aclaró.
 
+## v23.15 · Piso en dos clics
+Con la herramienta Piso: clic en una esquina y clic en la esquina opuesta (Esc cancela). Arrastrar sigue funcionando. editor.js v=235.
+
 ## v23.14 · Hora del día
 Input de hora (🕒) en la pantalla de entrada del visor, con deslizador; durante el recorrido `[` y `]` cambian ±30 min. El sol (de día) o la luna (de noche) recorre el cielo, y cambian el color de la luz, el cielo, la niebla y las sombras. Se guarda en `localStorage` (`castillo-v20-hora`).
 
