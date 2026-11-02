@@ -82,6 +82,9 @@ npx serve .
 - Valores de partida: 60–120 cuchillas/m² y 0,3 m de alto. En el editor no se dibuja (solo en el visor 3D).
 - Nueva función `pastoSobre()` en `lib-objetos/objetos_lote3.js` (pasto sobre cualquier superficie, con una función de altura); el pasto de la biblioteca se aclaró.
 
+## v23.14 · Hora del día
+Input de hora (🕒) en la pantalla de entrada del visor, con deslizador; durante el recorrido `[` y `]` cambian ±30 min. El sol (de día) o la luna (de noche) recorre el cielo, y cambian el color de la luz, el cielo, la niebla y las sombras. Se guarda en `localStorage` (`castillo-v20-hora`).
+
 ## v23.13 · Pasto como semilla configurable
 Hojas finas y curvas con viento proporcional a su altura (corto ≈ quieto, alto ondula). Panel «Ajustes del pasto»: tamaño, variación, grosor, arqueo, inclinación, densidad, borde suave, viento (fuerza/velocidad/dirección/turbulencia), color, sendero y semilla. Disponible en 🎨 del editor y en el selector del recorrido (por pieza o por tipo). Ver `lib-objetos/pasto/README.md`.
 

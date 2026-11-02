@@ -55,6 +55,55 @@ scene.add(sunLight);
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);
 
+// HORA DEL DÍA: el sol (o la luna de noche) da la vuelta según la hora 0–24
+const K_HORA = 'castillo-v20-hora';
+const _cSky = { noche: new THREE.Color(0x0a1128), alba: new THREE.Color(0xe8a678), dia: new THREE.Color(0xa8c3d9) };
+const _cSol = { alba: new THREE.Color(0xffa65c), dia: new THREE.Color(0xfff4e6), luna: new THREE.Color(0x8fa8ff) };
+const _tmp = new THREE.Color();
+let horaAct = 12;
+function aplicarHora(h) {
+    h = ((+h % 24) + 24) % 24; horaAct = h;
+    const dia = h >= 6 && h <= 18;
+    const f = dia ? (h - 6) / 12 : (((h < 6 ? h + 24 : h) - 18) / 12);   // 0..1 a lo largo del arco del astro
+    const ang = f * Math.PI, alt = Math.sin(ang);                        // altura 0..1
+    const dir = new THREE.Vector3(Math.cos(ang), Math.max(alt, 0.05) , 0.35).normalize();
+    if (dia) dir.x = -Math.cos(ang); else dir.x = Math.cos(ang);
+    sunLight.position.copy(dir).multiplyScalar(90);
+    const calido = 1 - Math.min(1, alt * 2.2);                           // 1 al amanecer/atardecer
+    if (dia) {
+        sunLight.color.copy(_cSol.dia).lerp(_cSol.alba, calido);
+        sunLight.intensity = 1.0 + 1.5 * Math.min(1, alt * 1.6);
+        ambientLight.intensity = 0.4 + 0.2 * Math.min(1, alt * 1.6);
+        _tmp.copy(_cSky.dia).lerp(_cSky.alba, calido * 0.8);
+    } else {
+        sunLight.color.copy(_cSol.luna);
+        sunLight.intensity = 0.25 + 0.35 * alt;
+        ambientLight.intensity = 0.12 + 0.08 * alt;
+        _tmp.copy(_cSky.noche);
+    }
+    // transición suave del cielo alrededor de 6h y 18h (el alba/ocaso se funde con la noche)
+    const borde = dia ? Math.min(1, alt * 12) : 0;
+    if (dia) _tmp.lerp(_cSky.noche, 1 - borde);
+    scene.background.copy(_tmp); scene.fog.color.copy(_tmp);
+    renderer.toneMappingExposure = dia ? 1.2 : 1.0;
+    const hh = Math.floor(h), mm = Math.round((h - hh) * 60) % 60;
+    const txt = String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+    const ti = document.getElementById('hora-t'), sl = document.getElementById('hora-r');
+    if (ti && ti.value !== txt) ti.value = txt; if (sl && +sl.value !== h) sl.value = h;
+}
+function guardarHora() { try { localStorage.setItem(K_HORA, String(horaAct)); } catch (e) {} }
+(function initHora() {
+    let h = 12; try { const v = localStorage.getItem(K_HORA); if (v !== null && isFinite(+v)) h = +v; } catch (e) {}
+    const ti = document.getElementById('hora-t'), sl = document.getElementById('hora-r');
+    if (ti) ti.addEventListener('input', () => { const m = /^(\d{1,2}):(\d{2})/.exec(ti.value); if (m) { aplicarHora(+m[1] + m[2] / 60); guardarHora(); } });
+    if (sl) sl.addEventListener('input', () => { aplicarHora(+sl.value); guardarHora(); });
+    window.addEventListener('keydown', e => {
+        if (e.code === 'BracketLeft' || e.code === 'BracketRight') { aplicarHora(horaAct + (e.code === 'BracketRight' ? 0.5 : -0.5)); guardarHora(); }
+    });
+    window.addEventListener('storage', e => { if (e.key === K_HORA && e.newValue !== null) aplicarHora(+e.newValue); });
+    aplicarHora(h);
+})();
+
 const LS_KEY = 'castillo-v20';
 let mapaData = null, decorado = null, pastos = [];
 
