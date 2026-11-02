@@ -11,7 +11,6 @@ export function crearRecorrido(ctx) {
   let solidos = [], caminar = false, x = 0, z = 0, feetY = 0, vy = 0, suelo = false, eye = 1.6;
   let apuntado = null, tiempoApunte = 0, pickerAbierto = false;
 
-  /* ---------- sólidos ---------- */
   function actualizarSolidos() {
     solidos = [];
     const sinRef = (o) => { for (let p = o; p; p = p.parent) if (p.userData && p.userData.ref) return false; return true; };
@@ -35,7 +34,6 @@ export function crearRecorrido(ctx) {
   }
   function altoSuelo(ox, oz, desde, far) { const h = rayo(ox, desde, oz, 0, -1, 0, far); return h ? h.point.y : null; }
 
-  /* ---------- caminar ---------- */
   function entrar() {
     const ref = ctx.ref(); eye = 1.6 * (ref && ref.h > 0 ? ref.h / 1.75 : 1);
     if (ref && isFinite(ref.x) && isFinite(ref.z)) { x = +ref.x; z = +ref.z; feetY = (+ref.y || 0) + 0.15 + 0.3; }
@@ -71,7 +69,6 @@ export function crearRecorrido(ctx) {
     camera.position.set(x, feetY + eye, z);
   }
 
-  /* ---------- apuntar a una pieza ---------- */
   function mirar() {
     rc.setFromCamera(new THREE.Vector2(0, 0), camera); rc.near = 0; rc.far = 60;
     const m = ctx.mapa(); if (!m) return null;
@@ -88,22 +85,31 @@ export function crearRecorrido(ctx) {
   etq.style.cssText = 'position:fixed;left:50%;top:calc(50% + 22px);transform:translateX(-50%);color:#fff;font:12px monospace;background:rgba(0,0,0,.55);padding:3px 8px;border-radius:5px;pointer-events:none;z-index:50;display:none';
   document.body.appendChild(etq);
 
-  /* ---------- selector de textura ---------- */
   let cat = null;
   fetch('../lib-objetos/catalogo.json').then(r => r.json()).then(j => { cat = j.texturas.filter(t => t.tipo === 'repetida'); }).catch(() => {});
   const modal = document.createElement('div');
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:200;font-family:system-ui,sans-serif';
   document.body.appendChild(modal);
   const GN = { pasto: '🌿 Pasto (con volumen)', muro: 'Muros', piso: 'Pisos', cubierta: 'Cubiertas', material: 'Materiales' };
+  const COLS = [
+    { h: '#f5f5f5', n: 'Blanco' }, { h: '#d4d4d4', n: 'Gris claro' }, { h: '#9ca3af', n: 'Gris' },
+    { h: '#6b7280', n: 'Gris medio' }, { h: '#374151', n: 'Gris oscuro' }, { h: '#1f2937', n: 'Carbón' },
+    { h: '#000000', n: 'Negro' }, { h: '#7a7a7a', n: 'Hormigón' }, { h: '#a8a29e', n: 'Piedra' },
+    { h: '#78716c', n: 'Piedra oscura' }, { h: '#d6d3d1', n: 'Mármol' }, { h: '#c4a574', n: 'Arena' },
+    { h: '#b45309', n: 'Terracota' }, { h: '#92400e', n: 'Ladrillo' }, { h: '#7c2d12', n: 'Ladrillo oscuro' },
+    { h: '#a67c52', n: 'Madera' }, { h: '#78350f', n: 'Madera oscura' }, { h: '#5c3a21', n: 'Nogal' },
+    { h: '#3f6212', n: 'Musgo' }, { h: '#166534', n: 'Verde bosque' }, { h: '#1e3a5f', n: 'Azul noche' },
+    { h: '#1e40af', n: 'Azul' }, { h: '#7c3aed', n: 'Violeta' }, { h: '#be123c', n: 'Rojo' },
+    { h: '#eab308', n: 'Oro' }, { h: '#ca8a04', n: 'Latón' }, { h: '#0f766e', n: 'Verde cobre' },
+  ];
   const ORDEN = { muro: ['muro', 'piso', 'cubierta', 'material'], piso: ['pasto', 'piso', 'muro', 'cubierta', 'material'], techo: ['cubierta', 'piso', 'muro', 'material'], rampa: ['pasto', 'piso', 'muro', 'cubierta', 'material'], escalera: ['piso', 'muro', 'cubierta', 'material'] };
 
   function abrirSelector(o, alcanceInicial) {
     if (!cat) return;
-    const pieza = o.userData && o.userData.tag ? { tag: o.userData.tag, slot: o.userData.slot || 'muro', nom: nombrePieza(o) } : o;   // o = malla, o ya una pieza
+    const pieza = o.userData && o.userData.tag ? { tag: o.userData.tag, slot: o.userData.slot || 'muro', nom: nombrePieza(o) } : o;
     const { tag, slot } = pieza;
     const tx = ctx.leer(ctx.LS_TEX) || {}, tp = ctx.leer(ctx.LS_TOBJ) || {};
     const actual = tp[tag.id] ? 'esta pieza' : (tx[slot] ? 'todas' : null);
-    // el pasto que se ajusta es el de la pieza si tiene textura propia; si no, el de la ranura general
     const alc0 = alcanceInicial || (tp[tag.id] ? 'pieza' : (tx[slot] && tx[slot].pasto ? 'tipo' : 'pieza'));
     const pastoAct = () => { const a = ctx.leer(ctx.LS_TOBJ) || {}, b = ctx.leer(ctx.LS_TEX) || {}; return tp0(a, b, alcance()); };
     const tp0 = (a, b, sc) => (sc === 'tipo' ? (b[slot] && b[slot].pasto) : (a[tag.id] && a[tag.id].pasto)) || null;
@@ -115,6 +121,14 @@ export function crearRecorrido(ctx) {
         <label><input type="radio" name="rt-sc" value="tipo" ${alc0 === 'tipo' ? 'checked' : ''}> Todos los «${NOM[slot] || slot}»</label>
         <label>m/repetición <input id="rt-m" type="number" min="0.1" step="0.1" placeholder="auto" style="width:70px"></label>
         <button id="rt-q">Quitar textura</button><small style="color:#94a3b8">${actual ? 'Ahora: ' + actual : 'Sin textura'}</small></div>
+      <h4 style="margin:10px 0 4px;color:#e8c37a">🎨 Colores sólidos</h4>
+      <div id="rt-cols" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+        ${COLS.map(c => `<button type="button" data-col="${c.h}" title="${c.n}" style="width:28px;height:28px;border-radius:6px;border:2px solid #2a2f3a;background:${c.h};cursor:pointer;padding:0"></button>`).join('')}
+        <label title="Color personalizado" style="display:flex;align-items:center;gap:4px;cursor:pointer">
+          <input id="rt-cp" type="color" value="#7a7a7a" style="width:28px;height:28px;border:none;background:transparent;cursor:pointer;padding:0">
+          <span style="font-size:11px;color:#94a3b8">Otro</span>
+        </label>
+      </div>
       <div id="rt-pasto"></div>
       ${ORDEN[slot].map(g => `<h4 style="margin:10px 0 4px;color:#e8c37a">${GN[g]}</h4><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px">${cat.filter(t => t.grupo === g).map(t => `<div data-id="${t.id}" title="${t.nombre} — ${t.uso}" style="cursor:pointer;text-align:center;font-size:11px"><img src="../lib-objetos/tex/${t.archivo}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:2px solid #2a2f3a"><div>${t.nombre}</div></div>`).join('')}</div>`).join('')}</div>`;
     modal.style.display = 'flex';
@@ -126,7 +140,6 @@ export function crearRecorrido(ctx) {
       ctx.reconstruir();
       if (quedar) abrirSelector(pieza, alcance()); else cerrar();
     };
-    // ajustes del pasto (viento, tamaño, densidad, color…): se ven al instante
     const caja = modal.querySelector('#rt-pasto');
     const montarPastoUI = () => {
       caja.innerHTML = ''; const cur = pastoAct(); if (!cur) return;
@@ -147,8 +160,13 @@ export function crearRecorrido(ctx) {
     modal.querySelector('#rt-q').onclick = () => guardar(null);
     modal.querySelectorAll('[data-id]').forEach(el => el.onclick = () => {
       const t = cat.find(q => q.id === el.dataset.id), m = parseFloat(modal.querySelector('#rt-m').value);
-      guardar(Object.assign({ img: '../lib-objetos/tex/' + t.archivo, m: m > 0 ? m : (t.tile || 1), lib: t.id }, t.pasto ? { pasto: normalizarPasto(t.pasto) } : {}), !!t.pasto);   // con pasto se queda abierto para ajustarlo
+      guardar(Object.assign({ img: '../lib-objetos/tex/' + t.archivo, m: m > 0 ? m : (t.tile || 1), lib: t.id }, t.pasto ? { pasto: normalizarPasto(t.pasto) } : {}), !!t.pasto);
     });
+    modal.querySelectorAll('[data-col]').forEach(el => el.onclick = () => {
+      guardar({ color: el.dataset.col });
+    });
+    const cp = modal.querySelector('#rt-cp');
+    if (cp) cp.onchange = () => guardar({ color: cp.value });
     modal.onmousedown = (e) => { if (e.target === modal) cerrar(); };
   }
 
