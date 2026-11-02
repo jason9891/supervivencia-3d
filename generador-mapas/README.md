@@ -82,6 +82,9 @@ npx serve .
 - Valores de partida: 60–120 cuchillas/m² y 0,3 m de alto. En el editor no se dibuja (solo en el visor 3D).
 - Nueva función `pastoSobre()` en `lib-objetos/objetos_lote3.js` (pasto sobre cualquier superficie, con una función de altura); el pasto de la biblioteca se aclaró.
 
+## v23.16 · Pasto: rampas y sendero
+El pasto de la rampa llega hasta el inicio y el fin (el margen y el borde suave solo cuentan a los lados, por las paredes). El sendero tiene sus propias propiedades: alto, densidad, color (matiz/claridad) y hojas amarillas/secas; se funden hacia el pasto normal. main.js v=20.
+
 ## v23.15 · Piso en dos clics
 Con la herramienta Piso: clic en una esquina y clic en la esquina opuesta (Esc cancela). Arrastrar sigue funcionando. editor.js v=235.
 

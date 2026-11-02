@@ -173,3 +173,4 @@ Acceso: botón «EDITOR · MAPAS» en el index del juego → `./generador-mapas/
 - generador-mapas v23.14: hora del día (aplicarHora en main.js, input en index.html); main.js v=18.
 - generador-mapas v23.15: piso en dos clics (editor.js v=235, piso2/piso2fin).
 - pasto: sin margen en bordes y borde suave por defecto 0 (main.js v=19).
+- pasto: propiedades propias del sendero (sTam,sDens,sMatiz,sClar,sSeco); margen/borde suave de rampas solo laterales (main.js v=20).

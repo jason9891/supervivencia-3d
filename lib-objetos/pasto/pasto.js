@@ -30,6 +30,11 @@ export const PASTO_PARAMS = [
   { g: 'Color',    k: 'brillo',  n: 'Brillo',                         min: .5,  max: 2.5,  step: .05, def: 1.1 },
   { g: 'Sendero',  k: 'camino',  n: 'Ancho del sendero (m, 0 = sin)', min: 0,   max: 8,    step: .1,  def: 0 },
   { g: 'Sendero',  k: 'crece',   n: 'Crece hacia los lados (0–1)',    min: 0,   max: 1,    step: .05, def: .8 },
+  { g: 'Sendero',  k: 'sTam',    n: 'Alto del pasto en el sendero (m)', min: .02, max: 1.2, step: .01, def: .12 },
+  { g: 'Sendero',  k: 'sDens',   n: 'Densidad en el sendero (hojas/m²)', min: 0, max: 600, step: 5, def: 14 },
+  { g: 'Sendero',  k: 'sMatiz',  n: 'Color en el sendero (matiz °)',  min: 20,  max: 160,  step: 1,   def: 62 },
+  { g: 'Sendero',  k: 'sClar',   n: 'Claridad en el sendero',         min: .12, max: .7,   step: .01, def: .36 },
+  { g: 'Sendero',  k: 'sSeco',   n: 'Hojas amarillas/secas en el sendero (0–1)', min: 0, max: 1, step: .02, def: .45 },
   { g: 'Semilla',  k: 'sem',     n: 'Semilla (otra distribución)',    min: 1,   max: 999,  step: 1,   def: 1 },
 ];
 export const PASTO_DEF = Object.fromEntries(PASTO_PARAMS.map(p => [p.k, p.def]));
@@ -62,8 +67,8 @@ function geoHoja(arqueo) {
 const MAX_HOJAS = 150000;
 
 export function crearPasto(cfgIn, rect, altura = () => 0, opc = {}) {
-  const c = normalizarPasto(cfgIn), R = rng(Math.round(c.sem * 211) + 5), { x0, x1, z0, z1 } = rect, margen = opc.margen || 0;
-  const w = Math.max(.01, x1 - x0 - 2 * margen), d = Math.max(.01, z1 - z0 - 2 * margen);
+  const c = normalizarPasto(cfgIn), R = rng(Math.round(c.sem * 211) + 5), { x0, x1, z0, z1 } = rect, mx = opc.mx !== undefined ? opc.mx : (opc.margen || 0), mz = opc.mz !== undefined ? opc.mz : (opc.margen || 0);
+  const w = Math.max(.01, x1 - x0 - 2 * mx), d = Math.max(.01, z1 - z0 - 2 * mz);
   const n = Math.min(MAX_HOJAS, Math.max(1, Math.round(w * d * c.dens)));
   const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, eje = opc.ejeCamino || (w >= d ? 'x' : 'z'), semi = (eje === 'x' ? d : w) / 2;
 
@@ -97,22 +102,26 @@ export function crearPasto(cfgIn, rect, altura = () => 0, opc = {}) {
   const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
   let k = 0;
   for (let i = 0; i < n; i++) {
-    const x = x0 + margen + R() * w, z = z0 + margen + R() * d;
-    const borde = Math.min(x - x0, x1 - x, z - z0, z1 - z);
+    const x = x0 + mx + R() * w, z = z0 + mz + R() * d;
+    const bx = Math.min(x - x0, x1 - x), bz = Math.min(z - z0, z1 - z);
+    const borde = opc.bordeEje === 'x' ? bz : opc.bordeEje === 'z' ? bx : Math.min(bx, bz);   // bordeEje: el borde suave solo cuenta a los lados
     if (c.suave > 0 && R() > smooth(0, c.suave, borde) * .97 + .03) continue;
-    let f = 1;
+    let f = 1, tt = 1, enSen = false;   // tt: 0 en el sendero … 1 en el pasto normal
     if (c.camino > 0) {
       const dist = Math.abs(eje === 'x' ? z - cz : x - cx) - c.camino / 2;
-      if (dist < 0) { if (R() > .04) continue; f = .3; }
-      else f = 1 - c.crece * .75 * (1 - smooth(0, Math.max(1, semi * .5), dist));
+      if (dist < 0) { if (R() > Math.min(1, c.sDens / c.dens)) continue; enSen = true; tt = 0; }
+      else { tt = smooth(0, Math.max(1, semi * .5), dist); f = 1 - c.crece * .75 * (1 - tt); }
     }
-    const h = c.tam * f * (1 + (c.var / 100) * (R() * 2 - 1));
-    const ancho = c.hoja / 100 * (.75 + .5 * R()) * Math.pow(Math.max(.3, h / c.tam), .3);
+    const lerp = (a, b, u) => a + (b - a) * u;
+    const hBase = enSen ? c.sTam : c.tam * f;
+    const h = hBase * (1 + (c.var / 100) * (R() * 2 - 1));
+    const ancho = c.hoja / 100 * (.75 + .5 * R()) * Math.pow(Math.max(.3, h / Math.max(c.tam, c.sTam)), .3);
     dm.position.set(x, altura(x, z) - .01, z);
     dm.rotation.set(R() * c.lean * Math.PI / 180, R() * 6.2832, (R() - .5) * c.lean * Math.PI / 90);
     dm.scale.set(ancho, h, h); dm.updateMatrix(); im.setMatrixAt(k, dm.matrix);
-    const seca = R() < c.seco, t = R();
-    seca ? col.setHSL((38 + t * 14) / 360, .45, .42 + t * .12, THREE.SRGBColorSpace) : col.setHSL((c.matiz + (t - .5) * 22) / 360, .5 + .15 * t, c.clar * (.8 + .5 * t), THREE.SRGBColorSpace);
+    const hue = c.camino > 0 ? lerp(c.sMatiz, c.matiz, tt) : c.matiz, cl = c.camino > 0 ? lerp(c.sClar, c.clar, tt) : c.clar, sec = c.camino > 0 ? lerp(c.sSeco, c.seco, tt) : c.seco;
+    const seca = R() < sec, t = R();
+    seca ? col.setHSL((38 + t * 14) / 360, .45, .42 + t * .12, THREE.SRGBColorSpace) : col.setHSL((hue + (t - .5) * 22) / 360, .5 + .15 * t, cl * (.8 + .5 * t), THREE.SRGBColorSpace);
     col.multiplyScalar(c.brillo); im.setColorAt(k, col); k++;
   }
   im.count = Math.max(1, k);

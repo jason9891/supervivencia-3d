@@ -139,8 +139,9 @@ function montarPasto(json) {
             altura = (x, z) => { const t = ((alongX ? x : z) - a0) / (a1 - a0 || 1); return yA + (yB - yA) * t; };
             eje = alongX ? 'x' : 'z';
         }
+        const lado = r.type === 'rampa' && !(r.lat === 0);   // paredes laterales: separar un poco las hojas, solo a los lados
         const cfg = Object.assign({ sem: hashId(r.id) }, c);   // sin semilla propia: una distinta por pieza
-        const g = crearPasto(cfg, { x0, x1, z0, z1 }, altura, { ejeCamino: eje, margen: (r.type === 'rampa' && !(r.lat === 0)) ? 0.15 : 0 });
+        const g = crearPasto(cfg, { x0, x1, z0, z1 }, altura, { ejeCamino: eje, mx: lado && eje === 'z' ? 0.15 : 0, mz: lado && eje === 'x' ? 0.15 : 0, bordeEje: r.type === 'rampa' ? eje : undefined });
         scene.add(g.root); pastos.push(g);
     });
 }
