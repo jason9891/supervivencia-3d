@@ -90,7 +90,7 @@ export function crearRecorrido(ctx) {
   const modal = document.createElement('div');
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:200;font-family:system-ui,sans-serif';
   document.body.appendChild(modal);
-  const GN = { pasto: '🌿 Pasto (con volumen)', muro: 'Muros', piso: 'Pisos', cubierta: 'Cubiertas', material: 'Materiales' };
+  const GN = { pasto: '🌿 Pasto (con volumen)', muro: 'Muros', piso: 'Pisos', cubierta: 'Cubiertas', material: 'Materiales', cocina: '🍳 Cocina', mueble: '🪑 Muebles', interior: '🏠 Interiores' };
   const COLS = [
     { h: '#f5f5f5', n: 'Blanco' }, { h: '#d4d4d4', n: 'Gris claro' }, { h: '#9ca3af', n: 'Gris' },
     { h: '#6b7280', n: 'Gris medio' }, { h: '#374151', n: 'Gris oscuro' }, { h: '#1f2937', n: 'Carbón' },
@@ -102,7 +102,7 @@ export function crearRecorrido(ctx) {
     { h: '#1e40af', n: 'Azul' }, { h: '#7c3aed', n: 'Violeta' }, { h: '#be123c', n: 'Rojo' },
     { h: '#eab308', n: 'Oro' }, { h: '#ca8a04', n: 'Latón' }, { h: '#0f766e', n: 'Verde cobre' },
   ];
-  const ORDEN = { muro: ['muro', 'piso', 'cubierta', 'material'], piso: ['pasto', 'piso', 'muro', 'cubierta', 'material'], techo: ['cubierta', 'piso', 'muro', 'material'], rampa: ['pasto', 'piso', 'muro', 'cubierta', 'material'], escalera: ['piso', 'muro', 'cubierta', 'material'] };
+  const ORDEN = { muro: ['muro', 'interior', 'cocina', 'piso', 'cubierta', 'material', 'mueble'], piso: ['pasto', 'piso', 'cocina', 'interior', 'muro', 'cubierta', 'material', 'mueble'], techo: ['cubierta', 'piso', 'interior', 'muro', 'material', 'mueble'], rampa: ['pasto', 'piso', 'muro', 'cubierta', 'material', 'cocina', 'mueble', 'interior'], escalera: ['piso', 'muro', 'interior', 'cocina', 'cubierta', 'material', 'mueble'] };
 
   function abrirSelector(o, alcanceInicial) {
     if (!cat) return;

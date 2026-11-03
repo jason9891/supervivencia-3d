@@ -140,3 +140,7 @@ Se pueden añadir los tuyos: `crearTexturas(THREE, { temas: { miTema: { muro: 'm
 - Por qué JPG: son opacas y pesan unas 5 veces menos que PNG. El total del paquete son unos 7 MB.
 - Para sumar texturas nuevas: guarda la imagen en `tex/` y añade una línea en `MANIFIESTO` de `texturas.js` (`src`, `tipo`, `tile` o `w`/`h`).
 - **No comprobado:** las imágenes se revisaron en una hoja de contacto; no se probaron aún sobre los muros y pisos de tu plano en un navegador. La escala (`tile`) puede necesitar ajuste según cómo se vea.
+
+## Texturas de interior (cocina, muebles, interiores)
+
+Otras 29 texturas repetibles viven en `tex/interior/` (grupos `cocina`, `mueble` e `interior` del catálogo): azulejos, encimeras, maderas de mueble, tapicerías, papeles pintados, parquet, alfombra, mármol negro, latón, corcho y lambrín. Lista completa, medidas y cómo regenerarlas o añadir más: [`tex/interior/README.md`](tex/interior/README.md).

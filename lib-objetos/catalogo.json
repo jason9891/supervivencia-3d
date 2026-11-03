@@ -516,6 +516,267 @@
     "seco": 0.5,
     "viento": 0.7
    }
+  },
+  {
+   "id": "cocina_azulejo_blanco",
+   "archivo": "interior/cocina_azulejo_blanco.jpg",
+   "tipo": "repetida",
+   "tile": 0.8,
+   "grupo": "cocina",
+   "nombre": "Azulejo blanco (metro)",
+   "uso": "Paredes de cocina, baños"
+  },
+  {
+   "id": "cocina_azulejo_damero",
+   "archivo": "interior/cocina_azulejo_damero.jpg",
+   "tipo": "repetida",
+   "tile": 1.6,
+   "grupo": "cocina",
+   "nombre": "Damero blanco y negro",
+   "uso": "Piso de cocina, tabernas"
+  },
+  {
+   "id": "cocina_azulejo_azul",
+   "archivo": "interior/cocina_azulejo_azul.jpg",
+   "tipo": "repetida",
+   "tile": 1.0,
+   "grupo": "cocina",
+   "nombre": "Azulejo azul estampado",
+   "uso": "Paredes de cocina, fogones"
+  },
+  {
+   "id": "cocina_azulejo_terracota",
+   "archivo": "interior/cocina_azulejo_terracota.jpg",
+   "tipo": "repetida",
+   "tile": 1.2,
+   "grupo": "cocina",
+   "nombre": "Baldosa de terracota",
+   "uso": "Piso de cocina rústica"
+  },
+  {
+   "id": "cocina_hexagonal",
+   "archivo": "interior/cocina_hexagonal.jpg",
+   "tipo": "repetida",
+   "tile": 1.3,
+   "grupo": "cocina",
+   "nombre": "Mosaico hexagonal",
+   "uso": "Piso de cocina o baño"
+  },
+  {
+   "id": "cocina_baldosa_beige",
+   "archivo": "interior/cocina_baldosa_beige.jpg",
+   "tipo": "repetida",
+   "tile": 1.5,
+   "grupo": "cocina",
+   "nombre": "Baldosa beige grande",
+   "uso": "Piso de cocina, pasillos"
+  },
+  {
+   "id": "cocina_encimera_granito",
+   "archivo": "interior/cocina_encimera_granito.jpg",
+   "tipo": "repetida",
+   "tile": 1.0,
+   "grupo": "cocina",
+   "nombre": "Encimera de granito",
+   "uso": "Mesadas y barras"
+  },
+  {
+   "id": "cocina_encimera_marmol",
+   "archivo": "interior/cocina_encimera_marmol.jpg",
+   "tipo": "repetida",
+   "tile": 2.0,
+   "grupo": "cocina",
+   "nombre": "Encimera de mármol blanco",
+   "uso": "Mesadas, mesas de amasar"
+  },
+  {
+   "id": "cocina_acero",
+   "archivo": "interior/cocina_acero.jpg",
+   "tipo": "repetida",
+   "tile": 0.8,
+   "grupo": "cocina",
+   "nombre": "Acero inoxidable",
+   "uso": "Campanas, mesones, fregaderos"
+  },
+  {
+   "id": "mueble_roble",
+   "archivo": "interior/mueble_roble.jpg",
+   "tipo": "repetida",
+   "tile": 1.0,
+   "grupo": "mueble",
+   "nombre": "Madera de roble",
+   "uso": "Mesas, sillas, armarios"
+  },
+  {
+   "id": "mueble_nogal",
+   "archivo": "interior/mueble_nogal.jpg",
+   "tipo": "repetida",
+   "tile": 1.0,
+   "grupo": "mueble",
+   "nombre": "Madera de nogal",
+   "uso": "Escritorios, camas, aparadores"
+  },
+  {
+   "id": "mueble_pino",
+   "archivo": "interior/mueble_pino.jpg",
+   "tipo": "repetida",
+   "tile": 1.0,
+   "grupo": "mueble",
+   "nombre": "Pino con nudos",
+   "uso": "Muebles rústicos, estantes"
+  },
+  {
+   "id": "mueble_cerezo",
+   "archivo": "interior/mueble_cerezo.jpg",
+   "tipo": "repetida",
+   "tile": 1.0,
+   "grupo": "mueble",
+   "nombre": "Madera de cerezo",
+   "uso": "Cómodas, vitrinas"
+  },
+  {
+   "id": "mueble_laca_blanca",
+   "archivo": "interior/mueble_laca_blanca.jpg",
+   "tipo": "repetida",
+   "tile": 1.0,
+   "grupo": "mueble",
+   "nombre": "Madera lacada blanca",
+   "uso": "Alacenas, puertas de gabinete"
+  },
+  {
+   "id": "mueble_tapiz_rojo",
+   "archivo": "interior/mueble_tapiz_rojo.jpg",
+   "tipo": "repetida",
+   "tile": 0.5,
+   "grupo": "mueble",
+   "nombre": "Tapiz rojo a rayas",
+   "uso": "Sillones, cojines, cortinas"
+  },
+  {
+   "id": "mueble_lino",
+   "archivo": "interior/mueble_lino.jpg",
+   "tipo": "repetida",
+   "tile": 0.5,
+   "grupo": "mueble",
+   "nombre": "Lino natural",
+   "uso": "Sofás, manteles, cortinas"
+  },
+  {
+   "id": "mueble_terciopelo_verde",
+   "archivo": "interior/mueble_terciopelo_verde.jpg",
+   "tipo": "repetida",
+   "tile": 0.6,
+   "grupo": "mueble",
+   "nombre": "Terciopelo verde",
+   "uso": "Sillones, cortinas pesadas"
+  },
+  {
+   "id": "mueble_cuero_negro",
+   "archivo": "interior/mueble_cuero_negro.jpg",
+   "tipo": "repetida",
+   "tile": 0.5,
+   "grupo": "mueble",
+   "nombre": "Cuero negro granulado",
+   "uso": "Sillas, asientos, correas"
+  },
+  {
+   "id": "mueble_capitone",
+   "archivo": "interior/mueble_capitone.jpg",
+   "tipo": "repetida",
+   "tile": 0.9,
+   "grupo": "mueble",
+   "nombre": "Cuero capitoné burdeos",
+   "uso": "Sillones, cabeceros"
+  },
+  {
+   "id": "interior_papel_damasco",
+   "archivo": "interior/interior_papel_damasco.jpg",
+   "tipo": "repetida",
+   "tile": 1.0,
+   "grupo": "interior",
+   "nombre": "Papel damasco burdeos",
+   "uso": "Paredes de salón, alcobas"
+  },
+  {
+   "id": "interior_papel_rayas",
+   "archivo": "interior/interior_papel_rayas.jpg",
+   "tipo": "repetida",
+   "tile": 1.0,
+   "grupo": "interior",
+   "nombre": "Papel de rayas",
+   "uso": "Paredes de dormitorio"
+  },
+  {
+   "id": "interior_papel_floral",
+   "archivo": "interior/interior_papel_floral.jpg",
+   "tipo": "repetida",
+   "tile": 1.0,
+   "grupo": "interior",
+   "nombre": "Papel floral",
+   "uso": "Paredes de casa, cuarto de niños"
+  },
+  {
+   "id": "interior_pintura_crema",
+   "archivo": "interior/interior_pintura_crema.jpg",
+   "tipo": "repetida",
+   "tile": 2.0,
+   "grupo": "interior",
+   "nombre": "Pintura crema",
+   "uso": "Paredes y techos lisos"
+  },
+  {
+   "id": "interior_parquet",
+   "archivo": "interior/interior_parquet.jpg",
+   "tipo": "repetida",
+   "tile": 2.0,
+   "grupo": "interior",
+   "nombre": "Parquet de tablas",
+   "uso": "Pisos de salón y estudio"
+  },
+  {
+   "id": "interior_alfombra_persa",
+   "archivo": "interior/interior_alfombra_persa.jpg",
+   "tipo": "repetida",
+   "tile": 2.4,
+   "grupo": "interior",
+   "nombre": "Alfombra persa",
+   "uso": "Alfombras, tapices de suelo"
+  },
+  {
+   "id": "interior_marmol_negro",
+   "archivo": "interior/interior_marmol_negro.jpg",
+   "tipo": "repetida",
+   "tile": 2.5,
+   "grupo": "interior",
+   "nombre": "Mármol negro con vetas doradas",
+   "uso": "Pisos de lujo, columnas"
+  },
+  {
+   "id": "interior_laton",
+   "archivo": "interior/interior_laton.jpg",
+   "tipo": "repetida",
+   "tile": 0.8,
+   "grupo": "interior",
+   "nombre": "Latón cepillado",
+   "uso": "Herrajes, lámparas, molduras"
+  },
+  {
+   "id": "interior_corcho",
+   "archivo": "interior/interior_corcho.jpg",
+   "tipo": "repetida",
+   "tile": 0.6,
+   "grupo": "interior",
+   "nombre": "Corcho",
+   "uso": "Tableros, pisos, avisos"
+  },
+  {
+   "id": "interior_lambri",
+   "archivo": "interior/interior_lambri.jpg",
+   "tipo": "repetida",
+   "tile": 2.0,
+   "grupo": "interior",
+   "nombre": "Lambrín de madera",
+   "uso": "Zócalos y paredes de despacho"
   }
  ],
  "temas": {

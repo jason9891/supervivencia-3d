@@ -100,3 +100,7 @@ Hojas finas y curvas con viento proporcional a su altura (corto ≈ quieto, alto
 - Los presets viven en `lib-objetos/catalogo.json` (`pasto: {d, h, camino?, tono?}`): añade los tuyos copiando una entrada del grupo `pasto`. `pastoSobre()` admite `camino` (ancho del sendero) y `tono` ('seco').
 - Los campos «Pasto…» de las propiedades de rampa/piso siguen funcionando; una textura elegida para esa pieza tiene prioridad.
 - Límite: 30 000 cuchillas por pieza (en pisos muy grandes la densidad real baja).
+
+## v23.17 · Texturas de cocina, muebles e interiores
+- Nueva carpeta `lib-objetos/tex/interior/` con 29 texturas sin costuras: **🍳 Cocina** (azulejos, damero, mosaico hexagonal, encimeras de granito y mármol, acero), **🪑 Muebles** (roble, nogal, pino, cerezo, laca blanca, tapiz, lino, terciopelo, cuero, capitoné) y **🏠 Interiores** (papeles pintados, pintura, parquet, alfombra persa, mármol negro, latón, corcho, lambrín). Ver `lib-objetos/tex/interior/README.md`.
+- Aparecen como grupos nuevos en el selector «Biblioteca…» de 🎨 Texturas (editor) y en la tecla **T** del visor. No se quitó ni cambió ninguna textura anterior; editor-ref.js v=8, main.js v=23.

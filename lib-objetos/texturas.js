@@ -64,7 +64,37 @@ export const MANIFIESTO = {
   estandarte_rojo: { src: 'estandarte_rojo.png', tipo: 'calcomania', w: 1.5, h: 3.0 },
   decal_grieta: { src: 'decal_grieta.png', tipo: 'calcomania', w: 2.0, h: 2.0 },
   decal_runa: { src: 'decal_runa.png', tipo: 'calcomania', w: 1.5, h: 1.5 },
-  decal_moho: { src: 'decal_moho.png', tipo: 'calcomania', w: 2.5, h: 2.5 }
+  decal_moho: { src: 'decal_moho.png', tipo: 'calcomania', w: 2.5, h: 2.5 },
+  /* interior/: cocina, muebles e interiores (ver tex/interior/README.md) */
+  cocina_azulejo_blanco: { src: 'interior/cocina_azulejo_blanco.jpg', tipo: 'repetida', tile: 0.8 },
+  cocina_azulejo_damero: { src: 'interior/cocina_azulejo_damero.jpg', tipo: 'repetida', tile: 1.6 },
+  cocina_azulejo_azul: { src: 'interior/cocina_azulejo_azul.jpg', tipo: 'repetida', tile: 1.0 },
+  cocina_azulejo_terracota: { src: 'interior/cocina_azulejo_terracota.jpg', tipo: 'repetida', tile: 1.2 },
+  cocina_hexagonal: { src: 'interior/cocina_hexagonal.jpg', tipo: 'repetida', tile: 1.3 },
+  cocina_baldosa_beige: { src: 'interior/cocina_baldosa_beige.jpg', tipo: 'repetida', tile: 1.5 },
+  cocina_encimera_granito: { src: 'interior/cocina_encimera_granito.jpg', tipo: 'repetida', tile: 1.0 },
+  cocina_encimera_marmol: { src: 'interior/cocina_encimera_marmol.jpg', tipo: 'repetida', tile: 2.0 },
+  cocina_acero: { src: 'interior/cocina_acero.jpg', tipo: 'repetida', tile: 0.8 },
+  mueble_roble: { src: 'interior/mueble_roble.jpg', tipo: 'repetida', tile: 1.0 },
+  mueble_nogal: { src: 'interior/mueble_nogal.jpg', tipo: 'repetida', tile: 1.0 },
+  mueble_pino: { src: 'interior/mueble_pino.jpg', tipo: 'repetida', tile: 1.0 },
+  mueble_cerezo: { src: 'interior/mueble_cerezo.jpg', tipo: 'repetida', tile: 1.0 },
+  mueble_laca_blanca: { src: 'interior/mueble_laca_blanca.jpg', tipo: 'repetida', tile: 1.0 },
+  mueble_tapiz_rojo: { src: 'interior/mueble_tapiz_rojo.jpg', tipo: 'repetida', tile: 0.5 },
+  mueble_lino: { src: 'interior/mueble_lino.jpg', tipo: 'repetida', tile: 0.5 },
+  mueble_terciopelo_verde: { src: 'interior/mueble_terciopelo_verde.jpg', tipo: 'repetida', tile: 0.6 },
+  mueble_cuero_negro: { src: 'interior/mueble_cuero_negro.jpg', tipo: 'repetida', tile: 0.5 },
+  mueble_capitone: { src: 'interior/mueble_capitone.jpg', tipo: 'repetida', tile: 0.9 },
+  interior_papel_damasco: { src: 'interior/interior_papel_damasco.jpg', tipo: 'repetida', tile: 1.0 },
+  interior_papel_rayas: { src: 'interior/interior_papel_rayas.jpg', tipo: 'repetida', tile: 1.0 },
+  interior_papel_floral: { src: 'interior/interior_papel_floral.jpg', tipo: 'repetida', tile: 1.0 },
+  interior_pintura_crema: { src: 'interior/interior_pintura_crema.jpg', tipo: 'repetida', tile: 2.0 },
+  interior_parquet: { src: 'interior/interior_parquet.jpg', tipo: 'repetida', tile: 2.0 },
+  interior_alfombra_persa: { src: 'interior/interior_alfombra_persa.jpg', tipo: 'repetida', tile: 2.4 },
+  interior_marmol_negro: { src: 'interior/interior_marmol_negro.jpg', tipo: 'repetida', tile: 2.5 },
+  interior_laton: { src: 'interior/interior_laton.jpg', tipo: 'repetida', tile: 0.8 },
+  interior_corcho: { src: 'interior/interior_corcho.jpg', tipo: 'repetida', tile: 0.6 },
+  interior_lambri: { src: 'interior/interior_lambri.jpg', tipo: 'repetida', tile: 2.0 }
 };
 
 /* tema -> qué imagen usa en muro / piso / techo (si no hay techo se usa el piso) */

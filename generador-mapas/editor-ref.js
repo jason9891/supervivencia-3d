@@ -64,11 +64,11 @@
   // Biblioteca de texturas (lib-objetos/catalogo.json): se elige sin subir archivos
   const LIBTEX = '../lib-objetos/tex/'; let cat = null;
   fetch('../lib-objetos/catalogo.json').then(r => r.json()).then(j => { cat = j.texturas.filter(t => t.tipo === 'repetida'); renderTex(); }).catch(() => {});
-  const GRUPOS = { muro: ['muro'], piso: ['pasto', 'piso'], techo: ['cubierta', 'piso'], rampa: ['pasto', 'piso', 'muro'], escalera: ['piso', 'muro'], puerta: ['material'] };
-  const GNOM = { pasto: '🌿 Pasto (con volumen)', muro: 'Muros', piso: 'Pisos', cubierta: 'Cubiertas', material: 'Materiales' };
+  const GRUPOS = { muro: ['muro', 'interior', 'cocina'], piso: ['pasto', 'piso', 'cocina', 'interior'], techo: ['cubierta', 'piso', 'interior'], rampa: ['pasto', 'piso', 'muro'], escalera: ['piso', 'muro', 'interior'], puerta: ['material', 'mueble'] };
+  const GNOM = { pasto: '🌿 Pasto (con volumen)', muro: 'Muros', piso: 'Pisos', cubierta: 'Cubiertas', material: 'Materiales', cocina: '🍳 Cocina', mueble: '🪑 Muebles', interior: '🏠 Interiores' };
   function libSelect(k) {
     if (!cat) return '';
-    const orden = [...(GRUPOS[k] || []), ...['pasto', 'muro', 'piso', 'cubierta', 'material'].filter(g => !(GRUPOS[k] || []).includes(g))];
+    const orden = [...(GRUPOS[k] || []), ...['pasto', 'muro', 'piso', 'cubierta', 'material', 'cocina', 'mueble', 'interior'].filter(g => !(GRUPOS[k] || []).includes(g))];
     const cur = tex[k] && tex[k].lib;
     return `<select onchange="libTex('${k}',this.value)"><option value="">Biblioteca…</option>${orden.map(g => `<optgroup label="${GNOM[g]}">${cat.filter(t => t.grupo === g).map(t => `<option value="${t.id}" ${cur === t.id ? 'selected' : ''}>${t.nombre}</option>`).join('')}</optgroup>`).join('')}</select>`;
   }
