@@ -25,10 +25,16 @@
     <input id="hora-r" type="range" min="0" max="24" step="0.25" value="12" style="width:220px">
     <small style="opacity:.7">[ / ] ±30 min</small>
   </div>
+  <div id="mapas-box" onclick="event.stopPropagation()" style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;background:rgba(0,0,0,.5);padding:8px 14px;border-radius:8px;cursor:default">
+    <label for="mapas-sel">🗂️ Mapa</label>
+    <select id="mapas-sel" style="font-size:15px;max-width:60vw"><option value="">Mapa del editor (este navegador)</option></select>
+    <small id="mapas-nota" style="opacity:.75"></small>
+  </div>
 </div>
 <div class="hud" id="zone">Cargando motor...</div>
 
 <script src="./celdas.js?v=22"></script>
+<script src="./mapas-repo.js?v=1"></script>
 <script type="importmap">
 {
   "imports": {
@@ -37,6 +43,6 @@
   }
 }
 </script>
-<script type="module" src="./main.js?v=23"></script>
+<script type="module" src="./main.js?v=24"></script>
 </body>
 </html>

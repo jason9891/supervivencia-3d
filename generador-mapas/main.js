@@ -101,7 +101,10 @@ function guardarHora() { try { localStorage.setItem(K_HORA, String(horaAct)); } 
     aplicarHora(h);
 })();
 
-const LS_KEY = 'castillo-v20';
+// ?mapa=nombre abre un mapa guardado en el repo (generador-mapas/mapas/nombre.json). Es solo para ver:
+// usa un espacio de almacenamiento aparte que se vacía al cargar, así nunca pisa el mapa del editor.
+const idMapaRepo = new URLSearchParams(location.search).get('mapa');
+const LS_KEY = idMapaRepo ? 'castillo-repo-vista' : 'castillo-v20';
 let mapaData = null, decorado = null, pastos = [];
 
 function leerLocal() {
@@ -176,6 +179,17 @@ function reconstruir(json, origen) {
 }
 
 async function cargarMapa() {
+    if (idMapaRepo) {
+        [LS_KEY, LS_TEX, LS_REF, LS_TOBJ].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+        try {
+            if (!window.MapasRepo) throw new Error('Falta mapas-repo.js');
+            reconstruir(await window.MapasRepo.leer(idMapaRepo), 'el repo (' + idMapaRepo + ')');
+        } catch (error) {
+            console.error('❌ Error cargando el mapa del repo:', error);
+            overlay.innerHTML = `<h1 style="color:red;">No se pudo abrir «${idMapaRepo.replace(/[<>&"]/g, '')}»</h1><p>${String(error.message).replace(/[<>&]/g, '')}</p><p><a style="color:#7dd3fc" href="${location.pathname}">Abrir el mapa del editor</a></p>`;
+        }
+        return;
+    }
     const forzarArchivo = new URLSearchParams(location.search).get('src') === 'file';
     const local = forzarArchivo ? null : leerLocal();
     if (local) { reconstruir(local, 'el editor (localStorage)'); return; }
@@ -208,6 +222,20 @@ ov = crearObjetosVisor({
 window.__ov = ov; window.__deco = () => decorado;
 window.__rec = rec;
 cargarMapa();
+
+// Selector de mapas del repo en la pantalla de entrada
+(async () => {
+    const sel = document.getElementById('mapas-sel'), nota = document.getElementById('mapas-nota');
+    if (!sel || !window.MapasRepo) return;
+    let ids = [];
+    try { ids = (await window.MapasRepo.listar()).map(m => m.id); } catch (e) { nota.textContent = 'No se pudo leer la lista del repo: ' + e.message; }
+    if (idMapaRepo && !ids.includes(idMapaRepo)) ids.push(idMapaRepo);
+    ids.forEach(id => { const o = document.createElement('option'); o.value = id; o.textContent = id; sel.appendChild(o); });
+    sel.value = idMapaRepo || '';
+    if (idMapaRepo) nota.textContent = 'Del repo · en el visor los cambios no se guardan; edita en el editor';
+    else if (ids.length && !nota.textContent) nota.textContent = ids.length + ' mapa(s) guardado(s) en el repo';
+    sel.onchange = () => { const u = new URL(location.href); u.searchParams.delete('src'); sel.value ? u.searchParams.set('mapa', sel.value) : u.searchParams.delete('mapa'); location.href = u.href; };
+})();
 
 window.addEventListener('storage', (e) => {
     if (![LS_KEY, LS_TEX, LS_REF, LS_TOBJ].includes(e.key)) return;

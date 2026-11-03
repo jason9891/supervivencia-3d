@@ -104,3 +104,8 @@ Hojas finas y curvas con viento proporcional a su altura (corto ≈ quieto, alto
 ## v23.17 · Texturas de cocina, muebles e interiores
 - Nueva carpeta `lib-objetos/tex/interior/` con 29 texturas sin costuras: **🍳 Cocina** (azulejos, damero, mosaico hexagonal, encimeras de granito y mármol, acero), **🪑 Muebles** (roble, nogal, pino, cerezo, laca blanca, tapiz, lino, terciopelo, cuero, capitoné) y **🏠 Interiores** (papeles pintados, pintura, parquet, alfombra persa, mármol negro, latón, corcho, lambrín). Ver `lib-objetos/tex/interior/README.md`.
 - Aparecen como grupos nuevos en el selector «Biblioteca…» de 🎨 Texturas (editor) y en la tecla **T** del visor. No se quitó ni cambió ninguna textura anterior; editor-ref.js v=8, main.js v=23.
+
+## v23.18 · Mapas guardados en el repo
+- Carpeta `generador-mapas/mapas/` (un `.json` por mapa). En el editor, **☁️ Mapas del repo**: guardar el mapa actual (con texturas, personaje y objetos), abrir uno guardado, copiar el enlace del visor. Guardar pide un token de GitHub (fine-grained, solo este repo, *Contents: Read and write*) que se guarda solo en ese navegador; abrir y listar no necesitan nada (repo público).
+- Visor: `index.html?mapa=nombre` abre un mapa del repo desde cualquier dispositivo, y la pantalla de entrada tiene un selector «🗂️ Mapa». Es solo para ver: usa un almacenamiento aparte que se vacía al cargar, así nunca pisa el mapa del editor ni queda una copia local con prioridad; los cambios del visor (objetos, texturas por pieza) no se guardan, se editan en el editor.
+- Código: `mapas-repo.js` (API de GitHub, compartido), `editor-repo.js` (panel). editor-ref.js v=9, main.js v=24.

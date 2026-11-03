@@ -133,6 +133,7 @@
   /* ---------- Exportar / importar incluyendo ref y texturas ---------- */
   const K_TOBJ = LS_KEY + '-texobj';
   const withExtras = () => { const to = rd(K_TOBJ, {}); return Object.assign({}, data, ref ? { ref } : {}, Object.keys(tex).length ? { texturas: tex } : {}, Object.keys(to).length ? { texobj: to } : {}); };
+  window.__mapaCompleto = withExtras; // lo usa editor-repo.js (guardar en el repo)
   window.exportJSON = () => navigator.clipboard.writeText(JSON.stringify(withExtras(), null, 2)).then(() => toast('JSON copiado')).catch(() => toast('Error'));
   window.downloadJSON = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(withExtras(), null, 2)], { type: 'application/json' })); a.download = 'mapa.json'; a.click(); };
   window.importJSON = function (input) {
