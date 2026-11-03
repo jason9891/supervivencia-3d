@@ -186,7 +186,7 @@ async function cargarMapa() {
             reconstruir(await window.MapasRepo.leer(idMapaRepo), 'el repo (' + idMapaRepo + ')');
         } catch (error) {
             console.error('❌ Error cargando el mapa del repo:', error);
-            overlay.innerHTML = `<h1 style="color:red;">No se pudo abrir «${idMapaRepo.replace(/[<>&"]/g, '')}»</h1><p>${String(error.message).replace(/[<>&]/g, '')}</p><p><a style="color:#7dd3fc" href="${location.pathname}">Abrir el mapa del editor</a></p>`;
+            avisoMapa('No se pudo abrir «' + idMapaRepo + '»: ' + error.message, true);
         }
         return;
     }
@@ -199,9 +199,17 @@ async function cargarMapa() {
         if (!response.ok) throw new Error('No se encontró mapa.json');
         reconstruir(await response.json(), 'mapa.json');
     } catch (error) {
-        console.error('❌ Error cargando el mapa:', error);
-        overlay.innerHTML = `<h1 style="color:red;">Error cargando el mapa</h1><p>${error.message}</p>`;
+        console.warn('Sin mapa local ni mapa.json:', error.message);
+        sinMapa = true;
     }
+}
+
+// Aviso en la pantalla de entrada (sin tocar el resto del overlay, para conservar el selector de mapas)
+let sinMapa = false;
+function avisoMapa(texto, error) {
+    const a = document.getElementById('mapas-aviso'); if (!a) return;
+    a.textContent = texto; a.style.display = 'block'; a.style.color = error ? '#fca5a5' : '#fde68a';
+    const h = overlay.querySelector('h1'); if (h && error) h.textContent = 'No se pudo cargar el mapa';
 }
 
 rec = crearRecorrido({
@@ -221,17 +229,24 @@ ov = crearObjetosVisor({
 });
 window.__ov = ov; window.__deco = () => decorado;
 window.__rec = rec;
-cargarMapa();
+const cargando = cargarMapa();
 
 // Selector de mapas del repo en la pantalla de entrada
 (async () => {
     const sel = document.getElementById('mapas-sel'), nota = document.getElementById('mapas-nota');
     if (!sel || !window.MapasRepo) return;
-    let ids = [];
-    try { ids = (await window.MapasRepo.listar()).map(m => m.id); } catch (e) { nota.textContent = 'No se pudo leer la lista del repo: ' + e.message; }
+    await cargando;
+    let ids = [], falloLista = '';
+    try { ids = (await window.MapasRepo.listar()).map(m => m.id); } catch (e) { falloLista = e.message; nota.textContent = 'No se pudo leer la lista del repo: ' + e.message; }
     if (idMapaRepo && !ids.includes(idMapaRepo)) ids.push(idMapaRepo);
     ids.forEach(id => { const o = document.createElement('option'); o.value = id; o.textContent = id; sel.appendChild(o); });
     sel.value = idMapaRepo || '';
+    if (sinMapa && !idMapaRepo) {
+        // Navegador sin mapa propio (p. ej. incógnito u otro dispositivo): con un solo mapa guardado se abre solo
+        if (ids.length === 1) { const u = new URL(location.href); u.searchParams.set('mapa', ids[0]); location.replace(u.href); return; }
+        const h = overlay.querySelector('h1'); if (h) h.textContent = ids.length ? 'Elige un mapa' : 'No hay mapa en este navegador';
+        if (falloLista) avisoMapa('Este navegador no tiene mapa propio y no se pudo leer la lista del repo: ' + falloLista, true); else avisoMapa(ids.length ? 'Este navegador no tiene mapa propio. Elige uno de los guardados en el repo:' : 'Este navegador no tiene mapa propio y el repo aún no tiene mapas guardados. Guarda uno desde el editor (☁️ Mapas del repo).', false);
+    }
     if (idMapaRepo) nota.textContent = 'Del repo · en el visor los cambios no se guardan; edita en el editor';
     else if (ids.length && !nota.textContent) nota.textContent = ids.length + ' mapa(s) guardado(s) en el repo';
     sel.onchange = () => { const u = new URL(location.href); u.searchParams.delete('src'); sel.value ? u.searchParams.set('mapa', sel.value) : u.searchParams.delete('mapa'); location.href = u.href; };
