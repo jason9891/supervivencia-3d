@@ -1,0 +1,519 @@
+{
+ "rooms": [
+  {
+   "id": "rmvzfdaf22j3",
+   "nombre": "Piso",
+   "x0": -20,
+   "x1": 39,
+   "z0": 0,
+   "z1": 19,
+   "type": "piso",
+   "y": 0,
+   "open": true
+  },
+  {
+   "id": "rmvzfy8o6sc",
+   "nombre": "Piso",
+   "x0": -20,
+   "x1": 39,
+   "z0": -22,
+   "z1": 0,
+   "type": "piso",
+   "y": 0,
+   "open": true
+  },
+  {
+   "id": "rmvzgfrq78",
+   "nombre": "Piso",
+   "x0": 34.2,
+   "x1": 38.9,
+   "z0": -5,
+   "z1": 18.3,
+   "type": "piso",
+   "y": 9,
+   "open": true
+  },
+  {
+   "id": "rmvzgjd6mbc",
+   "nombre": "Piso",
+   "x0": 35,
+   "x1": 38.9,
+   "z0": -4.4,
+   "z1": 18.3,
+   "type": "piso",
+   "y": 14,
+   "open": true
+  },
+  {
+   "id": "rmvzgqqhj6cj",
+   "nombre": "Piso",
+   "x0": -20,
+   "x1": 39.1,
+   "z0": -16,
+   "z1": 19.1,
+   "type": "piso",
+   "y": 23,
+   "open": true
+  },
+  {
+   "id": "rmvzhd0ef4i7",
+   "nombre": "Piso",
+   "x0": 0,
+   "x1": 6.1,
+   "z0": -1,
+   "z1": 17,
+   "type": "piso",
+   "y": 12,
+   "open": true
+  },
+  {
+   "id": "rmvzhtayhw0",
+   "nombre": "Piso",
+   "x0": 6.1,
+   "x1": 34.2,
+   "z0": 13,
+   "z1": 18.9,
+   "type": "piso",
+   "y": 10,
+   "open": true
+  }
+ ],
+ "walls": [
+  {
+   "id": "wmvzfemb9t4",
+   "points": [
+    {
+     "x": 38.05,
+     "z": 18.95
+    },
+    {
+     "x": 38.05,
+     "z": 18.35
+    },
+    {
+     "x": 38.949999999999996,
+     "z": 18.35
+    }
+   ],
+   "h": 23,
+   "y": 0
+  },
+  {
+   "id": "wmvzfgbekt1",
+   "points": [
+    {
+     "x": 37.949999999999996,
+     "z": 18.95
+    },
+    {
+     "x": 6.05,
+     "z": 18.95
+    }
+   ],
+   "h": 10.8,
+   "y": 0
+  },
+  {
+   "id": "wmvzfimbx4ty",
+   "points": [
+    {
+     "x": 37.949999999999996,
+     "z": 18.95
+    },
+    {
+     "x": 29.05,
+     "z": 18.95
+    }
+   ],
+   "h": 23,
+   "y": 0
+  },
+  {
+   "id": "wmvzfj5at5ye",
+   "points": [
+    {
+     "x": 6.05,
+     "z": 18.95
+    },
+    {
+     "x": 14.950000000000001,
+     "z": 18.95
+    }
+   ],
+   "h": 23,
+   "y": 0
+  },
+  {
+   "id": "wmvzfnl716e6",
+   "points": [
+    {
+     "x": 38.949999999999996,
+     "z": 18.25
+    },
+    {
+     "x": 38.949999999999996,
+     "z": 18.25
+    },
+    {
+     "x": 38.949999999999996,
+     "z": 0.05
+    }
+   ],
+   "h": 23,
+   "y": 0
+  },
+  {
+   "id": "wmvzfykml2nt",
+   "points": [
+    {
+     "x": 38.949999999999996,
+     "z": -21.95
+    },
+    {
+     "x": 38.949999999999996,
+     "z": -0.05
+    }
+   ],
+   "h": 23,
+   "y": 0
+  },
+  {
+   "id": "wmvzgkw2ur4",
+   "points": [
+    {
+     "x": 38.849999999999994,
+     "z": 18.25
+    },
+    {
+     "x": 35.05,
+     "z": 18.25
+    },
+    {
+     "x": 35.05,
+     "z": -4.3500000000000005
+    },
+    {
+     "x": 38.849999999999994,
+     "z": -4.3500000000000005
+    }
+   ],
+   "h": 8,
+   "y": 14
+  },
+  {
+   "id": "wmvzgmpr26ji",
+   "points": [
+    {
+     "x": 38.849999999999994,
+     "z": -4.95
+    },
+    {
+     "x": 34.25,
+     "z": -4.95
+    },
+    {
+     "x": 34.25,
+     "z": 18.25
+    },
+    {
+     "x": 38.849999999999994,
+     "z": 18.25
+    }
+   ],
+   "h": 9,
+   "y": 0
+  },
+  {
+   "id": "wmvzgobdqh4",
+   "points": [
+    {
+     "x": 38.849999999999994,
+     "z": 18.25
+    },
+    {
+     "x": 38.849999999999994,
+     "z": -4.95
+    }
+   ],
+   "h": 1,
+   "y": 9
+  },
+  {
+   "id": "wmvzgyj72gp",
+   "points": [
+    {
+     "x": 0.05,
+     "z": 18.95
+    },
+    {
+     "x": -11.95,
+     "z": 18.95
+    }
+   ],
+   "h": 23,
+   "y": 0
+  },
+  {
+   "id": "wmvzh6ms71s2",
+   "points": [
+    {
+     "x": 0.05,
+     "z": 18.85
+    },
+    {
+     "x": 0.05,
+     "z": 17.05
+    }
+   ],
+   "h": 23,
+   "y": 0
+  },
+  {
+   "id": "wmvzh78m6w5",
+   "points": [
+    {
+     "x": 6.05,
+     "z": 18.85
+    },
+    {
+     "x": 6.05,
+     "z": 17.05
+    }
+   ],
+   "h": 23,
+   "y": 0
+  },
+  {
+   "id": "wmvzh7f7ydh",
+   "points": [
+    {
+     "x": 0.15000000000000002,
+     "z": 17.05
+    },
+    {
+     "x": 5.95,
+     "z": 17.05
+    }
+   ],
+   "h": 23,
+   "y": 0
+  }
+ ],
+ "doors": [
+  {
+   "id": "dmvzgytyo6rx",
+   "x": -5.950000000000001,
+   "z": 18.95,
+   "ax": "x",
+   "y": 0,
+   "w": 11.8,
+   "h": 20,
+   "sill": 0,
+   "fw": 0.1,
+   "depth": 0.5,
+   "angle": 72,
+   "panel": "single",
+   "hinge": "left",
+   "swing": "in",
+   "tipo": "dt-estandar"
+  }
+ ],
+ "holes": [
+  {
+   "id": "hmvzhz5jc664",
+   "x0": 7,
+   "x1": 11,
+   "z0": 13.4,
+   "z1": 18.6,
+   "y": 10
+  },
+  {
+   "id": "hmvzi0wh43uv",
+   "x0": 11.5,
+   "x1": 15.5,
+   "z0": 13.4,
+   "z1": 18.6,
+   "y": 10
+  }
+ ],
+ "blocks": [],
+ "doorTypes": [
+  {
+   "id": "dt-estandar",
+   "nombre": "Puerta estándar",
+   "w": 1.5,
+   "h": 3.6,
+   "sill": 0,
+   "fw": 0.1,
+   "depth": 0.5,
+   "panel": "single",
+   "hinge": "left",
+   "swing": "in",
+   "angle": 72
+  },
+  {
+   "id": "dt-doble",
+   "nombre": "Portón doble",
+   "w": 3,
+   "h": 4,
+   "sill": 0,
+   "fw": 0.15,
+   "depth": 0.5,
+   "panel": "double",
+   "hinge": "left",
+   "swing": "in",
+   "angle": 72
+  },
+  {
+   "id": "dt-arco",
+   "nombre": "Arco abierto",
+   "w": 2,
+   "h": 3.6,
+   "sill": 0,
+   "fw": 0.1,
+   "depth": 0.5,
+   "panel": "none",
+   "hinge": "left",
+   "swing": "in",
+   "angle": 72
+  },
+  {
+   "id": "dt-postigo",
+   "nombre": "Postigo alto",
+   "w": 1,
+   "h": 1.2,
+   "sill": 1.5,
+   "fw": 0.08,
+   "depth": 0.5,
+   "panel": "single",
+   "hinge": "left",
+   "swing": "in",
+   "angle": 72
+  }
+ ],
+ "activeDoorType": "dt-estandar",
+ "objetos": [],
+ "enlaces": [],
+ "texobj": {
+  "rmvzbe5bs351": {
+   "img": "../lib-objetos/tex/piso_tierra.jpg",
+   "m": 3,
+   "lib": "pasto_sendero",
+   "pasto": {
+    "tam": 0.5,
+    "var": 25,
+    "hoja": 1,
+    "arqueo": 0.1,
+    "lean": 2,
+    "dens": 1000,
+    "suave": 0,
+    "viento": 0.9,
+    "vel": 1.15,
+    "dir": 40,
+    "turb": 0.5,
+    "matiz": 92,
+    "clar": 0.3,
+    "seco": 0.08,
+    "brillo": 1.1,
+    "camino": 1.8,
+    "crece": 0.4,
+    "sTam": 0.15,
+    "sDens": 595,
+    "sMatiz": 128,
+    "sClar": 0.36,
+    "sSeco": 0.7,
+    "sem": 682
+   }
+  },
+  "rmvzb8gq11ah": {
+   "img": "../lib-objetos/tex/piso_pasto.jpg",
+   "m": 2,
+   "lib": "pasto_alto",
+   "pasto": {
+    "tam": 0.2,
+    "var": 80,
+    "hoja": 1.5,
+    "arqueo": 0.4,
+    "lean": 5,
+    "dens": 1000,
+    "suave": 0,
+    "viento": 0.8,
+    "vel": 1.1,
+    "dir": 40,
+    "turb": 0.5,
+    "matiz": 92,
+    "clar": 0.3,
+    "seco": 0.08,
+    "brillo": 1.1,
+    "camino": 0,
+    "crece": 0.8,
+    "sem": 1
+   }
+  },
+  "wmvzfemb9t4": {
+   "color": "#c4a574"
+  },
+  "wmvzfh1z14fn": {
+   "img": "../lib-objetos/tex/muro_adobe.jpg",
+   "m": 3,
+   "lib": "muro_adobe"
+  },
+  "wmvzfgbekt1": {
+   "color": "#f5f5f5"
+  },
+  "wmvzfimbx4ty": {
+   "color": "#f5f5f5"
+  },
+  "wmvzfj5at5ye": {
+   "color": "#f5f5f5"
+  },
+  "wmvzfw9vh5gs": {
+   "img": "../lib-objetos/tex/madera_oscura.jpg",
+   "m": 1,
+   "lib": "madera_oscura"
+  },
+  "wmvzgkw2ur4": {
+   "img": "../lib-objetos/tex/madera_oscura.jpg",
+   "m": 1,
+   "lib": "madera_oscura"
+  },
+  "wmvzgmpr26ji": {
+   "img": "../lib-objetos/tex/madera_oscura.jpg",
+   "m": 1,
+   "lib": "madera_oscura"
+  },
+  "rmvzgfrq78": {
+   "img": "../lib-objetos/tex/interior/interior_pintura_crema.jpg",
+   "m": 2,
+   "lib": "interior_pintura_crema"
+  },
+  "wmvzgobdqh4": {
+   "color": "#f5f29e"
+  },
+  "wmvzh6ms71s2": {
+   "color": "#f5f5f5"
+  },
+  "wmvzh7f7ydh": {
+   "color": "#c4a574"
+  },
+  "wmvzh78m6w5": {
+   "color": "#f5f5f5"
+  },
+  "rmvzhd0ef4i7": {
+   "img": "../lib-objetos/tex/interior/cocina_encimera_marmol.jpg",
+   "m": 2,
+   "lib": "cocina_encimera_marmol"
+  },
+  "wmvzfykml2nt": {
+   "color": "#f5f5f5"
+  },
+  "wmvzfnl716e6": {
+   "color": "#f5f5f5"
+  },
+  "rmvzhtayhw0": {
+   "img": "../lib-objetos/tex/interior/interior_pintura_crema.jpg",
+   "m": 2,
+   "lib": "interior_pintura_crema"
+  }
+ }
+}
