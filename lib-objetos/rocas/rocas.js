@@ -12,6 +12,8 @@
  *  estalagmita     punta de roca (cueva)         trilito          dos menhires y un dintel
  *  pila_lajas      lajas apiladas                cantos           muchas piedras pequeñas esparcidas
  *  penasco         roca grande con otras al pie  roca_hendida     roca partida con grieta
+ *  GIGANTES (muros / divisores de ambientes, hasta 80 m):
+ *  muro_roca       muro de roca con paso opcional   muro_estratos  muro de lajas apiladas   farallon  peñasco inmenso
  */
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -160,6 +162,87 @@ function hendida(p) {
   return s.fin();
 }
 
+/* ---------- GIGANTES: muros y peñascos de roca de 10–80 m ----------
+   El relieve se mide en METROS (no en fracción del tamaño), así una roca de 30 m no sale lisa.
+   Para usarlas de límite o divisor de ambientes: son sólidas en el recorrido a pie (como cualquier objeto) y
+   se pueden juntar o solapar unas con otras sin que se note la unión. */
+const rl = (x, y, z, ph, L) => ruido3(x / L, y / L, z / L, ph);
+const ond = (x, ph, L) => .5 * Math.sin(x / L + ph[0]) + .3 * Math.sin(x / (L * .43) + ph[1]) + .2 * Math.sin(x / (L * .19) + ph[2]);
+
+/* Muro de roca: caja subdividida y deformada. Largo en X, grosor en Z, alto en Y (base enterrada).
+   cresta 0..1 (cuánto varía la altura a lo largo) · borde 0..1 (cuánto bajan y se afinan los extremos)
+   curva (m, abombado en planta) · inclin (° hacia un lado) · res (m por segmento) · cx / W (posición y largo total si es un tramo) */
+function geoMuro({ w, d, h, deform = .5, facetas = .3, cresta = .3, borde = .5, curva = 0, inclin = 0, res = .9, sink, cx = 0, W, sem = 1 }) {
+  W = W || w;
+  const sx = Math.min(72, Math.max(6, Math.round(w / res))), sy = Math.min(26, Math.max(4, Math.round(h / res))), sz = Math.min(10, Math.max(2, Math.round(d / res)));
+  let g = new THREE.BoxGeometry(1, 1, 1, sx, sy, sz);
+  g.deleteAttribute('normal'); g.deleteAttribute('uv'); g = mergeVertices(g, 1e-4);          // soldar bordes: no se abren al deformar
+  const a = g.attributes.position.array, { ph } = fases(sem), ph2 = ph.map(v => v * 1.7 + 3), pasos = 1 + Math.round(facetas * 3);
+  const hund = sink != null ? sink : Math.min(1.2, .06 * h + .2), tg = Math.tan(inclin * Math.PI / 180);
+  const amp = (.15 + .85 * deform) * Math.min(1.2, .06 * Math.min(w, h) + .25);
+  for (let i = 0; i < a.length; i += 3) {
+    const ux = a[i], uy = a[i + 1], uz = a[i + 2], tx = ux + .5, ty = uy + .5, XA = ux * w + cx;
+    const fin = Math.min(tx, 1 - tx) * w, tap = sstep(0, 2.5 + .07 * w, fin), fe = 1 - borde * (1 - tap);
+    const alto = Math.max(.2 * h, h * (1 + cresta * (.55 * ond(XA, ph, 5 + .1 * W) + .45 * ond(XA, ph2, 2.3))) * fe);
+    const ancho = (1 + .22 * deform * ond(XA, ph2, 6)) * (1 - .45 * borde * (1 - tap)) * (1 + .2 * (1 - ty)) * (1 - .12 * ty);   // más ancho al pie
+    let Y = ty * alto, Z = uz * d * ancho;
+    const tw = (XA / W) + .5; Z += curva * (1 - (2 * tw - 1) * (2 * tw - 1)) + tg * Y;
+    const wx = Math.abs(ux) > .499 ? Math.sign(ux) : 0, wy = uy > .499 ? 1 : 0, wz = Math.abs(uz) > .499 ? Math.sign(uz) : 0;
+    const n = .6 * rl(XA, Y, Z, ph, 3.4) + .4 * rl(XA, Y, Z, ph2, 1.4), q = Math.round(n * pasos) / pasos, nn = Math.max(-1.2, Math.min(1.2, n * (1 - facetas * .6) + q * facetas * .6));
+    a[i] = XA + wx * amp * nn; a[i + 1] = Y + wy * amp * nn - hund; a[i + 2] = Z + wz * amp * nn * 1.4;
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
+/* Masa grande (peñasco): como masa() pero con relieve en metros y 5 120 caras (detalle 15 = 16 divisiones por arista). */
+function masaGig({ w, d, h, deform = .5, facetas = .4, afinar = .15, bajo = .22, sem = 1 }) {
+  const H = h / (1 - bajo);                                   // para que el alto final sea h (la base plana se come una parte)
+  const g = new THREE.IcosahedronGeometry(1, 15), a = g.attributes.position.array, { ph } = fases(sem), ph2 = ph.map(v => v * 1.7 + 3), pasos = 1 + Math.round(facetas * 3);
+  for (let i = 0; i < a.length; i += 3) {
+    const l = Math.hypot(a[i], a[i + 1], a[i + 2]) || 1, dx = a[i] / l, dy = a[i + 1] / l, dz = a[i + 2] / l, px = dx * w / 2, py = dy * H / 2, pz = dz * d / 2;
+    const n = .62 * ruido3(dx * 1.3, dy * 1.3, dz * 1.3, ph) + .38 * (.6 * rl(px, py, pz, ph2, 5) + .4 * rl(px, py, pz, ph, 2.2)), q = Math.round(n * pasos) / pasos;
+    const k = 1 + (.12 + .3 * deform) * (n * (1 - facetas * .6) + q * facetas * .6);
+    let x = dx * k * w / 2, y = dy * k * H / 2, z = dz * k * d / 2;
+    y = Math.max(y, -H / 2 * (1 - bajo * 2)); y += H / 2 * (1 - bajo * 2) - H * .02;
+    const t = Math.max(0, Math.min(1, y / h)); if (afinar) { const f = 1 - afinar * t * .85; x *= f; z *= f; }
+    a[i] = x; a[i + 1] = y; a[i + 2] = z;
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
+function muroRoca(p) {
+  const { w, d, h, paso, pos_paso, deform, facetas, cresta, curva, inclin, musgo, semilla } = p, s = pNuevo(), { R } = fases(semilla);
+  const gap = Math.min(Math.max(0, paso), w - 4), tramos = [];
+  if (gap > .5) { const util = w - gap, izq = Math.max(2, util * (1 + pos_paso) / 2), der = Math.max(2, util - izq); tramos.push([-w / 2, -w / 2 + izq], [w / 2 - der, w / 2]); }
+  else tramos.push([-w / 2, w / 2]);
+  tramos.forEach(([x0, x1], i) => {
+    const g = geoMuro({ w: x1 - x0, d, h, deform, facetas, cresta, borde: .5, curva, inclin, cx: (x0 + x1) / 2, W: w, sem: semilla + i * 5 });
+    pone(s, g, R, { tile: 4, desg: .5 }); musgoSobre(g, musgo, semilla + i);
+  });
+  return s.fin();
+}
+function muroEstratos(p) {
+  const { w, d, h, capas, desfase, musgo, semilla } = p, s = pNuevo(), { R } = fases(semilla), N = Math.max(2, Math.round(capas));
+  const hs = Array.from({ length: N }, () => .7 + .6 * R()), tot = hs.reduce((u, v) => u + v, 0); let y = 0;
+  for (let i = 0; i < N; i++) {
+    const hh = h * hs[i] / tot, g = geoMuro({ w: w * (.9 + .1 * R()), d: d * (.8 + .45 * R()), h: hh * 1.15, deform: .95, facetas: .5, cresta: .12, borde: .35, res: 1.2, sink: i ? .04 : undefined, sem: semilla + i * 3 });
+    g.translate((R() - .5) * desfase * Math.min(w * .15, 3), y, (R() - .5) * desfase * .6);
+    pone(s, g, R, { tile: 3, tint: .78 + .38 * R(), desg: .5 }); musgoSobre(g, musgo, semilla + i); y += hh * .88;
+  }
+  return s.fin();
+}
+function farallon(p) {
+  const { w, d, h, deform, facetas, afinar, escombro, musgo, semilla } = p, s = pNuevo(), { R } = fases(semilla);
+  const g = masaGig({ w, d, h, deform, facetas, afinar, sem: semilla }); pone(s, g, R, { tile: 4, desg: .4 }); musgoSobre(g, musgo, semilla);
+  for (let i = 0; i < Math.round(escombro * 6); i++) {
+    const rr = Math.min(w, d) * (.05 + .07 * R()), an = R() * P2, m = masa({ w: rr * 2, d: rr * (1.3 + R() * .5), h: rr * (1 + .5 * R()), deform: .5, facetas: .5, detalle: 2, bajo: .3, sem: semilla + i * 5 });
+    m.rotateY(R() * 3); m.translate(Math.cos(an) * w * (.5 + .12 * R()), 0, Math.sin(an) * d * (.5 + .12 * R())); pone(s, m, R, { tile: 2 }); musgoSobre(m, musgo, i + semilla);
+  }
+  return s.fin();
+}
+
 /* ---------- catálogo ---------- */
 const G = 'rocas', C = (n, f, params, extra) => Object.assign({ nombre: n, f, params, grupo: G }, extra || {});
 const sem = [1, 80, 1, 1], mus = [0, 1, .3, .05];
@@ -178,15 +261,20 @@ export const DEFS_ROCAS = {
   cantos: C('Cantos (piedras pequeñas)', cantos, { n: [3, 60, 18, 1], r: [.04, .3, .12, .01], area: [.3, 6, 1.5, .1], musgo: [0, 1, .1, .05], semilla: sem }),
   penasco: C('Peñasco con piedras al pie', penasco, { r: [.6, 4, 1.6, .05], musgo: [0, 1, .4, .05], semilla: sem }),
   roca_hendida: C('Roca hendida', hendida, { w: [.8, 4, 1.8, .05], h: [.6, 3.5, 1.5, .05], grieta: [.03, .5, .12, .01], musgo: mus, semilla: sem }),
+  // Gigantes (muros y divisores de ambientes): w hasta 80 m, h hasta 40 m
+  muro_roca: C('Gigante · Muro de roca', muroRoca, { w: [4, 80, 24, .5], d: [1, 16, 4, .25], h: [2, 40, 7, .5], paso: [0, 12, 0, .25], pos_paso: [-1, 1, 0, .05], deform: [0, 1, .5, .05], facetas: [0, 1, .35, .05], cresta: [0, 1, .3, .05], curva: [-20, 20, 0, .5], inclin: [-20, 20, 0, 1], musgo: mus, semilla: sem }),
+  muro_estratos: C('Gigante · Muro de lajas apiladas', muroEstratos, { w: [4, 60, 20, .5], d: [1, 12, 3.5, .25], h: [2, 30, 6, .5], capas: [2, 14, 6, 1], desfase: [0, 2, .6, .05], musgo: [0, 1, .15, .05], semilla: sem }),
+  farallon: C('Gigante · Peñasco inmenso', farallon, { w: [4, 60, 18, .5], d: [4, 60, 14, .5], h: [3, 40, 12, .5], deform: [0, 1, .5, .05], facetas: [0, 1, .5, .05], afinar: [0, 1, .15, .05], escombro: [0, 1, .5, .05], musgo: [0, 1, .25, .05], semilla: sem }),
 };
 export const TIPOS_ROCAS = Object.keys(DEFS_ROCAS);
 const HUELLAS = {
   roca_redonda: p => [p.w, p.d], roca_larga: p => [p.w, p.d], roca_ancha: p => [p.w, p.d], roca_deformada: p => [p.w * 1.1, p.d * 1.1], roca_angular: p => [p.w, p.d],
   laja: p => [p.w, p.d], menhir: p => [p.w, p.d], columnas_basalto: p => { const k = Math.ceil(Math.sqrt(p.n)) * p.r * 1.8; return [k, k]; }, estalagmita: p => [p.r * 2, p.r * 2],
   trilito: p => [p.w * 1.05, p.w * .35], pila_lajas: p => [p.w, p.w * .8], cantos: p => [p.area * 2, p.area * 2], penasco: p => [p.r * 3.4, p.r * 3], roca_hendida: p => [p.w + p.grieta, p.w * .8],
+  muro_roca: p => [p.w, p.d + Math.abs(p.curva) * 2], muro_estratos: p => [p.w * 1.05, p.d * 1.3], farallon: p => [p.w * 1.2, p.d * 1.2],
 };
 export function registrarRocas() {
   for (const k in DEFS_ROCAS) CATALOGO[k] = Object.assign({}, CATALOGO[k] || {}, DEFS_ROCAS[k]);
   Object.assign(HUELLA, HUELLAS);
-  Object.assign(ETIQUETAS, { deform: 'Deformación', facetas: 'Aristas (facetas)', inclin: 'Inclinación (°)', grieta: 'Grieta (m)', area: 'Radio del área', musgo: 'Musgo', n: 'Cantidad', semilla: 'Semilla' });
+  Object.assign(ETIQUETAS, { paso: 'Paso (m, 0 = muro seguido)', pos_paso: 'Posición del paso (−1 … 1)', cresta: 'Cresta irregular', curva: 'Curvatura (m)', capas: 'Capas', desfase: 'Desfase de capas', escombro: 'Piedras caídas al pie', deform: 'Deformación', facetas: 'Aristas (facetas)', inclin: 'Inclinación (°)', grieta: 'Grieta (m)', area: 'Radio del área', musgo: 'Musgo', n: 'Cantidad', semilla: 'Semilla' });
 }

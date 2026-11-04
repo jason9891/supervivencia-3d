@@ -110,3 +110,6 @@ Hojas finas y curvas con viento proporcional a su altura (corto ≈ quieto, alto
 - Visor: `index.html?mapa=nombre` abre un mapa del repo desde cualquier dispositivo, y la pantalla de entrada tiene un selector «🗂️ Mapa». Es solo para ver: usa un almacenamiento aparte que se vacía al cargar, así nunca pisa el mapa del editor ni queda una copia local con prioridad; los cambios del visor (objetos, texturas por pieza) no se guardan, se editan en el editor.
 - Código: `mapas-repo.js` (API de GitHub, compartido), `editor-repo.js` (panel). editor-ref.js v=9, main.js v=24.
 - v23.19: un navegador sin mapa propio (incógnito, otro dispositivo) ya no cae en «Error cargando el mapa»: el visor muestra el selector de mapas del repo, y si hay uno solo lo abre automáticamente. main.js v=25.
+
+## v23.20 · Rocas gigantes (muros y divisores)
+- Tres piezas nuevas en el grupo «🪨 Rocas» (prefijo «Gigante ·»): **Muro de roca** (hasta 80 m de largo y 40 de alto, con `paso` opcional para dejar una entrada), **Muro de lajas apiladas** y **Peñasco inmenso**. Sirven de límite del mapa o de divisor de ambientes con una sola pieza, sin escalar muchas piedras pequeñas; son sólidas al caminar. Ver `lib-objetos/rocas/README.md`.
