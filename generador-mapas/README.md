@@ -113,3 +113,9 @@ Hojas finas y curvas con viento proporcional a su altura (corto ≈ quieto, alto
 
 ## v23.20 · Rocas gigantes (muros y divisores)
 - Tres piezas nuevas en el grupo «🪨 Rocas» (prefijo «Gigante ·»): **Muro de roca** (hasta 80 m de largo y 40 de alto, con `paso` opcional para dejar una entrada), **Muro de lajas apiladas** y **Peñasco inmenso**. Sirven de límite del mapa o de divisor de ambientes con una sola pieza, sin escalar muchas piedras pequeñas; son sólidas al caminar. Ver `lib-objetos/rocas/README.md`.
+
+### v23.21 — Anti Z-fighting (parpadeo en alturas sobrepuestas)
+- Piso a la misma altura que la base de una escalera: el piso ya no se dibuja debajo de la escalera (se recorta su huella) y las escaleras bajan 3 mm, así sus bases no coinciden con pisos poligonales.
+- Prioridad de profundidad (`polygonOffset`): muro > escalera/rampa > piso, para los bordes de losa que quedan al ras de los muros.
+- Muros idénticos duplicados se emiten una sola vez.
+- Muros parcialmente superpuestos del mismo material no se tocan: se ven igual, no parpadean visiblemente.

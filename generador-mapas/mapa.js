@@ -39,6 +39,10 @@ export function construirMapa(scene, json) {
   const matRampa = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.8 });
   const matEscalera = new THREE.MeshStandardMaterial({ color: 0xa855f7, roughness: 0.7 });
   const matHighFloor = new THREE.MeshStandardMaterial({ color: 0x5a5a5a, roughness: 0.8 });
+  // Anti Z-fighting: caras coplanares (borde de losa = cara exterior del muro, base de escalera = base de piso)
+  // se resuelven con prioridad de profundidad: muro > escalera/rampa > piso.
+  [matWall, matWallRamp].forEach(m => { m.polygonOffset = true; m.polygonOffsetFactor = -2; m.polygonOffsetUnits = -2; });
+  [matEscalera, matRampa].forEach(m => { m.polygonOffset = true; m.polygonOffsetFactor = -1; m.polygonOffsetUnits = -1; });
   const matDoorFrame = new THREE.MeshStandardMaterial({ color: 0x4a2e15, roughness: 0.9 });
   const matDoorPanel = new THREE.MeshStandardMaterial({ color: 0xa67c52, roughness: 0.6, metalness: 0.1 });
   const matDoorHole = new THREE.MeshBasicMaterial({ color: 0x000000 });
@@ -103,7 +107,13 @@ export function construirMapa(scene, json) {
   const rects = (json.rooms || []).filter(r => !isPoly(r)).map(norm);
   const holesAt = (y) => allHoles.filter(h => Math.abs(h.y - y) < 0.1);
   const floorPieces = new Map();
-  rects.forEach(r => { if (isElev(r)) return; floorPieces.set(r, rectSubtract(r, holesAt(r.y))); });
+  // Un piso a la misma altura que la base de una escalera no debe quedar debajo de ella (caras coplanares).
+  const escRects = rects.filter(r => r.type === 'escalera');
+  rects.forEach(r => {
+    if (isElev(r)) return;
+    const cut = holesAt(r.y).concat(escRects.filter(e => Math.abs(e.y - r.y) < 0.05));
+    floorPieces.set(r, rectSubtract(r, cut));
+  });
 
   (json.rooms || []).filter(isPoly).forEach(r => {
     curTag = { tipo: 'room', id: r.id };
@@ -177,7 +187,7 @@ export function construirMapa(scene, json) {
       const steps = r.steps || Math.max(4, Math.min(40, Math.round(Math.abs(y2 - r.y) / 0.25)));
       const length = dir.includes('z') ? d : w;
       const stepD = length / steps;
-      const baseY = r.y - half;
+      const baseY = r.y - half - 0.003; // 3 mm más abajo: no coincide con la base de pisos poligonales
       for (let i = 0; i < steps; i++) {
         const topY = surf0 + ((i + 1) / steps) * rise;
         const offset = i * stepD + stepD / 2;
@@ -199,6 +209,7 @@ export function construirMapa(scene, json) {
   });
 
   curTag = null;
+  const wallSeen = new Set();
   (json.walls || []).forEach(w => {
     curTag = { tipo: 'wall', id: w.id };
     const height = w.h || 3, y0 = w.y || 0, half = T_WALL / 2;
@@ -222,6 +233,9 @@ export function construirMapa(scene, json) {
       const mz = a.z + uz * ((s0 + s1) / 2);
       const my = (yB + yT) / 2;
       const geo = new THREE.BoxGeometry(T_WALL, h, segLen);
+      const key = [mx, my, mz, segLen, h, Math.abs(ux) > Math.abs(uz) ? 'x' : 'z'].map(v => typeof v === 'number' ? Math.round(v * 100) : v).join('|');
+      if (wallSeen.has(key)) return; // muro idéntico ya emitido (paredes duplicadas)
+      wallSeen.add(key);
       const mesh = new THREE.Mesh(geo, matWall);
       mesh.position.set(mx, my, mz);
       mesh.rotation.y = Math.atan2(ux, uz);
